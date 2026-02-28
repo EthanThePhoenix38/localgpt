@@ -57,6 +57,25 @@ pub enum GenCommand {
         name: String,
     },
     AudioInfo,
+
+    // Tier 6: Behaviors
+    AddBehavior(AddBehaviorCmd),
+    RemoveBehavior {
+        entity: String,
+        behavior_id: Option<String>,
+    },
+    ListBehaviors {
+        entity: Option<String>,
+    },
+    SetBehaviorsPaused {
+        paused: bool,
+    },
+
+    // Tier 7: World skills
+    SaveWorld(SaveWorldCmd),
+    LoadWorld {
+        path: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +286,128 @@ pub struct ModifyAudioEmitterCmd {
 }
 
 // ---------------------------------------------------------------------------
+// Behavior command data structures
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddBehaviorCmd {
+    pub entity: String,
+    #[serde(default)]
+    pub behavior_id: Option<String>,
+    pub behavior: BehaviorDef,
+}
+
+/// Declarative behavior definition — data, not code.
+/// Each variant fully describes a continuous animation that the tick system evaluates.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BehaviorDef {
+    /// Orbit around a center entity or point.
+    Orbit {
+        /// Name of entity to orbit around (mutually exclusive with `center_point`).
+        #[serde(default)]
+        center: Option<String>,
+        /// Fixed point to orbit around [x,y,z] (used if `center` is None).
+        #[serde(default)]
+        center_point: Option<[f32; 3]>,
+        /// Orbit radius.
+        #[serde(default = "default_orbit_radius")]
+        radius: f32,
+        /// Orbital speed in degrees per second.
+        #[serde(default = "default_orbit_speed")]
+        speed: f32,
+        /// Orbit axis (normalized). Default: Y-up.
+        #[serde(default = "default_y_axis")]
+        axis: [f32; 3],
+        /// Initial phase angle in degrees.
+        #[serde(default)]
+        phase: f32,
+        /// Orbit tilt in degrees (inclination from the axis plane).
+        #[serde(default)]
+        tilt: f32,
+    },
+    /// Spin (rotate) around a local axis.
+    Spin {
+        /// Local axis to spin around.
+        #[serde(default = "default_y_axis")]
+        axis: [f32; 3],
+        /// Rotation speed in degrees per second.
+        #[serde(default = "default_spin_speed")]
+        speed: f32,
+    },
+    /// Bob up and down (sinusoidal oscillation along an axis).
+    Bob {
+        /// Axis of oscillation.
+        #[serde(default = "default_y_axis")]
+        axis: [f32; 3],
+        /// Amplitude (distance from center in each direction).
+        #[serde(default = "default_bob_amplitude")]
+        amplitude: f32,
+        /// Oscillation frequency in Hz.
+        #[serde(default = "default_bob_frequency")]
+        frequency: f32,
+        /// Phase offset in degrees.
+        #[serde(default)]
+        phase: f32,
+    },
+    /// Continuously look at / follow another entity.
+    LookAt {
+        /// Name of entity to look at.
+        target: String,
+    },
+    /// Scale pulsation (breathing effect).
+    Pulse {
+        /// Minimum scale multiplier.
+        #[serde(default = "default_pulse_min")]
+        min_scale: f32,
+        /// Maximum scale multiplier.
+        #[serde(default = "default_pulse_max")]
+        max_scale: f32,
+        /// Pulse frequency in Hz.
+        #[serde(default = "default_bob_frequency")]
+        frequency: f32,
+    },
+}
+
+fn default_orbit_radius() -> f32 {
+    5.0
+}
+fn default_orbit_speed() -> f32 {
+    36.0
+}
+fn default_y_axis() -> [f32; 3] {
+    [0.0, 1.0, 0.0]
+}
+fn default_spin_speed() -> f32 {
+    90.0
+}
+fn default_bob_amplitude() -> f32 {
+    0.5
+}
+fn default_bob_frequency() -> f32 {
+    0.5
+}
+fn default_pulse_min() -> f32 {
+    0.9
+}
+fn default_pulse_max() -> f32 {
+    1.1
+}
+
+// ---------------------------------------------------------------------------
+// World save/load command data structures
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveWorldCmd {
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Responses (Bevy → agent)
 // ---------------------------------------------------------------------------
 
@@ -274,25 +415,74 @@ pub struct ModifyAudioEmitterCmd {
 #[allow(dead_code)]
 pub enum GenResponse {
     SceneInfo(SceneInfoData),
-    Screenshot { image_path: String },
+    Screenshot {
+        image_path: String,
+    },
     EntityInfo(EntityInfoData),
-    Spawned { name: String, entity_id: u64 },
-    Modified { name: String },
-    Deleted { name: String },
+    Spawned {
+        name: String,
+        entity_id: u64,
+    },
+    Modified {
+        name: String,
+    },
+    Deleted {
+        name: String,
+    },
     CameraSet,
-    LightSet { name: String },
+    LightSet {
+        name: String,
+    },
     EnvironmentSet,
-    Exported { path: String },
-    GltfLoaded { name: String, path: String },
+    Exported {
+        path: String,
+    },
+    GltfLoaded {
+        name: String,
+        path: String,
+    },
 
     // Audio responses
     AmbienceSet,
-    AudioEmitterSpawned { name: String },
-    AudioEmitterModified { name: String },
-    AudioEmitterRemoved { name: String },
+    AudioEmitterSpawned {
+        name: String,
+    },
+    AudioEmitterModified {
+        name: String,
+    },
+    AudioEmitterRemoved {
+        name: String,
+    },
     AudioInfoData(AudioInfoResponse),
 
-    Error { message: String },
+    // Behavior responses
+    BehaviorAdded {
+        entity: String,
+        behavior_id: String,
+    },
+    BehaviorRemoved {
+        entity: String,
+        count: usize,
+    },
+    BehaviorList(BehaviorListResponse),
+    BehaviorsPaused {
+        paused: bool,
+    },
+
+    // World responses
+    WorldSaved {
+        path: String,
+        skill_name: String,
+    },
+    WorldLoaded {
+        path: String,
+        entities: usize,
+        behaviors: usize,
+    },
+
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,6 +536,29 @@ pub struct AudioEmitterSummary {
     pub radius: f32,
     pub position: Option<[f32; 3]>,
     pub attached_to: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Behavior response data structures
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BehaviorListResponse {
+    pub paused: bool,
+    pub entities: Vec<EntityBehaviorsSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityBehaviorsSummary {
+    pub entity: String,
+    pub behaviors: Vec<BehaviorSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BehaviorSummary {
+    pub id: String,
+    pub behavior_type: String,
+    pub description: String,
 }
 
 // ---------------------------------------------------------------------------

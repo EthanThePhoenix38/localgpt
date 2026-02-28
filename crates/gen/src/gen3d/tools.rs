@@ -34,7 +34,14 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenSetAmbienceTool::new(bridge.clone())),
         Box::new(GenAudioEmitterTool::new(bridge.clone())),
         Box::new(GenModifyAudioTool::new(bridge.clone())),
-        Box::new(GenAudioInfoTool::new(bridge)),
+        Box::new(GenAudioInfoTool::new(bridge.clone())),
+        // Behavior tools
+        Box::new(GenAddBehaviorTool::new(bridge.clone())),
+        Box::new(GenRemoveBehaviorTool::new(bridge.clone())),
+        Box::new(GenListBehaviorsTool::new(bridge.clone())),
+        // World tools
+        Box::new(GenSaveWorldTool::new(bridge.clone())),
+        Box::new(GenLoadWorldTool::new(bridge)),
     ]
 }
 
@@ -1327,6 +1334,338 @@ impl Tool for GenAudioInfoTool {
     async fn execute(&self, _arguments: &str) -> Result<String> {
         match self.bridge.send(GenCommand::AudioInfo).await? {
             GenResponse::AudioInfoData(data) => Ok(serde_json::to_string_pretty(&data)?),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_add_behavior
+// ===========================================================================
+
+struct GenAddBehaviorTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenAddBehaviorTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenAddBehaviorTool {
+    fn name(&self) -> &str {
+        "gen_add_behavior"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_add_behavior".into(),
+            description: "Add a continuous behavior to an entity. Behaviors animate entities automatically each frame. Multiple behaviors can be stacked on one entity.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "Name of entity to add behavior to"
+                    },
+                    "behavior_id": {
+                        "type": "string",
+                        "description": "Optional unique ID for this behavior (auto-generated if omitted). Use to later remove specific behaviors."
+                    },
+                    "behavior": {
+                        "type": "object",
+                        "description": "Behavior definition. Types: orbit {center: entity_name, center_point: [x,y,z], radius, speed (deg/s), axis: [x,y,z], phase (deg), tilt (deg)}, spin {axis: [x,y,z], speed (deg/s)}, bob {axis: [x,y,z], amplitude, frequency (Hz), phase (deg)}, look_at {target: entity_name}, pulse {min_scale, max_scale, frequency (Hz)}",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["orbit", "spin", "bob", "look_at", "pulse"]
+                            }
+                        },
+                        "required": ["type"]
+                    }
+                },
+                "required": ["entity", "behavior"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing entity"))?
+            .to_string();
+
+        let behavior_id = args["behavior_id"].as_str().map(|s| s.to_string());
+        let behavior: BehaviorDef = serde_json::from_value(args["behavior"].clone())?;
+
+        let cmd = AddBehaviorCmd {
+            entity,
+            behavior_id,
+            behavior,
+        };
+
+        match self.bridge.send(GenCommand::AddBehavior(cmd)).await? {
+            GenResponse::BehaviorAdded {
+                entity,
+                behavior_id,
+            } => Ok(format!(
+                "Added behavior '{}' to entity '{}'",
+                behavior_id, entity
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_remove_behavior
+// ===========================================================================
+
+struct GenRemoveBehaviorTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenRemoveBehaviorTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenRemoveBehaviorTool {
+    fn name(&self) -> &str {
+        "gen_remove_behavior"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_remove_behavior".into(),
+            description:
+                "Remove behaviors from an entity. If behavior_id is specified, removes only that behavior; otherwise removes all behaviors from the entity."
+                    .into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "Name of entity to remove behaviors from"
+                    },
+                    "behavior_id": {
+                        "type": "string",
+                        "description": "Specific behavior ID to remove (from gen_list_behaviors). Omit to remove all."
+                    }
+                },
+                "required": ["entity"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing entity"))?
+            .to_string();
+
+        let behavior_id = args["behavior_id"].as_str().map(|s| s.to_string());
+
+        match self
+            .bridge
+            .send(GenCommand::RemoveBehavior {
+                entity,
+                behavior_id,
+            })
+            .await?
+        {
+            GenResponse::BehaviorRemoved { entity, count } => {
+                Ok(format!("Removed {} behavior(s) from '{}'", count, entity))
+            }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_list_behaviors
+// ===========================================================================
+
+struct GenListBehaviorsTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenListBehaviorsTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenListBehaviorsTool {
+    fn name(&self) -> &str {
+        "gen_list_behaviors"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_list_behaviors".into(),
+            description: "List all active behaviors. Optionally filter by entity name.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "Filter to specific entity name (optional)"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let entity = args["entity"].as_str().map(|s| s.to_string());
+
+        match self
+            .bridge
+            .send(GenCommand::ListBehaviors { entity })
+            .await?
+        {
+            GenResponse::BehaviorList(data) => Ok(serde_json::to_string_pretty(&data)?),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_save_world
+// ===========================================================================
+
+struct GenSaveWorldTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSaveWorldTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSaveWorldTool {
+    fn name(&self) -> &str {
+        "gen_save_world"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_save_world".into(),
+            description: "Save the current scene as a world skill. Creates a skill directory with scene.glb, behaviors.toml, audio.toml, world.toml, and SKILL.md. The world can be loaded later with gen_load_world or invoked as a skill.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "World/skill name (e.g., 'solar-system', 'medieval-village'). Used as directory name."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of the world for SKILL.md"
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Custom output path. Default: {workspace}/skills/{name}/"
+                    }
+                },
+                "required": ["name"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let cmd = SaveWorldCmd {
+            name: args["name"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing name"))?
+                .to_string(),
+            description: args["description"].as_str().map(|s| s.to_string()),
+            path: args["path"].as_str().map(|s| s.to_string()),
+        };
+
+        match self.bridge.send(GenCommand::SaveWorld(cmd)).await? {
+            GenResponse::WorldSaved { path, skill_name } => Ok(format!(
+                "World '{}' saved to: {}\nCan be loaded with gen_load_world or invoked as /{}",
+                skill_name, path, skill_name
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_load_world
+// ===========================================================================
+
+struct GenLoadWorldTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenLoadWorldTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenLoadWorldTool {
+    fn name(&self) -> &str {
+        "gen_load_world"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_load_world".into(),
+            description: "Load a world skill. Restores the 3D scene, behaviors, audio, environment, and camera from a saved world directory.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to world skill directory, or just the skill name (searches {workspace}/skills/)"
+                    }
+                },
+                "required": ["path"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let path = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?
+            .to_string();
+
+        match self.bridge.send(GenCommand::LoadWorld { path }).await? {
+            GenResponse::WorldLoaded {
+                path,
+                entities,
+                behaviors,
+            } => Ok(format!(
+                "World loaded from: {}\n{} entities, {} behaviors restored",
+                path, entities, behaviors
+            )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }

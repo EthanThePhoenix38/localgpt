@@ -49,8 +49,8 @@ pub struct AudioEngine {
     emitter_params: HashMap<String, EmitterSharedParams>,
     layer_volumes: HashMap<String, Shared>,
     graph_tx: mpsc::Sender<AudioGraphUpdate>,
-    ambience_layer_names: Vec<String>,
-    emitter_meta: HashMap<String, EmitterMeta>,
+    pub ambience_layer_names: Vec<String>,
+    pub emitter_meta: HashMap<String, EmitterMeta>,
 }
 
 struct EmitterSharedParams {
@@ -58,12 +58,12 @@ struct EmitterSharedParams {
     pan: Shared,
 }
 
-struct EmitterMeta {
-    sound_type: String,
-    base_volume: f32,
-    radius: f32,
-    attached_to: Option<String>,
-    position: Option<[f32; 3]>,
+pub struct EmitterMeta {
+    pub sound_type: String,
+    pub base_volume: f32,
+    pub radius: f32,
+    pub attached_to: Option<String>,
+    pub position: Option<[f32; 3]>,
 }
 
 /// Messages sent from Bevy to the audio management thread.

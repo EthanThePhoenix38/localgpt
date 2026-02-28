@@ -184,6 +184,18 @@ Mobile crate uses `default-features = false, features = ["embeddings-local", "sq
 
 See `docs/gen-audio.md` for detailed architecture and usage examples.
 
+**Behavior System:**
+- **Declarative behaviors:** Data-driven entity animations (no scripting required)
+- **Types:** `orbit` (around entity/point), `spin` (local rotation), `bob` (sinusoidal oscillation), `look_at` (track target), `pulse` (scale breathing)
+- **Composable:** Multiple behaviors stack on one entity (e.g., orbit + spin + bob)
+- **Tools:** `gen_add_behavior`, `gen_remove_behavior`, `gen_list_behaviors`
+
+**World Skills:**
+- **Save/load scenes as skills:** Complete worlds serialized to skill directories
+- **Format:** `SKILL.md` + `world.toml` + `scene.glb` + `behaviors.toml` + `audio.toml`
+- **Tools:** `gen_save_world`, `gen_load_world`
+- **Extensible:** World manifest (`world.toml`) supports environment, camera, future asset types
+
 ### Mobile
 
 UniFFI proc-macro bindings (`crates/mobile-ffi/`). `LocalGPTClient` owns its own tokio runtime and wraps `AgentHandle`. Error type: `MobileError` enum (Init, Chat, Memory, Config).

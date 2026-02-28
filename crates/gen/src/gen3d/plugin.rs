@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use super::GenChannels;
 use super::audio::{self, SpatialAudioListener};
+use super::behaviors::{self, BehaviorState, EntityBehaviors};
 use super::commands::*;
 use super::registry::*;
 
@@ -119,6 +120,7 @@ pub fn setup_gen_app(
         .init_resource::<PendingScreenshots>()
         .init_resource::<PendingGltfLoads>()
         .init_resource::<FlyCamConfig>()
+        .init_resource::<BehaviorState>()
         .add_systems(
             Startup,
             (
@@ -132,6 +134,7 @@ pub fn setup_gen_app(
         .add_systems(Update, process_pending_gltf_loads)
         .add_systems(Update, audio::spatial_audio_update)
         .add_systems(Update, audio::auto_infer_audio)
+        .add_systems(Update, behaviors::behavior_tick)
         .add_systems(Update, fly_cam_movement)
         .add_systems(Update, fly_cam_look)
         .add_systems(Update, fly_cam_scroll_speed);
@@ -232,6 +235,7 @@ struct GenCommandParams<'w, 's> {
     pending_screenshots: ResMut<'w, PendingScreenshots>,
     pending_gltf: ResMut<'w, PendingGltfLoads>,
     audio_engine: ResMut<'w, audio::AudioEngine>,
+    behavior_state: ResMut<'w, BehaviorState>,
     asset_server: Res<'w, AssetServer>,
     workspace: Res<'w, GenWorkspace>,
     transforms: Query<'w, 's, &'static Transform>,
@@ -242,6 +246,7 @@ struct GenCommandParams<'w, 's> {
     visibility_query: Query<'w, 's, &'static Visibility>,
     material_handles: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
     mesh_handles: Query<'w, 's, &'static Mesh3d>,
+    behaviors_query: Query<'w, 's, &'static mut EntityBehaviors>,
 }
 
 fn process_gen_commands(
@@ -385,6 +390,133 @@ fn process_gen_commands(
                 audio::handle_remove_audio_emitter(&name, &mut params.audio_engine)
             }
             GenCommand::AudioInfo => audio::handle_audio_info(&params.audio_engine),
+
+            // Behavior commands
+            GenCommand::AddBehavior(cmd) => behaviors::handle_add_behavior(
+                cmd,
+                &mut params.behavior_state,
+                &mut commands,
+                &params.registry,
+                &params.transforms,
+                &mut params.behaviors_query,
+            ),
+            GenCommand::RemoveBehavior {
+                entity,
+                behavior_id,
+            } => behaviors::handle_remove_behavior(
+                &entity,
+                behavior_id.as_deref(),
+                &params.registry,
+                &mut params.behaviors_query,
+            ),
+            GenCommand::ListBehaviors { entity } => behaviors::handle_list_behaviors(
+                entity.as_deref(),
+                &params.behavior_state,
+                &params.registry,
+                &params.behaviors_query,
+            ),
+            GenCommand::SetBehaviorsPaused { paused } => {
+                params.behavior_state.paused = paused;
+                GenResponse::BehaviorsPaused { paused }
+            }
+
+            // World commands
+            GenCommand::SaveWorld(cmd) => super::world::handle_save_world(
+                cmd,
+                &params.workspace,
+                &params.registry,
+                &params.transforms,
+                &params.gen_entities,
+                &params.parent_query,
+                &params.material_handles,
+                &params.materials,
+                &params.mesh_handles,
+                &params.meshes,
+                &params.audio_engine,
+                &params.behaviors_query,
+            ),
+            GenCommand::LoadWorld { path } => {
+                let result = super::world::handle_load_world(
+                    &path,
+                    &params.workspace,
+                    &mut params.behavior_state,
+                );
+                match result {
+                    Ok(world_load) => {
+                        // Queue the glTF scene load
+                        if let Some(scene_path) = world_load.scene_path
+                            && let Some(resolved) =
+                                resolve_gltf_path(&scene_path, &params.workspace.path)
+                        {
+                            let asset_path = resolved
+                                .to_string_lossy()
+                                .trim_start_matches('/')
+                                .to_string();
+                            let handle = params
+                                .asset_server
+                                .load::<Scene>(format!("{}#Scene0", asset_path));
+                            params.pending_gltf.queue.push(PendingGltfLoad {
+                                handle,
+                                name: "world_scene".to_string(),
+                                path: resolved.to_string_lossy().into_owned(),
+                                send_response: false,
+                            });
+                        }
+
+                        // Apply behaviors
+                        for (entity_name, behavior_defs) in &world_load.behaviors {
+                            if let Some(entity) = params.registry.get_entity(entity_name) {
+                                let base_transform =
+                                    params.transforms.get(entity).copied().unwrap_or_default();
+                                let instances: Vec<behaviors::BehaviorInstance> = behavior_defs
+                                    .iter()
+                                    .map(|def| behaviors::BehaviorInstance {
+                                        id: params.behavior_state.next_id(),
+                                        def: def.clone(),
+                                        base_position: base_transform.translation,
+                                        base_scale: base_transform.scale,
+                                    })
+                                    .collect();
+                                commands.entity(entity).insert(EntityBehaviors {
+                                    behaviors: instances,
+                                });
+                            }
+                        }
+
+                        // Apply audio
+                        if let Some(ambience) = world_load.ambience {
+                            audio::handle_set_ambience(ambience, &mut params.audio_engine);
+                        }
+                        for emitter_cmd in &world_load.emitters {
+                            audio::handle_spawn_audio_emitter(
+                                emitter_cmd.clone(),
+                                &mut params.audio_engine,
+                                &mut commands,
+                                &params.registry,
+                            );
+                        }
+
+                        // Apply environment
+                        if let Some(env) = world_load.environment {
+                            handle_set_environment(env, &mut commands);
+                        }
+
+                        // Apply camera
+                        if let Some(cam) = world_load.camera {
+                            handle_set_camera(cam, &mut commands, &params.registry);
+                        }
+
+                        GenResponse::WorldLoaded {
+                            path: world_load.world_path,
+                            entities: world_load.entity_count,
+                            behaviors: world_load.behavior_count,
+                        }
+                    }
+                    Err(e) => GenResponse::Error {
+                        message: format!("Failed to load world: {}", e),
+                    },
+                }
+            }
         };
 
         let _ = channel_res.channels.resp_tx.send(response);

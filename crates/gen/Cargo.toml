@@ -43,3 +43,6 @@ rustyline = "17.0.2"
 # Procedural audio (environmental soundscapes)
 fundsp = "0.23"
 cpal = "0.17"
+
+# World skill serialization
+toml = "0.8"

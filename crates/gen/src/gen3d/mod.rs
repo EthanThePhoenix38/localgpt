@@ -7,10 +7,12 @@
 
 pub mod audio;
 pub mod audio_graphs;
+pub mod behaviors;
 pub mod commands;
 pub mod plugin;
 pub mod registry;
 pub mod tools;
+pub mod world;
 
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
