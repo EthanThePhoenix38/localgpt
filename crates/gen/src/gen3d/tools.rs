@@ -365,24 +365,29 @@ impl Tool for GenModifyEntityTool {
                     },
                     "position": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "New position [x, y, z]"
                     },
                     "rotation_degrees": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "New rotation [pitch, yaw, roll] in degrees"
                     },
                     "scale": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "New scale [x, y, z]"
                     },
                     "color": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "New RGBA color"
                     },
                     "metallic": {"type": "number"},
                     "roughness": {"type": "number"},
                     "emissive": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "New emissive RGBA color"
                     },
                     "visible": {
@@ -513,11 +518,13 @@ impl Tool for GenSetCameraTool {
                 "properties": {
                     "position": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "default": [5, 5, 5],
                         "description": "Camera position [x, y, z]"
                     },
                     "look_at": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "default": [0, 0, 0],
                         "description": "Point camera looks at [x, y, z]"
                     },
@@ -588,6 +595,7 @@ impl Tool for GenSetLightTool {
                     },
                     "color": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "default": [1, 1, 1, 1],
                         "description": "RGBA light color"
                     },
@@ -598,10 +606,12 @@ impl Tool for GenSetLightTool {
                     },
                     "position": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "Position for point/spot lights [x, y, z]"
                     },
                     "direction": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "Direction for directional/spot lights [x, y, z]"
                     },
                     "shadows": {
@@ -670,6 +680,7 @@ impl Tool for GenSetEnvironmentTool {
                 "properties": {
                     "background_color": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "description": "RGBA background color"
                     },
                     "ambient_light": {
@@ -679,6 +690,7 @@ impl Tool for GenSetEnvironmentTool {
                     },
                     "ambient_color": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "default": [1, 1, 1, 1],
                         "description": "Ambient light RGBA color"
                     }
@@ -736,7 +748,10 @@ impl Tool for GenSpawnMeshTool {
                     "name": {"type": "string"},
                     "vertices": {
                         "type": "array",
-                        "items": {"type": "array"},
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"}
+                        },
                         "description": "Array of [x,y,z] vertex positions"
                     },
                     "indices": {
@@ -746,22 +761,30 @@ impl Tool for GenSpawnMeshTool {
                     },
                     "normals": {
                         "type": "array",
-                        "items": {"type": "array"},
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"}
+                        },
                         "description": "Per-vertex normals [x,y,z]. Auto-computed if omitted."
                     },
                     "uvs": {
                         "type": "array",
-                        "items": {"type": "array"},
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "number"}
+                        },
                         "description": "Per-vertex UV coordinates [u,v]"
                     },
                     "color": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "default": [0.8, 0.8, 0.8, 1.0]
                     },
                     "metallic": {"type": "number", "default": 0.0},
                     "roughness": {"type": "number", "default": 0.5},
                     "position": {
                         "type": "array",
+                        "items": {"type": "number"},
                         "default": [0, 0, 0],
                         "description": "World position [x, y, z]"
                     }
