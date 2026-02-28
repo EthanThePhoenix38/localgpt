@@ -21,7 +21,13 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'LocalGPT Gen',
-      items: ['gen'],
+      items: [
+        'gen/index',
+        'gen/tools',
+        'gen/behaviors',
+        'gen/audio',
+        'gen/world-skills',
+      ],
     },
     {
       type: 'category',
