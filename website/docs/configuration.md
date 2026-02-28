@@ -44,6 +44,9 @@ EOF
 #   openai/*           → OpenAI
 #   openai-compatible/*→ OpenAI-compatible server (OpenRouter, DeepSeek, etc.)
 #   github-copilot/*   → GitHub Copilot API
+#   gemini/*           → Gemini API (simple API key)
+#   vertex/*           → Google Vertex AI (service account)
+#   xai/*              → xAI (Grok)
 #   glm/* or glm       → GLM (Z.AI)
 #   ollama/*           → Ollama
 #   Aliases: opus, sonnet, gpt, gpt-mini
@@ -194,6 +197,11 @@ embedding_cache_dir = "~/.cache/localgpt/embeddings"
 
 # Additional paths to index (outside workspace)
 # external_paths = ["~/projects/notes"]
+
+# Temporal decay for search scoring (default: 0.0 = disabled)
+# Higher values penalize older memories more.
+# Recommended: 0.1 gives ~50% penalty to 7-day old memories
+# temporal_decay_lambda = 0.0
 
 #──────────────────────────────────────────────────────────────────────────────
 # HTTP Server Settings
@@ -418,11 +426,34 @@ default_model = "glm/glm-4.7"  # or alias: glm
 api_key = "${GLM_API_KEY}"
 ```
 
+### xAI (Grok)
+
+```toml
+[agent]
+default_model = "xai/grok-3-mini"  # or xai/grok-3
+
+[providers.xai]
+api_key = "${XAI_API_KEY}"
+base_url = "https://api.x.ai/v1"
+```
+
 ### Gemini (Google)
 
-LocalGPT supports Gemini via OAuth (recommended) or legacy API keys.
+LocalGPT supports Gemini via API key (simplest), OAuth, or Vertex AI.
 
-**OAuth Setup (Recommended):**
+**API Key (Simplest):**
+
+```toml
+[agent]
+default_model = "gemini/gemini-2.0-flash"  # or gemini-2.5-pro, etc.
+
+[providers.gemini]
+api_key = "${GEMINI_API_KEY}"
+```
+
+Get your API key at [Google AI Studio](https://aistudio.google.com/app/apikey).
+
+**OAuth Setup (For Subscription Plans):**
 
 ```bash
 localgpt auth gemini
@@ -436,12 +467,25 @@ Then use:
 default_model = "gemini/gemini-3.1-pro-preview"  # or gemini-3.1-flash, etc.
 ```
 
-**Legacy API Key:**
+### Vertex AI (Google Cloud)
+
+Access Claude and Gemini models via Google Cloud's enterprise platform:
 
 ```toml
-[providers.gemini_oauth]
-# Not yet supported via simple API key config, use OAuth flow above.
+[agent]
+default_model = "vertex/claude-opus-4-6"  # or vertex/gemini-2.0-flash
+
+[providers.vertex]
+service_account_key = "~/.config/gcloud/service-account.json"
+project_id = "${GOOGLE_CLOUD_PROJECT}"
+location = "us-central1"  # or "global" for global endpoint
 ```
+
+Setup steps:
+1. Create a service account in [Google Cloud Console](https://console.cloud.google.com/)
+2. Grant "Vertex AI User" role
+3. Download the JSON key file
+4. Configure the path in `service_account_key`
 
 ### OpenAI-Compatible Provider (OpenRouter, DeepSeek, Groq, etc.)
 

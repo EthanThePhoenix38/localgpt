@@ -4,7 +4,11 @@ All notable changes to LocalGPT are documented in this file.
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-02-24
+### Added
+
+- **Security hardening** — improved defenses for HTTP, WebSocket, and tool call attack surfaces.
+
+## [0.3.0] - 2026-02-27
 
 A major release bringing the agent platform to production readiness with MCP tool integration, OpenAI-compatible API, cron scheduling, security hardening, mobile apps, and multi-agent orchestration.
 
@@ -32,6 +36,13 @@ A major release bringing the agent platform to production readiness with MCP too
 - **Profile isolation** via `-p/--profile` CLI option for complete XDG path separation.
 - **Hybrid web search** with configurable providers (`searxng`, `brave`, `tavily`, `perplexity`) and native-search passthrough.
 - **xAI provider support** (`xai/*`, `grok-*`) with native `web_search` tool passthrough.
+- **Vertex AI provider** — access Claude and Gemini models via Google Cloud with service account authentication (`vertex/*` models).
+- **Gemini API key provider** — simple `GEMINI_API_KEY` authentication without OAuth (`gemini/*` models).
+- **Bridge health monitoring** — automatic health status tracking (healthy/degraded/unhealthy) for all connected bridges.
+- **CLI bridge** (`localgpt-bridge-cli`) — interactive terminal that connects to a running daemon via bridge IPC socket.
+- **Skill routing rules** — `useWhen` and `dontUseWhen` conditions for context-aware skill activation.
+- **Temporal decay for memory search** — optional scoring penalty for older memories (`temporal_decay_lambda` config).
+- **LLM reasoning text preservation** — thinking/reasoning content emitted alongside tool calls is now preserved in responses.
 
 ### Changed
 

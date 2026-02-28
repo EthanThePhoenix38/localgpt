@@ -94,6 +94,75 @@ metadata:
 | `metadata.openclaw.requires.bins` | string[] | - | Required binaries (all) |
 | `metadata.openclaw.requires.anyBins` | string[] | - | Required binaries (any) |
 | `metadata.openclaw.requires.env` | string[] | - | Required environment variables |
+| `useWhen` | Condition[] | - | Conditions to activate skill (any match) |
+| `dontUseWhen` | Condition[] | - | Conditions to skip skill (any match) |
+
+## Skill Routing Rules
+
+Skills can define **routing conditions** that determine when they should be automatically activated. This allows skills to be context-aware without manual invocation.
+
+### useWhen
+
+Specifies conditions that trigger the skill. If any condition matches, the skill is included in the system prompt:
+
+```yaml
+---
+name: debug-skill
+description: "Help with debugging"
+useWhen:
+  - "debug"           # Shorthand: matches if message contains "debug"
+  - "error"
+  - contains: "stack trace"
+---
+```
+
+### dontUseWhen
+
+Specifies conditions that block the skill. If any condition matches, the skill is excluded even if `useWhen` would match:
+
+```yaml
+---
+name: serious-skill
+description: "Serious work only"
+dontUseWhen:
+  - contains: "joke"
+  - contains: "fun"
+---
+```
+
+### Condition Types
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Shorthand string | `"debug"` | Contains check (case-insensitive) |
+| `contains` | `contains: "error"` | Message contains text |
+| `channel` | `channel: telegram` | Matches specific channel |
+| `hasTool` | `hasTool: bash` | Tool is available |
+
+### Combined Example
+
+```yaml
+---
+name: telegram-weather
+description: "Weather for Telegram"
+user-invocable: true
+useWhen:
+  - contains: "weather"
+  - channel: telegram
+dontUseWhen:
+  - contains: "joke"
+  - hasTool: weather_api
+---
+
+# Weather Skill
+
+Provides weather information for Telegram users...
+```
+
+**Evaluation logic:**
+1. Check `dontUseWhen` first — any match blocks the skill
+2. If `useWhen` is empty, allow (backward compatible)
+3. Check `useWhen` — any match activates the skill
 
 ## Using Skills
 

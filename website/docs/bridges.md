@@ -6,13 +6,14 @@ sidebar_position: 13
 
 LocalGPT supports connecting to messaging platforms through **bridge daemons** — lightweight binaries that relay messages between a chat platform and LocalGPT's agent.
 
-Three official bridges are available:
+Four official bridges are available:
 
 | Bridge | Platform | Library |
 |--------|----------|---------|
 | `localgpt-bridge-telegram` | Telegram | teloxide |
 | `localgpt-bridge-discord` | Discord | serenity |
 | `localgpt-bridge-whatsapp` | WhatsApp | whatsapp-web.js (Node.js adapter) |
+| `localgpt-bridge-cli` | Terminal | rustyline |
 
 ## How Bridges Work
 
@@ -192,6 +193,41 @@ All three bridges share these features:
 - **Turn gating** — Only one message is processed at a time per session to prevent race conditions.
 - **Model selection** — Switch models mid-conversation with `/model`.
 - **Message chunking** — Long responses are automatically split to respect platform limits (4096 chars for Telegram, 2000 for Discord).
+- **Health monitoring** — Bridges report health status; degraded/unhealthy bridges trigger warnings.
+
+## Bridge Health Monitoring
+
+The daemon monitors bridge health with automatic status tracking:
+
+| Status | Description |
+|--------|-------------|
+| **Healthy** | Bridge is responsive (last ping < 60s) |
+| **Degraded** | Bridge is slow (last ping 60-120s) |
+| **Unhealthy** | Bridge unresponsive (last ping > 120s) |
+
+Health checks run every 30 seconds. Unhealthy bridges trigger warnings in logs but continue operating.
+
+## CLI Bridge
+
+`localgpt-bridge-cli` provides an interactive terminal chat that connects to a running daemon via the bridge IPC socket:
+
+```bash
+# Build the CLI bridge
+cargo build -p localgpt-bridge-cli --release
+
+# Connect to running daemon
+./target/release/localgpt-bridge-cli
+
+# With options
+./target/release/localgpt-bridge-cli --model claude-cli/opus --verbose
+```
+
+This is useful for:
+- **Remote access** — Connect to a daemon running on another machine (with socket forwarding)
+- **Scripting** — Pipe input for automated interactions
+- **Testing** — Quick way to test daemon functionality
+
+The CLI bridge uses the same security model as other bridges — it connects via Unix domain socket with peer identity verification (same UID only).
 
 ## Troubleshooting
 

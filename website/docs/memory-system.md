@@ -95,6 +95,7 @@ Designed REST endpoints for the chat API:
 2. **FTS5 Indexing** - Chunks are stored in SQLite FTS5 for fast keyword search, scored by BM25
 3. **Embedding Generation** - Chunks are embedded using a local model (fastembed by default — no API key needed) and stored in sqlite-vec for vector similarity search
 4. **Hybrid Scoring** - Search results combine FTS5 (30% weight) and vector similarity (70% weight) for best results
+5. **Temporal Decay** (optional) - Older memories can be penalized to prioritize recent information
 
 ### Automatic Indexing
 
@@ -149,7 +150,29 @@ embedding_cache_dir = "~/.cache/localgpt/embeddings"
 
 # Additional paths to index (outside workspace)
 # external_paths = ["~/projects/notes"]
+
+# Temporal decay lambda (default: 0.0 = disabled)
+# Penalizes older memories in search results
+# Recommended: 0.1 gives ~50% score penalty to 7-day old memories
+# temporal_decay_lambda = 0.0
 ```
+
+### Temporal Decay
+
+When enabled, older memories receive lower search scores, helping the AI prioritize recent information. This is useful for:
+
+- **Project work** - Recent decisions and context are more relevant
+- **Evolving preferences** - Newer preferences override old ones
+- **Fact correction** - Updated information takes precedence
+
+The decay uses exponential scoring: `score * exp(-lambda * age_in_days)`
+
+| Lambda | 1-day old | 7-day old | 30-day old |
+|--------|-----------|-----------|------------|
+| 0.0 (disabled) | 100% | 100% | 100% |
+| 0.05 | 95% | 70% | 22% |
+| 0.1 (recommended) | 90% | 50% | 5% |
+| 0.2 | 82% | 25% | 0.2% |
 
 ## Tools
 
