@@ -228,7 +228,7 @@ async fn handle_message(bot: Bot, msg: Message, state: Arc<BotState>) -> Respons
         let is_mentioned = text.contains(&mention);
         let is_reply_to_bot = msg
             .reply_to_message()
-            .and_then(|m| m.from())
+            .and_then(|m| m.from.as_ref())
             .map(|u| u.id == state.bot_info.id)
             .unwrap_or(false);
 
