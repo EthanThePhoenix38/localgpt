@@ -21,7 +21,7 @@ cargo test -p localgpt-core     # Single crate
 cargo test -- --nocapture       # Show stdout
 
 # Lint (required before commits)
-cargo clippy --workspace
+cargo clippy --workspace -- -D warnings
 cargo fmt --check
 
 # Cross-compile checks (mobile)

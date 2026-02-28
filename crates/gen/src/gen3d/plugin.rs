@@ -1,6 +1,7 @@
 //! Bevy GenPlugin — command processing, default scene, screenshot capture, glTF loading.
 
 use bevy::asset::RenderAssetUsages;
+use bevy::ecs::system::SystemParam;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::prelude::*;
@@ -223,54 +224,58 @@ fn load_initial_scene(
 }
 
 /// Poll the command channel each frame and dispatch.
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+struct GenCommandParams<'w, 's> {
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+    registry: ResMut<'w, NameRegistry>,
+    pending_screenshots: ResMut<'w, PendingScreenshots>,
+    pending_gltf: ResMut<'w, PendingGltfLoads>,
+    audio_engine: ResMut<'w, audio::AudioEngine>,
+    asset_server: Res<'w, AssetServer>,
+    workspace: Res<'w, GenWorkspace>,
+    transforms: Query<'w, 's, &'static Transform>,
+    gen_entities: Query<'w, 's, &'static GenEntity>,
+    names_query: Query<'w, 's, &'static Name>,
+    children_query: Query<'w, 's, &'static Children>,
+    parent_query: Query<'w, 's, &'static ChildOf>,
+    visibility_query: Query<'w, 's, &'static Visibility>,
+    material_handles: Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
+    mesh_handles: Query<'w, 's, &'static Mesh3d>,
+}
+
 fn process_gen_commands(
     mut channel_res: ResMut<GenChannelRes>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut registry: ResMut<NameRegistry>,
-    mut pending_screenshots: ResMut<PendingScreenshots>,
-    mut pending_gltf: ResMut<PendingGltfLoads>,
-    mut audio_engine: ResMut<audio::AudioEngine>,
-    asset_server: Res<AssetServer>,
-    workspace: Res<GenWorkspace>,
-    transforms: Query<&Transform>,
-    gen_entities: Query<&GenEntity>,
-    names_query: Query<&Name>,
-    children_query: Query<&Children>,
-    parent_query: Query<&ChildOf>,
-    visibility_query: Query<&Visibility>,
-    material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
-    mesh_handles: Query<&Mesh3d>,
+    mut params: GenCommandParams,
 ) {
     while let Ok(cmd) = channel_res.channels.cmd_rx.try_recv() {
         let response = match cmd {
             GenCommand::SceneInfo => handle_scene_info(
-                &registry,
-                &transforms,
-                &gen_entities,
-                &material_handles,
-                &materials,
+                &params.registry,
+                &params.transforms,
+                &params.gen_entities,
+                &params.material_handles,
+                &params.materials,
             ),
             GenCommand::EntityInfo { name } => handle_entity_info(
                 &name,
-                &registry,
-                &transforms,
-                &gen_entities,
-                &names_query,
-                &children_query,
-                &parent_query,
-                &visibility_query,
-                &material_handles,
-                &materials,
+                &params.registry,
+                &params.transforms,
+                &params.gen_entities,
+                &params.names_query,
+                &params.children_query,
+                &params.parent_query,
+                &params.visibility_query,
+                &params.material_handles,
+                &params.materials,
             ),
             GenCommand::Screenshot {
                 width,
                 height,
                 wait_frames,
             } => {
-                pending_screenshots.queue.push(PendingScreenshot {
+                params.pending_screenshots.queue.push(PendingScreenshot {
                     frames_remaining: wait_frames,
                     width,
                     height,
@@ -282,37 +287,39 @@ fn process_gen_commands(
             GenCommand::SpawnPrimitive(cmd) => handle_spawn_primitive(
                 cmd,
                 &mut commands,
-                &mut meshes,
-                &mut materials,
-                &mut registry,
+                &mut params.meshes,
+                &mut params.materials,
+                &mut params.registry,
             ),
             GenCommand::ModifyEntity(cmd) => handle_modify_entity(
                 cmd,
                 &mut commands,
-                &registry,
-                &mut materials,
-                &material_handles,
-                &transforms,
+                &params.registry,
+                &mut params.materials,
+                &params.material_handles,
+                &params.transforms,
             ),
             GenCommand::DeleteEntity { name } => {
-                handle_delete_entity(&name, &mut commands, &mut registry)
+                handle_delete_entity(&name, &mut commands, &mut params.registry)
             }
-            GenCommand::SetCamera(cmd) => handle_set_camera(cmd, &mut commands, &registry),
-            GenCommand::SetLight(cmd) => handle_set_light(cmd, &mut commands, &mut registry),
+            GenCommand::SetCamera(cmd) => handle_set_camera(cmd, &mut commands, &params.registry),
+            GenCommand::SetLight(cmd) => {
+                handle_set_light(cmd, &mut commands, &mut params.registry)
+            }
             GenCommand::SetEnvironment(cmd) => handle_set_environment(cmd, &mut commands),
             GenCommand::SpawnMesh(cmd) => handle_spawn_mesh(
                 cmd,
                 &mut commands,
-                &mut meshes,
-                &mut materials,
-                &mut registry,
+                &mut params.meshes,
+                &mut params.materials,
+                &mut params.registry,
             ),
             GenCommand::ExportScreenshot {
                 path,
                 width,
                 height,
             } => {
-                pending_screenshots.queue.push(PendingScreenshot {
+                params.pending_screenshots.queue.push(PendingScreenshot {
                     frames_remaining: 3,
                     width,
                     height,
@@ -322,18 +329,18 @@ fn process_gen_commands(
             }
             GenCommand::ExportGltf { path } => handle_export_gltf(
                 path.as_deref(),
-                &workspace,
-                &registry,
-                &transforms,
-                &gen_entities,
-                &parent_query,
-                &material_handles,
-                &materials,
-                &mesh_handles,
-                &meshes,
+                &params.workspace,
+                &params.registry,
+                &params.transforms,
+                &params.gen_entities,
+                &params.parent_query,
+                &params.material_handles,
+                &params.materials,
+                &params.mesh_handles,
+                &params.meshes,
             ),
             GenCommand::LoadGltf { path } => {
-                if let Some(resolved) = resolve_gltf_path(&path, &workspace.path) {
+                if let Some(resolved) = resolve_gltf_path(&path, &params.workspace.path) {
                     let name = resolved
                         .file_stem()
                         .map(|s| s.to_string_lossy().into_owned())
@@ -343,9 +350,11 @@ fn process_gen_commands(
                         .to_string_lossy()
                         .trim_start_matches('/')
                         .to_string();
-                    let handle = asset_server.load::<Scene>(format!("{}#Scene0", asset_path));
+                    let handle = params
+                        .asset_server
+                        .load::<Scene>(format!("{}#Scene0", asset_path));
 
-                    pending_gltf.queue.push(PendingGltfLoad {
+                    params.pending_gltf.queue.push(PendingGltfLoad {
                         handle,
                         name,
                         path: resolved.to_string_lossy().into_owned(),
@@ -362,17 +371,24 @@ fn process_gen_commands(
             }
 
             // Audio commands
-            GenCommand::SetAmbience(cmd) => audio::handle_set_ambience(cmd, &mut audio_engine),
+            GenCommand::SetAmbience(cmd) => {
+                audio::handle_set_ambience(cmd, &mut params.audio_engine)
+            }
             GenCommand::SpawnAudioEmitter(cmd) => {
-                audio::handle_spawn_audio_emitter(cmd, &mut audio_engine, &mut commands, &registry)
+                audio::handle_spawn_audio_emitter(
+                    cmd,
+                    &mut params.audio_engine,
+                    &mut commands,
+                    &params.registry,
+                )
             }
             GenCommand::ModifyAudioEmitter(cmd) => {
-                audio::handle_modify_audio_emitter(cmd, &mut audio_engine)
+                audio::handle_modify_audio_emitter(cmd, &mut params.audio_engine)
             }
             GenCommand::RemoveAudioEmitter { name } => {
-                audio::handle_remove_audio_emitter(&name, &mut audio_engine)
+                audio::handle_remove_audio_emitter(&name, &mut params.audio_engine)
             }
-            GenCommand::AudioInfo => audio::handle_audio_info(&audio_engine),
+            GenCommand::AudioInfo => audio::handle_audio_info(&params.audio_engine),
         };
 
         let _ = channel_res.channels.resp_tx.send(response);

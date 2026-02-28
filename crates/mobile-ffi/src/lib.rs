@@ -54,12 +54,14 @@ const REGULAR_EDITABLE_FILES: &[&str] = &["MEMORY.md", "SOUL.md", "HEARTBEAT.md"
 /// Editing is only allowed through explicit user action (never by the agent).
 const SECURITY_EDITABLE_FILES: &[&str] = &["LocalGPT.md"];
 
-/// All editable files (regular + security-sensitive).
-const ALL_EDITABLE_FILES: &[&str] = &["MEMORY.md", "SOUL.md", "HEARTBEAT.md", "LocalGPT.md"];
-
 /// Check if a filename is a security-sensitive file that requires confirmation.
 fn is_security_file(filename: &str) -> bool {
     SECURITY_EDITABLE_FILES.contains(&filename)
+}
+
+/// Check if a filename is one of the editable workspace files.
+fn is_editable_file(filename: &str) -> bool {
+    REGULAR_EDITABLE_FILES.contains(&filename) || SECURITY_EDITABLE_FILES.contains(&filename)
 }
 
 // ---------------------------------------------------------------------------
@@ -247,8 +249,9 @@ impl LocalGPTClient {
     /// (like LocalGPT.md) are flagged with `is_security_sensitive = true`.
     pub fn list_workspace_files(&self) -> Vec<WorkspaceFile> {
         let workspace = self.config.workspace_path();
-        ALL_EDITABLE_FILES
+        REGULAR_EDITABLE_FILES
             .iter()
+            .chain(SECURITY_EDITABLE_FILES.iter())
             .map(|name| {
                 let path = workspace.join(name);
                 let content = match std::fs::read_to_string(&path) {
@@ -274,7 +277,7 @@ impl LocalGPTClient {
     /// LocalGPT.md) are allowed. Returns `MobileError::Memory` for
     /// unknown file names to prevent path-traversal.
     pub fn get_workspace_file(&self, filename: String) -> Result<String, MobileError> {
-        if !ALL_EDITABLE_FILES.contains(&filename.as_str()) {
+        if !is_editable_file(&filename) {
             return Err(MobileError::Memory(format!(
                 "File '{}' is not an editable workspace file",
                 filename
@@ -292,7 +295,7 @@ impl LocalGPTClient {
     /// automatically re-signed. The caller (mobile UI) must confirm
     /// security-sensitive file edits before calling this method.
     pub fn set_workspace_file(&self, filename: String, content: String) -> Result<(), MobileError> {
-        if !ALL_EDITABLE_FILES.contains(&filename.as_str()) {
+        if !is_editable_file(&filename) {
             return Err(MobileError::Memory(format!(
                 "File '{}' is not an editable workspace file",
                 filename
@@ -428,27 +431,33 @@ pub enum MobileError {
 mod tests {
     use super::*;
 
-    /// Verify ALL_EDITABLE_FILES is the union of REGULAR + SECURITY lists.
+    /// Verify editable file list is the union of REGULAR + SECURITY lists.
     #[test]
     fn editable_files_lists_consistent() {
+        let all: Vec<&str> = REGULAR_EDITABLE_FILES
+            .iter()
+            .chain(SECURITY_EDITABLE_FILES.iter())
+            .copied()
+            .collect();
+
         for &f in REGULAR_EDITABLE_FILES {
             assert!(
-                ALL_EDITABLE_FILES.contains(&f),
-                "ALL_EDITABLE_FILES missing regular file: {}",
+                all.contains(&f),
+                "Editable file list missing regular file: {}",
                 f
             );
         }
         for &f in SECURITY_EDITABLE_FILES {
             assert!(
-                ALL_EDITABLE_FILES.contains(&f),
-                "ALL_EDITABLE_FILES missing security file: {}",
+                all.contains(&f),
+                "Editable file list missing security file: {}",
                 f
             );
         }
         assert_eq!(
-            ALL_EDITABLE_FILES.len(),
+            all.len(),
             REGULAR_EDITABLE_FILES.len() + SECURITY_EDITABLE_FILES.len(),
-            "ALL_EDITABLE_FILES has unexpected length"
+            "Editable file list has unexpected length"
         );
     }
 
@@ -465,7 +474,7 @@ mod tests {
     /// Verify LocalGPT.md is the only security-sensitive editable file.
     #[test]
     fn only_policy_file_is_security_sensitive() {
-        for &f in ALL_EDITABLE_FILES {
+        for &f in REGULAR_EDITABLE_FILES.iter().chain(SECURITY_EDITABLE_FILES.iter()) {
             if f == security::POLICY_FILENAME {
                 assert!(is_security_file(f), "{} should be security-sensitive", f);
             } else {
