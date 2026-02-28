@@ -82,7 +82,7 @@ pub async fn run(args: AskArgs, agent_id: &str) -> Result<()> {
                     let _ = std::io::stdout().flush();
                 }
                 Ok(StreamEvent::ToolCallEnd { warnings, .. }) => {
-                    print!("Done.\n");
+                    println!("Done.");
                     let _ = std::io::stdout().flush();
                     if !warnings.is_empty() {
                         for warning in warnings {

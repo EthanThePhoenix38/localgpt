@@ -605,7 +605,7 @@ async fn show_status() -> Result<()> {
     if !config.cron.jobs.is_empty() {
         println!("  Cron jobs: {}", config.cron.jobs.len());
     }
-    let telegram_enabled = config.telegram.as_ref().map_or(false, |t| t.enabled);
+    let telegram_enabled = config.telegram.as_ref().is_some_and(|t| t.enabled);
     println!("  Telegram enabled: {}", telegram_enabled);
     println!("  HTTP Server enabled: {}", config.server.enabled);
     if config.server.enabled {
