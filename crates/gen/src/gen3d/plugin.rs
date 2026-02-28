@@ -68,6 +68,26 @@ struct PendingGltfLoads {
     queue: Vec<PendingGltfLoad>,
 }
 
+/// Deferred world setup — applied after a world's glTF scene finishes spawning.
+///
+/// When loading a world, the glTF scene is async. Entity names from the glTF
+/// aren't available until Bevy's scene spawner creates them (1-2 frames after
+/// the asset loads). This resource holds the behaviors and audio emitters
+/// that need to be applied once the named entities appear.
+#[derive(Resource, Default)]
+struct PendingWorldSetup {
+    active: Option<WorldSetupData>,
+}
+
+struct WorldSetupData {
+    /// Entity-name → behavior definitions to apply.
+    behaviors: Vec<(String, Vec<BehaviorDef>)>,
+    /// Audio emitters that reference entities by name.
+    emitters: Vec<AudioEmitterCmd>,
+    /// How many frames we've been waiting (give up after a limit).
+    frames_waited: u32,
+}
+
 /// Marker component for the interactive fly camera.
 #[derive(Component)]
 struct FlyCam;
@@ -119,6 +139,7 @@ pub fn setup_gen_app(
         .init_resource::<NameRegistry>()
         .init_resource::<PendingScreenshots>()
         .init_resource::<PendingGltfLoads>()
+        .init_resource::<PendingWorldSetup>()
         .init_resource::<FlyCamConfig>()
         .init_resource::<BehaviorState>()
         .add_systems(
@@ -132,6 +153,7 @@ pub fn setup_gen_app(
         .add_systems(Update, process_gen_commands)
         .add_systems(Update, process_pending_screenshots)
         .add_systems(Update, process_pending_gltf_loads)
+        .add_systems(Update, process_pending_world_setup)
         .add_systems(Update, audio::spatial_audio_update)
         .add_systems(Update, audio::auto_infer_audio)
         .add_systems(Update, behaviors::behavior_tick)
@@ -249,6 +271,7 @@ struct GenCommandParams<'w, 's> {
     behaviors_query: Query<'w, 's, &'static mut EntityBehaviors>,
     clear_color: Option<Res<'w, ClearColor>>,
     ambient_light: Option<Res<'w, GlobalAmbientLight>>,
+    pending_world: ResMut<'w, PendingWorldSetup>,
 }
 
 fn process_gen_commands(
@@ -460,7 +483,7 @@ fn process_gen_commands(
                 );
                 match result {
                     Ok(world_load) => {
-                        // Queue the glTF scene load
+                        // Queue the glTF scene load (async — entities appear later)
                         if let Some(scene_path) = world_load.scene_path
                             && let Some(resolved) =
                                 resolve_gltf_path(&scene_path, &params.workspace.path)
@@ -480,45 +503,25 @@ fn process_gen_commands(
                             });
                         }
 
-                        // Apply behaviors
-                        for (entity_name, behavior_defs) in &world_load.behaviors {
-                            if let Some(entity) = params.registry.get_entity(entity_name) {
-                                let base_transform =
-                                    params.transforms.get(entity).copied().unwrap_or_default();
-                                let instances: Vec<behaviors::BehaviorInstance> = behavior_defs
-                                    .iter()
-                                    .map(|def| behaviors::BehaviorInstance {
-                                        id: params.behavior_state.next_id(),
-                                        def: def.clone(),
-                                        base_position: base_transform.translation,
-                                        base_scale: base_transform.scale,
-                                    })
-                                    .collect();
-                                commands.entity(entity).insert(EntityBehaviors {
-                                    behaviors: instances,
-                                });
-                            }
+                        // Defer behaviors and emitters — entities from glTF
+                        // won't exist until the scene spawner runs (1-2 frames).
+                        if !world_load.behaviors.is_empty() || !world_load.emitters.is_empty() {
+                            params.pending_world.active = Some(WorldSetupData {
+                                behaviors: world_load.behaviors.clone(),
+                                emitters: world_load.emitters.clone(),
+                                frames_waited: 0,
+                            });
                         }
 
-                        // Apply audio
+                        // Ambience doesn't reference entities — apply immediately.
                         if let Some(ambience) = world_load.ambience {
                             audio::handle_set_ambience(ambience, &mut params.audio_engine);
                         }
-                        for emitter_cmd in &world_load.emitters {
-                            audio::handle_spawn_audio_emitter(
-                                emitter_cmd.clone(),
-                                &mut params.audio_engine,
-                                &mut commands,
-                                &params.registry,
-                            );
-                        }
 
-                        // Apply environment
+                        // Environment and camera don't depend on scene entities.
                         if let Some(env) = world_load.environment {
                             handle_set_environment(env, &mut commands);
                         }
-
-                        // Apply camera
                         if let Some(cam) = world_load.camera {
                             handle_set_camera(cam, &mut commands, &params.registry);
                         }
@@ -534,6 +537,20 @@ fn process_gen_commands(
                     },
                 }
             }
+
+            GenCommand::ClearScene {
+                keep_camera,
+                keep_lights,
+            } => handle_clear_scene(
+                keep_camera,
+                keep_lights,
+                &mut commands,
+                &mut params.registry,
+                &params.gen_entities,
+                &mut params.audio_engine,
+                &mut params.behavior_state,
+                &mut params.pending_world,
+            ),
         };
 
         let _ = channel_res.channels.resp_tx.send(response);
@@ -620,6 +637,89 @@ fn process_pending_gltf_loads(
             let _ = channel_res.channels.resp_tx.send(response);
         }
     }
+}
+
+/// After a world's glTF scene spawns, Bevy's scene spawner creates child
+/// entities with `Name` components (from glTF node names). This system
+/// scans for those named entities, registers them in `NameRegistry`, and
+/// applies the deferred behaviors and audio emitters.
+fn process_pending_world_setup(
+    mut pending: ResMut<PendingWorldSetup>,
+    mut registry: ResMut<NameRegistry>,
+    mut commands: Commands,
+    transforms: Query<&Transform>,
+    mut behavior_state: ResMut<BehaviorState>,
+    mut audio_engine: ResMut<audio::AudioEngine>,
+    named_entities: Query<(Entity, &Name), Without<GenEntity>>,
+) {
+    let Some(ref mut setup) = pending.active else {
+        return;
+    };
+
+    setup.frames_waited += 1;
+
+    // Collect all entity names we need to find.
+    let needed: std::collections::HashSet<String> = setup
+        .behaviors
+        .iter()
+        .map(|(name, _)| name.clone())
+        .chain(setup.emitters.iter().filter_map(|e| e.entity.clone()))
+        .collect();
+
+    if needed.is_empty() {
+        pending.active = None;
+        return;
+    }
+
+    // Scan for newly spawned named entities from the glTF scene.
+    // These won't have GenEntity yet (Bevy scene spawner adds Name but not our marker).
+    let mut found_count = 0;
+    for (entity, name) in named_entities.iter() {
+        let name_str = name.as_str();
+        if needed.contains(name_str) && registry.get_entity(name_str).is_none() {
+            registry.insert(name_str.to_string(), entity);
+            commands.entity(entity).insert(GenEntity {
+                entity_type: GenEntityType::Mesh,
+            });
+            found_count += 1;
+        }
+    }
+
+    // If no entities found yet and we haven't waited too long, try again next frame.
+    if found_count == 0 && setup.frames_waited < 120 {
+        return;
+    }
+
+    // Apply behaviors to now-registered entities.
+    for (entity_name, behavior_defs) in &setup.behaviors {
+        if let Some(entity) = registry.get_entity(entity_name) {
+            let base_transform = transforms.get(entity).copied().unwrap_or_default();
+            let instances: Vec<behaviors::BehaviorInstance> = behavior_defs
+                .iter()
+                .map(|def| behaviors::BehaviorInstance {
+                    id: behavior_state.next_id(),
+                    def: def.clone(),
+                    base_position: base_transform.translation,
+                    base_scale: base_transform.scale,
+                })
+                .collect();
+            commands.entity(entity).insert(EntityBehaviors {
+                behaviors: instances,
+            });
+        }
+    }
+
+    // Apply audio emitters (which reference entities by name for spatial attachment).
+    for emitter_cmd in &setup.emitters {
+        audio::handle_spawn_audio_emitter(
+            emitter_cmd.clone(),
+            &mut audio_engine,
+            &mut commands,
+            &registry,
+        );
+    }
+
+    pending.active = None;
 }
 
 // ---------------------------------------------------------------------------
@@ -1181,6 +1281,58 @@ fn handle_spawn_mesh(
     GenResponse::Spawned {
         name: cmd.name,
         entity_id,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scene management
+// ---------------------------------------------------------------------------
+
+#[allow(clippy::too_many_arguments)]
+fn handle_clear_scene(
+    keep_camera: bool,
+    keep_lights: bool,
+    commands: &mut Commands,
+    registry: &mut NameRegistry,
+    gen_entities: &Query<&GenEntity>,
+    audio_engine: &mut audio::AudioEngine,
+    behavior_state: &mut BehaviorState,
+    pending_world: &mut PendingWorldSetup,
+) -> GenResponse {
+    let mut removed = 0;
+    let all_names: Vec<(String, bevy::ecs::entity::Entity)> = registry
+        .all_names()
+        .map(|(n, e)| (n.to_string(), e))
+        .collect();
+
+    for (name, entity) in &all_names {
+        // Optionally keep cameras and lights
+        if let Ok(gen_ent) = gen_entities.get(*entity) {
+            if keep_camera && gen_ent.entity_type == GenEntityType::Camera {
+                continue;
+            }
+            if keep_lights && gen_ent.entity_type == GenEntityType::Light {
+                continue;
+            }
+        }
+
+        commands.entity(*entity).despawn();
+        registry.remove_by_name(name);
+        removed += 1;
+    }
+
+    // Stop all audio
+    audio_engine.stop_all();
+
+    // Reset behavior state
+    behavior_state.elapsed = 0.0;
+    behavior_state.paused = false;
+
+    // Clear any pending world setup
+    pending_world.active = None;
+
+    GenResponse::SceneCleared {
+        removed_count: removed,
     }
 }
 

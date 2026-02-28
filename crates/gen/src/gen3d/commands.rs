@@ -76,6 +76,12 @@ pub enum GenCommand {
     LoadWorld {
         path: String,
     },
+
+    // Tier 8: Scene management
+    ClearScene {
+        keep_camera: bool,
+        keep_lights: bool,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +484,11 @@ pub enum GenResponse {
         path: String,
         entities: usize,
         behaviors: usize,
+    },
+
+    // Scene management
+    SceneCleared {
+        removed_count: usize,
     },
 
     Error {

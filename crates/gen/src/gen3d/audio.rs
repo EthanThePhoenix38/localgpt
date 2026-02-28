@@ -69,6 +69,23 @@ pub struct EmitterMeta {
     pub position: Option<[f32; 3]>,
 }
 
+impl AudioEngine {
+    /// Stop all audio: remove all emitters and clear ambience state.
+    pub fn stop_all(&mut self) {
+        let emitter_names: Vec<String> = self.emitter_params.keys().cloned().collect();
+        for name in &emitter_names {
+            let _ = self
+                .graph_tx
+                .send(AudioGraphUpdate::RemoveEmitter { name: name.clone() });
+        }
+        self.emitter_params.clear();
+        self.emitter_meta.clear();
+        self.ambience_layer_names.clear();
+        self.layer_volumes.clear();
+        self.last_ambience = None;
+    }
+}
+
 /// Messages sent from Bevy to the audio management thread.
 enum AudioGraphUpdate {
     SetAmbience {

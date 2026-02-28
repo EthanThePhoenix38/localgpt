@@ -42,7 +42,9 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenPauseBehaviorsTool::new(bridge.clone())),
         // World tools
         Box::new(GenSaveWorldTool::new(bridge.clone())),
-        Box::new(GenLoadWorldTool::new(bridge)),
+        Box::new(GenLoadWorldTool::new(bridge.clone())),
+        // Scene management
+        Box::new(GenClearSceneTool::new(bridge)),
     ]
 }
 
@@ -1730,6 +1732,70 @@ impl Tool for GenLoadWorldTool {
                 "World loaded from: {}\n{} entities, {} behaviors restored",
                 path, entities, behaviors
             )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_clear_scene
+// ===========================================================================
+
+struct GenClearSceneTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenClearSceneTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenClearSceneTool {
+    fn name(&self) -> &str {
+        "gen_clear_scene"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_clear_scene".into(),
+            description: "Clear the 3D scene. Removes all entities, stops audio, and resets behaviors. Useful before loading a new world.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "keep_camera": {
+                        "type": "boolean",
+                        "description": "Keep the camera (default: true)",
+                        "default": true
+                    },
+                    "keep_lights": {
+                        "type": "boolean",
+                        "description": "Keep lights (default: true)",
+                        "default": true
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let keep_camera = args["keep_camera"].as_bool().unwrap_or(true);
+        let keep_lights = args["keep_lights"].as_bool().unwrap_or(true);
+
+        match self
+            .bridge
+            .send(GenCommand::ClearScene {
+                keep_camera,
+                keep_lights,
+            })
+            .await?
+        {
+            GenResponse::SceneCleared { removed_count } => {
+                Ok(format!("Scene cleared: {} entities removed", removed_count))
+            }
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }
