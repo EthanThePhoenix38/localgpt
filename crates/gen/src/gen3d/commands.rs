@@ -88,6 +88,7 @@ pub enum GenCommand {
     // Tier 9: Undo/Redo
     Undo,
     Redo,
+    UndoInfo,
 }
 
 // ---------------------------------------------------------------------------
@@ -682,6 +683,10 @@ pub enum GenResponse {
     },
     NothingToUndo,
     NothingToRedo,
+    UndoInfoResult {
+        undo_count: usize,
+        redo_count: usize,
+    },
 
     Error {
         message: String,

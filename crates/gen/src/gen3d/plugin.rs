@@ -312,12 +312,33 @@ struct GenCommandParams<'w, 's> {
     directional_lights: Query<'w, 's, &'static DirectionalLight>,
     point_lights: Query<'w, 's, &'static PointLight>,
     spot_lights: Query<'w, 's, &'static SpotLight>,
+    audio_emitters: Query<'w, 's, &'static audio::AudioEmitter>,
     projections: Query<'w, 's, &'static Projection>,
     clear_color: Option<Res<'w, ClearColor>>,
     ambient_light: Option<Res<'w, GlobalAmbientLight>>,
     pending_world: ResMut<'w, PendingWorldSetup>,
     avatar_config: ResMut<'w, AvatarConfig>,
     world_tours: ResMut<'w, WorldTours>,
+}
+
+/// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
+macro_rules! snap_queries {
+    ($params:expr) => {
+        SnapshotQueries {
+            transforms: &$params.transforms,
+            parametric_shapes: &$params.parametric_shapes,
+            material_handles: &$params.material_handles,
+            materials: &$params.materials,
+            visibility_query: &$params.visibility_query,
+            directional_lights: &$params.directional_lights,
+            point_lights: &$params.point_lights,
+            spot_lights: &$params.spot_lights,
+            behaviors_query: &$params.behaviors_query,
+            audio_emitters: &$params.audio_emitters,
+            parent_query: &$params.parent_query,
+            registry: &$params.registry,
+        }
+    };
 }
 
 fn process_gen_commands(
@@ -377,22 +398,10 @@ fn process_gen_commands(
             GenCommand::ModifyEntity(cmd) => {
                 // Snapshot before modify so we can undo
                 let pre_snapshot = params.registry.get_entity(&cmd.name).and_then(|e| {
-                    params.registry.get_id(e).map(|id| {
-                        snapshot_entity(
-                            &cmd.name,
-                            e,
-                            id,
-                            &params.transforms,
-                            &params.parametric_shapes,
-                            &params.material_handles,
-                            &params.materials,
-                            &params.visibility_query,
-                            &params.directional_lights,
-                            &params.point_lights,
-                            &params.spot_lights,
-                            &params.behaviors_query,
-                        )
-                    })
+                    params
+                        .registry
+                        .get_id(e)
+                        .map(|id| snapshot_entity(&cmd.name, e, id, &snap_queries!(params)))
                 });
                 let resp = handle_modify_entity(
                     cmd.clone(),
@@ -424,22 +433,10 @@ fn process_gen_commands(
             GenCommand::DeleteEntity { name } => {
                 // Snapshot before delete so we can undo
                 let pre_snapshot = params.registry.get_entity(&name).and_then(|e| {
-                    params.registry.get_id(e).map(|id| {
-                        snapshot_entity(
-                            &name,
-                            e,
-                            id,
-                            &params.transforms,
-                            &params.parametric_shapes,
-                            &params.material_handles,
-                            &params.materials,
-                            &params.visibility_query,
-                            &params.directional_lights,
-                            &params.point_lights,
-                            &params.spot_lights,
-                            &params.behaviors_query,
-                        )
-                    })
+                    params
+                        .registry
+                        .get_id(e)
+                        .map(|id| snapshot_entity(&name, e, id, &snap_queries!(params)))
                 });
                 let resp = handle_delete_entity(&name, &mut commands, &mut params.registry);
                 if let GenResponse::Deleted { .. } = &resp
@@ -498,9 +495,7 @@ fn process_gen_commands(
                 if let GenResponse::CameraSet = &resp {
                     if let Some(old_cam) = old_camera {
                         params.undo_stack.history.push(
-                            wt::EditOp::SetCamera {
-                                camera: new_camera,
-                            },
+                            wt::EditOp::SetCamera { camera: new_camera },
                             wt::EditOp::SetCamera { camera: old_cam },
                             None,
                         );
@@ -511,27 +506,11 @@ fn process_gen_commands(
             GenCommand::SetLight(cmd) => {
                 // Snapshot the old light before it gets despawned (for undo)
                 let old_light_snapshot =
-                    params
-                        .registry
-                        .get_entity(&cmd.name)
-                        .and_then(|old_ent| {
-                            params.registry.get_id(old_ent).map(|old_id| {
-                                snapshot_entity(
-                                    &cmd.name,
-                                    old_ent,
-                                    old_id,
-                                    &params.transforms,
-                                    &params.parametric_shapes,
-                                    &params.material_handles,
-                                    &params.materials,
-                                    &params.visibility_query,
-                                    &params.directional_lights,
-                                    &params.point_lights,
-                                    &params.spot_lights,
-                                    &params.behaviors_query,
-                                )
-                            })
-                        });
+                    params.registry.get_entity(&cmd.name).and_then(|old_ent| {
+                        params.registry.get_id(old_ent).map(|old_id| {
+                            snapshot_entity(&cmd.name, old_ent, old_id, &snap_queries!(params))
+                        })
+                    });
                 let resp = handle_set_light(
                     cmd,
                     &mut commands,
@@ -543,36 +522,17 @@ fn process_gen_commands(
                     && let Some(new_ent) = params.registry.get_entity(name)
                     && let Some(new_id) = params.registry.get_id(new_ent)
                 {
-                    let new_we = snapshot_entity(
-                        name,
-                        new_ent,
-                        new_id,
-                        &params.transforms,
-                        &params.parametric_shapes,
-                        &params.material_handles,
-                        &params.materials,
-                        &params.visibility_query,
-                        &params.directional_lights,
-                        &params.point_lights,
-                        &params.spot_lights,
-                        &params.behaviors_query,
-                    );
+                    let new_we = snapshot_entity(name, new_ent, new_id, &snap_queries!(params));
                     params.dirty_tracker.mark_dirty(new_id);
                     if let Some(old_we) = old_light_snapshot {
                         // Replacing existing light: undo restores old, redo re-applies new
                         let old_id = old_we.id;
                         params.undo_stack.history.push(
                             wt::EditOp::Batch {
-                                ops: vec![
-                                    wt::EditOp::delete(new_id),
-                                    wt::EditOp::spawn(new_we),
-                                ],
+                                ops: vec![wt::EditOp::delete(new_id), wt::EditOp::spawn(new_we)],
                             },
                             wt::EditOp::Batch {
-                                ops: vec![
-                                    wt::EditOp::delete(old_id),
-                                    wt::EditOp::spawn(old_we),
-                                ],
+                                ops: vec![wt::EditOp::delete(old_id), wt::EditOp::spawn(old_we)],
                             },
                             None,
                         );
@@ -597,10 +557,7 @@ fn process_gen_commands(
                     let (ambient_intensity, ambient_color) =
                         params.ambient_light.as_ref().map_or((None, None), |al| {
                             let c = al.color.to_srgba();
-                            (
-                                Some(al.brightness),
-                                Some([c.red, c.green, c.blue, c.alpha]),
-                            )
+                            (Some(al.brightness), Some([c.red, c.green, c.blue, c.alpha]))
                         });
                     wt::EnvironmentDef {
                         background_color: bg,
@@ -715,28 +672,12 @@ fn process_gen_commands(
             // Behavior commands
             GenCommand::AddBehavior(cmd) => {
                 // Snapshot before adding behavior for undo
-                let pre_snapshot =
+                let pre_snapshot = params.registry.get_entity(&cmd.entity).and_then(|e| {
                     params
                         .registry
-                        .get_entity(&cmd.entity)
-                        .and_then(|e| {
-                            params.registry.get_id(e).map(|id| {
-                                snapshot_entity(
-                                    &cmd.entity,
-                                    e,
-                                    id,
-                                    &params.transforms,
-                                    &params.parametric_shapes,
-                                    &params.material_handles,
-                                    &params.materials,
-                                    &params.visibility_query,
-                                    &params.directional_lights,
-                                    &params.point_lights,
-                                    &params.spot_lights,
-                                    &params.behaviors_query,
-                                )
-                            })
-                        });
+                        .get_id(e)
+                        .map(|id| snapshot_entity(&cmd.entity, e, id, &snap_queries!(params)))
+                });
                 let entity_name = cmd.entity.clone();
                 let resp = behaviors::handle_add_behavior(
                     cmd,
@@ -751,20 +692,7 @@ fn process_gen_commands(
                     && let Some(e) = params.registry.get_entity(&entity_name)
                     && let Some(id) = params.registry.get_id(e)
                 {
-                    let new_we = snapshot_entity(
-                        &entity_name,
-                        e,
-                        id,
-                        &params.transforms,
-                        &params.parametric_shapes,
-                        &params.material_handles,
-                        &params.materials,
-                        &params.visibility_query,
-                        &params.directional_lights,
-                        &params.point_lights,
-                        &params.spot_lights,
-                        &params.behaviors_query,
-                    );
+                    let new_we = snapshot_entity(&entity_name, e, id, &snap_queries!(params));
                     params.undo_stack.history.push(
                         wt::EditOp::Batch {
                             ops: vec![wt::EditOp::delete(id), wt::EditOp::spawn(new_we)],
@@ -782,25 +710,12 @@ fn process_gen_commands(
                 behavior_id,
             } => {
                 // Snapshot before removing behavior for undo
-                let pre_snapshot =
-                    params.registry.get_entity(&entity).and_then(|e| {
-                        params.registry.get_id(e).map(|id| {
-                            snapshot_entity(
-                                &entity,
-                                e,
-                                id,
-                                &params.transforms,
-                                &params.parametric_shapes,
-                                &params.material_handles,
-                                &params.materials,
-                                &params.visibility_query,
-                                &params.directional_lights,
-                                &params.point_lights,
-                                &params.spot_lights,
-                                &params.behaviors_query,
-                            )
-                        })
-                    });
+                let pre_snapshot = params.registry.get_entity(&entity).and_then(|e| {
+                    params
+                        .registry
+                        .get_id(e)
+                        .map(|id| snapshot_entity(&entity, e, id, &snap_queries!(params)))
+                });
                 let entity_name = entity.clone();
                 let resp = behaviors::handle_remove_behavior(
                     &entity,
@@ -814,20 +729,7 @@ fn process_gen_commands(
                     && let Some(e) = params.registry.get_entity(&entity_name)
                     && let Some(id) = params.registry.get_id(e)
                 {
-                    let new_we = snapshot_entity(
-                        &entity_name,
-                        e,
-                        id,
-                        &params.transforms,
-                        &params.parametric_shapes,
-                        &params.material_handles,
-                        &params.materials,
-                        &params.visibility_query,
-                        &params.directional_lights,
-                        &params.point_lights,
-                        &params.spot_lights,
-                        &params.behaviors_query,
-                    );
+                    let new_we = snapshot_entity(&entity_name, e, id, &snap_queries!(params));
                     params.undo_stack.history.push(
                         wt::EditOp::Batch {
                             ops: vec![wt::EditOp::delete(id), wt::EditOp::spawn(new_we)],
@@ -1014,20 +916,7 @@ fn process_gen_commands(
                         {
                             continue;
                         }
-                        pre_snapshots.push(snapshot_entity(
-                            name,
-                            *ent,
-                            id,
-                            &params.transforms,
-                            &params.parametric_shapes,
-                            &params.material_handles,
-                            &params.materials,
-                            &params.visibility_query,
-                            &params.directional_lights,
-                            &params.point_lights,
-                            &params.spot_lights,
-                            &params.behaviors_query,
-                        ));
+                        pre_snapshots.push(snapshot_entity(name, *ent, id, &snap_queries!(params)));
                     }
                 }
 
@@ -1050,10 +939,8 @@ fn process_gen_commands(
                         .iter()
                         .map(|we| wt::EditOp::delete(we.id))
                         .collect();
-                    let inverse_ops: Vec<wt::EditOp> = pre_snapshots
-                        .into_iter()
-                        .map(wt::EditOp::spawn)
-                        .collect();
+                    let inverse_ops: Vec<wt::EditOp> =
+                        pre_snapshots.into_iter().map(wt::EditOp::spawn).collect();
                     params.undo_stack.history.push(
                         wt::EditOp::Batch { ops: forward_ops },
                         wt::EditOp::Batch { ops: inverse_ops },
@@ -1086,6 +973,10 @@ fn process_gen_commands(
                 &mut params.next_entity_id,
                 &mut params.behavior_state,
             ),
+            GenCommand::UndoInfo => GenResponse::UndoInfoResult {
+                undo_count: params.undo_stack.history.undo_count(),
+                redo_count: params.undo_stack.history.redo_count(),
+            },
         };
 
         // Mark entities dirty and record undo history.
@@ -1096,20 +987,7 @@ fn process_gen_commands(
                 {
                     params.dirty_tracker.mark_dirty(id);
                     // Record undo: inverse of spawn is delete
-                    let we = snapshot_entity(
-                        name,
-                        bevy_ent,
-                        id,
-                        &params.transforms,
-                        &params.parametric_shapes,
-                        &params.material_handles,
-                        &params.materials,
-                        &params.visibility_query,
-                        &params.directional_lights,
-                        &params.point_lights,
-                        &params.spot_lights,
-                        &params.behaviors_query,
-                    );
+                    let we = snapshot_entity(name, bevy_ent, id, &snap_queries!(params));
                     params.undo_stack.history.push(
                         wt::EditOp::spawn(we),
                         wt::EditOp::delete(id),
@@ -2245,27 +2123,35 @@ fn spawn_light_entity(
 // Undo/Redo support
 // ---------------------------------------------------------------------------
 
+/// Borrows all the queries needed to snapshot entity state.
+/// Avoids passing 12+ individual query parameters to `snapshot_entity`.
+struct SnapshotQueries<'a, 'w, 's> {
+    transforms: &'a Query<'w, 's, &'static Transform>,
+    parametric_shapes: &'a Query<'w, 's, &'static ParametricShape>,
+    material_handles: &'a Query<'w, 's, &'static MeshMaterial3d<StandardMaterial>>,
+    materials: &'a Assets<StandardMaterial>,
+    visibility_query: &'a Query<'w, 's, &'static Visibility>,
+    directional_lights: &'a Query<'w, 's, &'static DirectionalLight>,
+    point_lights: &'a Query<'w, 's, &'static PointLight>,
+    spot_lights: &'a Query<'w, 's, &'static SpotLight>,
+    behaviors_query: &'a Query<'w, 's, &'static mut EntityBehaviors>,
+    audio_emitters: &'a Query<'w, 's, &'static audio::AudioEmitter>,
+    parent_query: &'a Query<'w, 's, &'static ChildOf>,
+    registry: &'a NameRegistry,
+}
+
 /// Capture the current ECS state of an entity as a `wt::WorldEntity`.
 ///
 /// Used to record the entity state before/after modifications for undo history.
-#[allow(clippy::too_many_arguments)]
 fn snapshot_entity(
     name: &str,
     entity: bevy::ecs::entity::Entity,
     id: wt::EntityId,
-    transforms: &Query<&Transform>,
-    parametric_shapes: &Query<&ParametricShape>,
-    material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
-    materials: &Assets<StandardMaterial>,
-    visibility_query: &Query<&Visibility>,
-    directional_lights: &Query<&DirectionalLight>,
-    point_lights: &Query<&PointLight>,
-    spot_lights: &Query<&SpotLight>,
-    behaviors_query: &Query<&mut EntityBehaviors>,
+    sq: &SnapshotQueries,
 ) -> wt::WorldEntity {
     let mut we = wt::WorldEntity::new(id.0, name);
 
-    if let Ok(transform) = transforms.get(entity) {
+    if let Ok(transform) = sq.transforms.get(entity) {
         let euler = transform.rotation.to_euler(EulerRot::XYZ);
         we.transform = wt::WorldTransform {
             position: transform.translation.to_array(),
@@ -2275,19 +2161,20 @@ fn snapshot_entity(
                 euler.2.to_degrees(),
             ],
             scale: transform.scale.to_array(),
-            visible: visibility_query
+            visible: sq
+                .visibility_query
                 .get(entity)
                 .map(|v| *v != Visibility::Hidden)
                 .unwrap_or(true),
         };
     }
 
-    if let Ok(param) = parametric_shapes.get(entity) {
+    if let Ok(param) = sq.parametric_shapes.get(entity) {
         we.shape = Some(param.shape.clone());
     }
 
-    if let Ok(mat_handle) = material_handles.get(entity)
-        && let Some(mat) = materials.get(&mat_handle.0)
+    if let Ok(mat_handle) = sq.material_handles.get(entity)
+        && let Some(mat) = sq.materials.get(&mat_handle.0)
     {
         let c = mat.base_color.to_srgba();
         let e = mat.emissive;
@@ -2300,9 +2187,10 @@ fn snapshot_entity(
     }
 
     // Light
-    if let Ok(dl) = directional_lights.get(entity) {
+    if let Ok(dl) = sq.directional_lights.get(entity) {
         let c = dl.color.to_srgba();
-        let dir = transforms
+        let dir = sq
+            .transforms
             .get(entity)
             .ok()
             .map(|t| t.forward().as_vec3().to_array());
@@ -2313,7 +2201,7 @@ fn snapshot_entity(
             direction: dir,
             shadows: dl.shadows_enabled,
         });
-    } else if let Ok(pl) = point_lights.get(entity) {
+    } else if let Ok(pl) = sq.point_lights.get(entity) {
         let c = pl.color.to_srgba();
         we.light = Some(wt::LightDef {
             light_type: wt::LightType::Point,
@@ -2322,9 +2210,10 @@ fn snapshot_entity(
             direction: None,
             shadows: pl.shadows_enabled,
         });
-    } else if let Ok(sl) = spot_lights.get(entity) {
+    } else if let Ok(sl) = sq.spot_lights.get(entity) {
         let c = sl.color.to_srgba();
-        let dir = transforms
+        let dir = sq
+            .transforms
             .get(entity)
             .ok()
             .map(|t| t.forward().as_vec3().to_array());
@@ -2338,12 +2227,30 @@ fn snapshot_entity(
     }
 
     // Behaviors
-    if let Ok(eb) = behaviors_query.get(entity) {
+    if let Ok(eb) = sq.behaviors_query.get(entity) {
         we.behaviors = eb
             .behaviors
             .iter()
             .map(|bi| wt::BehaviorDef::from(&bi.def))
             .collect();
+    }
+
+    // Audio
+    if let Ok(ae) = sq.audio_emitters.get(entity) {
+        we.audio = Some(wt::AudioDef {
+            kind: wt::AudioKind::Sfx,
+            source: wt::AudioSource::from(&ae.sound),
+            volume: ae.volume,
+            radius: Some(ae.radius),
+            rolloff: wt::Rolloff::InverseSquare,
+        });
+    }
+
+    // Parent
+    if let Ok(child_of) = sq.parent_query.get(entity) {
+        if let Some(parent_id) = sq.registry.get_id(child_of.0) {
+            we.parent = Some(parent_id);
+        }
     }
 
     we
@@ -2469,12 +2376,12 @@ fn apply_edit_op(
                 let transform = Transform::from_translation(Vec3::from_array(camera.position))
                     .looking_at(Vec3::from_array(camera.look_at), Vec3::Y);
                 commands.entity(cam_entity).insert(transform);
-                commands
-                    .entity(cam_entity)
-                    .insert(Projection::Perspective(PerspectiveProjection {
+                commands.entity(cam_entity).insert(Projection::Perspective(
+                    PerspectiveProjection {
                         fov: camera.fov_degrees.to_radians(),
                         ..default()
-                    }));
+                    },
+                ));
                 "restored camera".to_string()
             } else {
                 "main_camera not found".to_string()

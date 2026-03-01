@@ -47,7 +47,8 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenClearSceneTool::new(bridge.clone())),
         // Undo/Redo
         Box::new(GenUndoTool::new(bridge.clone())),
-        Box::new(GenRedoTool::new(bridge)),
+        Box::new(GenRedoTool::new(bridge.clone())),
+        Box::new(GenUndoInfoTool::new(bridge)),
     ]
 }
 
@@ -1888,6 +1889,48 @@ impl Tool for GenRedoTool {
         match self.bridge.send(GenCommand::Redo).await? {
             GenResponse::Redone { description } => Ok(format!("Redone: {}", description)),
             GenResponse::NothingToRedo => Ok("Nothing to redo".to_string()),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+struct GenUndoInfoTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenUndoInfoTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenUndoInfoTool {
+    fn name(&self) -> &str {
+        "gen_undo_info"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_undo_info".into(),
+            description: "Show the current undo/redo stack state: how many operations can be undone and redone.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        }
+    }
+
+    async fn execute(&self, _arguments: &str) -> Result<String> {
+        match self.bridge.send(GenCommand::UndoInfo).await? {
+            GenResponse::UndoInfoResult {
+                undo_count,
+                redo_count,
+            } => Ok(format!(
+                "Undo stack: {} operations can be undone, {} can be redone",
+                undo_count, redo_count
+            )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }
