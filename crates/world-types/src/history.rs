@@ -185,4 +185,73 @@ mod tests {
         assert_eq!(history.redo_count(), 0);
         assert_eq!(history.undo_count(), 2); // first + new
     }
+
+    #[test]
+    fn edit_op_set_environment_roundtrip() {
+        let op = EditOp::SetEnvironment {
+            env: crate::world::EnvironmentDef {
+                background_color: Some([0.1, 0.2, 0.3, 1.0]),
+                ambient_intensity: Some(0.5),
+                ambient_color: Some([1.0, 1.0, 0.9, 1.0]),
+                fog_density: Some(0.02),
+                fog_color: None,
+            },
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        let back: EditOp = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, EditOp::SetEnvironment { .. }));
+    }
+
+    #[test]
+    fn edit_op_set_camera_roundtrip() {
+        let op = EditOp::SetCamera {
+            camera: crate::world::CameraDef {
+                position: [10.0, 5.0, 10.0],
+                look_at: [0.0, 0.0, 0.0],
+                fov_degrees: 60.0,
+            },
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        let back: EditOp = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, EditOp::SetCamera { .. }));
+    }
+
+    #[test]
+    fn edit_op_batch_roundtrip() {
+        let entity = WorldEntity::new(5, "test_batch");
+        let op = EditOp::Batch {
+            ops: vec![
+                EditOp::delete(EntityId(1)),
+                EditOp::spawn(entity),
+                EditOp::SetEnvironment {
+                    env: crate::world::EnvironmentDef {
+                        background_color: Some([0.0, 0.0, 0.0, 1.0]),
+                        ambient_intensity: None,
+                        ambient_color: None,
+                        fog_density: None,
+                        fog_color: None,
+                    },
+                },
+            ],
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        let back: EditOp = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, EditOp::Batch { ops } if ops.len() == 3));
+    }
+
+    #[test]
+    fn edit_op_modify_entity_roundtrip() {
+        let op = EditOp::ModifyEntity {
+            id: EntityId(42),
+            patch: EntityPatch {
+                name: Some(crate::identity::EntityName::new("renamed")),
+                shape: Some(Some(crate::shape::Shape::Sphere { radius: 3.0 })),
+                light: Some(None), // Clearing the light
+                ..Default::default()
+            },
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        let back: EditOp = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, EditOp::ModifyEntity { id, .. } if id.0 == 42));
+    }
 }

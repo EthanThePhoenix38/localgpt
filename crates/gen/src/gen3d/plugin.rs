@@ -976,6 +976,8 @@ fn process_gen_commands(
             GenCommand::UndoInfo => GenResponse::UndoInfoResult {
                 undo_count: params.undo_stack.history.undo_count(),
                 redo_count: params.undo_stack.history.redo_count(),
+                entity_count: params.registry.len(),
+                dirty_count: params.dirty_tracker.dirty_count(),
             },
         };
 

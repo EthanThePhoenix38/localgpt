@@ -1673,10 +1673,23 @@ impl Tool for GenSaveWorldTool {
         };
 
         match self.bridge.send(GenCommand::SaveWorld(cmd)).await? {
-            GenResponse::WorldSaved { path, skill_name } => Ok(format!(
-                "World '{}' saved to: {}\nCan be loaded with gen_load_world or invoked as /{}",
-                skill_name, path, skill_name
-            )),
+            GenResponse::WorldSaved {
+                path,
+                skill_name,
+                warnings,
+            } => {
+                let mut msg = format!(
+                    "World '{}' saved to: {}\nCan be loaded with gen_load_world or invoked as /{}",
+                    skill_name, path, skill_name
+                );
+                if !warnings.is_empty() {
+                    msg.push_str("\n\nValidation warnings:");
+                    for w in &warnings {
+                        msg.push_str(&format!("\n  - {}", w));
+                    }
+                }
+                Ok(msg)
+            }
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }
@@ -1927,9 +1940,11 @@ impl Tool for GenUndoInfoTool {
             GenResponse::UndoInfoResult {
                 undo_count,
                 redo_count,
+                entity_count,
+                dirty_count,
             } => Ok(format!(
-                "Undo stack: {} operations can be undone, {} can be redone",
-                undo_count, redo_count
+                "Undo: {} undoable, {} redoable | Scene: {} entities ({} unsaved)",
+                undo_count, redo_count, entity_count, dirty_count
             )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),

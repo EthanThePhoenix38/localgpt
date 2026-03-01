@@ -380,6 +380,19 @@ pub fn handle_save_world(
         next_entity_id: next_id,
     };
 
+    // Validate before saving
+    let validation_issues = wt::validation::validate_entities(&manifest.entities, &wt::WorldLimits::default());
+    let warnings: Vec<String> = validation_issues
+        .iter()
+        .map(|i| i.message.clone())
+        .collect();
+    for issue in &validation_issues {
+        match issue.severity {
+            wt::Severity::Warning => tracing::warn!("Save validation: {}", issue.message),
+            wt::Severity::Error => tracing::error!("Save validation: {}", issue.message),
+        }
+    }
+
     // Write world.ron
     let ron_str = ron::ser::to_string_pretty(&manifest, ron::ser::PrettyConfig::default())
         .unwrap_or_else(|e| {
@@ -440,6 +453,7 @@ behaviors, audio, avatar, and tours.
     GenResponse::WorldSaved {
         path: skill_dir.to_string_lossy().into_owned(),
         skill_name: cmd.name,
+        warnings,
     }
 }
 

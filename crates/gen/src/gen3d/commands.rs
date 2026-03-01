@@ -662,6 +662,7 @@ pub enum GenResponse {
     WorldSaved {
         path: String,
         skill_name: String,
+        warnings: Vec<String>,
     },
     WorldLoaded {
         path: String,
@@ -686,6 +687,8 @@ pub enum GenResponse {
     UndoInfoResult {
         undo_count: usize,
         redo_count: usize,
+        entity_count: usize,
+        dirty_count: usize,
     },
 
     Error {
