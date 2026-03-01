@@ -698,6 +698,8 @@ pub struct SceneInfoData {
 pub struct EntitySummary {
     pub name: String,
     pub entity_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shape: Option<String>,
     pub position: [f32; 3],
     pub scale: [f32; 3],
     #[serde(skip_serializing_if = "Option::is_none")]

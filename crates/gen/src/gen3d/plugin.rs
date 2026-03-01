@@ -333,6 +333,7 @@ fn process_gen_commands(
                 &params.gen_entities,
                 &params.material_handles,
                 &params.materials,
+                &params.parametric_shapes,
             ),
             GenCommand::EntityInfo { name } => handle_entity_info(
                 &name,
@@ -1213,6 +1214,7 @@ fn handle_scene_info(
     gen_entities: &Query<&GenEntity>,
     material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
     material_assets: &Assets<StandardMaterial>,
+    parametric_shapes: &Query<&ParametricShape>,
 ) -> GenResponse {
     let mut entities = Vec::new();
 
@@ -1230,6 +1232,11 @@ fn handle_scene_info(
             .map(|g| g.entity_type.as_str().to_string())
             .unwrap_or_else(|_| "unknown".to_string());
 
+        let shape = parametric_shapes
+            .get(entity)
+            .ok()
+            .map(|p| p.shape.kind().to_string());
+
         let color = material_handles
             .get(entity)
             .ok()
@@ -1242,6 +1249,7 @@ fn handle_scene_info(
         entities.push(EntitySummary {
             name: name.to_string(),
             entity_type,
+            shape,
             position,
             scale,
             color,
