@@ -105,5 +105,8 @@ async fn async_main(cli: Cli) -> Result<()> {
         Commands::Init(args) => crate::cli::init::run(args),
         Commands::Bridge(args) => crate::cli::bridge::run(args).await,
         Commands::Doctor(args) => crate::cli::doctor::run(args).await,
+        Commands::Completion(args) => crate::cli::completion::run(args),
+        Commands::Cron(args) => crate::cli::cron::run(args),
+        Commands::Hooks(args) => crate::cli::hooks::run(args),
     }
 }

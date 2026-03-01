@@ -55,6 +55,9 @@ pub struct Config {
     pub cron: CronConfig,
 
     #[serde(default)]
+    pub hooks: HooksConfig,
+
+    #[serde(default)]
     pub mcp: McpConfig,
 }
 
@@ -678,6 +681,32 @@ pub struct CronJob {
     /// Timeout for the job (e.g., "5m", "1h"). Default: 10m
     #[serde(default = "default_cron_timeout")]
     pub timeout: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HooksConfig {
+    #[serde(default)]
+    pub hooks: Vec<HookConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HookConfig {
+    /// Unique name for this hook
+    pub name: String,
+
+    /// Event type: onMessage, onToolCall, onSessionStart, onSessionEnd, beforeToolCall, afterToolCall
+    pub event: String,
+
+    /// Command to execute (shell command)
+    pub command: String,
+
+    /// Optional filter (e.g., "tool:bash" for beforeToolCall)
+    #[serde(default)]
+    pub filter: Option<String>,
+
+    /// Whether this hook is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

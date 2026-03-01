@@ -1,13 +1,16 @@
 pub mod ask;
 pub mod bridge;
 pub mod chat;
+pub mod completion;
 pub mod config;
+pub mod cron;
 pub mod daemon;
 #[cfg(feature = "desktop")]
 pub mod desktop;
 pub mod doctor;
 #[cfg(feature = "gen")]
 pub mod gen3d;
+pub mod hooks;
 pub mod init;
 pub mod md;
 pub mod memory;
@@ -93,4 +96,13 @@ pub enum Commands {
 
     /// Run diagnostics to validate setup
     Doctor(doctor::DoctorArgs),
+
+    /// Generate shell completion scripts
+    Completion(completion::CompletionArgs),
+
+    /// Manage cron jobs
+    Cron(cron::CronArgs),
+
+    /// Manage event hooks
+    Hooks(hooks::HooksArgs),
 }
