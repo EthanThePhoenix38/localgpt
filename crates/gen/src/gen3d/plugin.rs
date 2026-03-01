@@ -1693,14 +1693,18 @@ fn handle_set_light(
         }
         LightType::Point => {
             let pos = cmd.position.unwrap_or([0.0, 5.0, 0.0]);
+            let mut pl = PointLight {
+                intensity: cmd.intensity,
+                shadows_enabled: cmd.shadows,
+                color,
+                ..default()
+            };
+            if let Some(r) = cmd.range {
+                pl.range = r;
+            }
             commands
                 .spawn((
-                    PointLight {
-                        intensity: cmd.intensity,
-                        shadows_enabled: cmd.shadows,
-                        color,
-                        ..default()
-                    },
+                    pl,
                     Transform::from_translation(Vec3::from_array(pos)),
                     Name::new(cmd.name.clone()),
                     GenEntity {
@@ -1715,14 +1719,24 @@ fn handle_set_light(
             let dir = cmd.direction.unwrap_or([0.0, -1.0, 0.0]);
             let transform = Transform::from_translation(Vec3::from_array(pos))
                 .looking_at(Vec3::from_array(pos) + Vec3::from_array(dir), Vec3::Y);
+            let mut sl = SpotLight {
+                intensity: cmd.intensity,
+                shadows_enabled: cmd.shadows,
+                color,
+                ..default()
+            };
+            if let Some(r) = cmd.range {
+                sl.range = r;
+            }
+            if let Some(oa) = cmd.outer_angle {
+                sl.outer_angle = oa;
+            }
+            if let Some(ia) = cmd.inner_angle {
+                sl.inner_angle = ia;
+            }
             commands
                 .spawn((
-                    SpotLight {
-                        intensity: cmd.intensity,
-                        shadows_enabled: cmd.shadows,
-                        color,
-                        ..default()
-                    },
+                    sl,
                     transform,
                     Name::new(cmd.name.clone()),
                     GenEntity {

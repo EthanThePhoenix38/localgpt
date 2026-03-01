@@ -631,6 +631,18 @@ impl Tool for GenSetLightTool {
                     "shadows": {
                         "type": "boolean",
                         "default": true
+                    },
+                    "range": {
+                        "type": "number",
+                        "description": "Max range in world units for point/spot lights"
+                    },
+                    "outer_angle": {
+                        "type": "number",
+                        "description": "Outer cone angle in radians (spot lights only)"
+                    },
+                    "inner_angle": {
+                        "type": "number",
+                        "description": "Inner cone angle in radians (spot lights only)"
                     }
                 },
                 "required": ["name"]
@@ -655,6 +667,9 @@ impl Tool for GenSetLightTool {
             position: parse_opt_f32_array(&args["position"]),
             direction: parse_opt_f32_array(&args["direction"]),
             shadows: args["shadows"].as_bool().unwrap_or(true),
+            range: args.get("range").and_then(|v| v.as_f64()).map(|v| v as f32),
+            outer_angle: args.get("outer_angle").and_then(|v| v.as_f64()).map(|v| v as f32),
+            inner_angle: args.get("inner_angle").and_then(|v| v.as_f64()).map(|v| v as f32),
         };
 
         match self.bridge.send(GenCommand::SetLight(cmd)).await? {

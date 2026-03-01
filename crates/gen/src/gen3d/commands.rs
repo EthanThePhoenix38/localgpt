@@ -166,6 +166,15 @@ pub struct SetLightCmd {
     pub direction: Option<[f32; 3]>,
     #[serde(default = "default_true")]
     pub shadows: bool,
+    /// Maximum range for point/spot lights (world units). None = engine default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<f32>,
+    /// Outer cone angle in radians (spot lights only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_angle: Option<f32>,
+    /// Inner cone angle in radians (spot lights only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inner_angle: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

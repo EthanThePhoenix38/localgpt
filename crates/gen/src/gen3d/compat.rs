@@ -152,9 +152,9 @@ impl From<&SetLightCmd> for wt::LightDef {
             intensity: cmd.intensity,
             direction: cmd.direction,
             shadows: cmd.shadows,
-            range: None,
-            outer_angle: None,
-            inner_angle: None,
+            range: cmd.range,
+            outer_angle: cmd.outer_angle,
+            inner_angle: cmd.inner_angle,
         }
     }
 }
@@ -169,6 +169,9 @@ impl From<&wt::LightDef> for SetLightCmd {
             position: None, // stored in transform, not light
             direction: def.direction,
             shadows: def.shadows,
+            range: def.range,
+            outer_angle: def.outer_angle,
+            inner_angle: def.inner_angle,
         }
     }
 }
