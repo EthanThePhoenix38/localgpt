@@ -253,8 +253,8 @@ pub fn handle_save_world(
             });
         }
 
-        // Light — extract from Bevy light components
-        if gen_ent.entity_type == GenEntityType::Light {
+        // Light — extract from Bevy light components (any entity type can have a light)
+        {
             if let Ok(dl) = directional_lights.get(bevy_entity) {
                 let c = dl.color.to_srgba();
                 let dir = transform.forward().as_vec3().to_array();
