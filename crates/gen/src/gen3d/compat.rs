@@ -51,6 +51,7 @@ pub fn shape_from_primitive(shape: PrimitiveShape, dims: &HashMap<String, f32>) 
 }
 
 /// Convert world-types Shape → PrimitiveShape + dimensions HashMap
+#[cfg(test)]
 pub fn shape_to_primitive(shape: &wt::Shape) -> (PrimitiveShape, HashMap<String, f32>) {
     match shape {
         wt::Shape::Cuboid { x, y, z } => {

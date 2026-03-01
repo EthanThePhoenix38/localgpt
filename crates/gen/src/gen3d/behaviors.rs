@@ -503,21 +503,3 @@ fn behavior_description(def: &BehaviorDef) -> String {
 // ---------------------------------------------------------------------------
 // Serialization helpers (for world save/load)
 // ---------------------------------------------------------------------------
-
-/// Collect all behaviors from the ECS for serialization.
-pub fn collect_all_behaviors(
-    registry: &NameRegistry,
-    behaviors_query: &Query<&mut EntityBehaviors>,
-) -> Vec<(String, Vec<BehaviorDef>)> {
-    let mut result = Vec::new();
-    for (name, entity) in registry.all_names() {
-        if let Ok(behaviors) = behaviors_query.get(entity)
-            && !behaviors.behaviors.is_empty()
-        {
-            let defs: Vec<BehaviorDef> =
-                behaviors.behaviors.iter().map(|b| b.def.clone()).collect();
-            result.push((name.to_string(), defs));
-        }
-    }
-    result
-}
