@@ -173,6 +173,7 @@ pub fn handle_save_world(
     env_snapshot: &EnvironmentSnapshot,
     avatar: Option<&AvatarDef>,
     tours: &[TourDef],
+    edit_history: &wt::EditHistory,
 ) -> GenResponse {
     // Resolve output directory
     let skill_dir = if let Some(ref path) = cmd.path {
@@ -475,6 +476,23 @@ behaviors, audio, avatar, and tours.
         };
     }
 
+    // Write undo history as JSONL (one WorldEdit per line)
+    if !edit_history.edits.is_empty() {
+        let mut lines = String::new();
+        for edit in &edit_history.edits {
+            if let Ok(line) = serde_json::to_string(edit) {
+                lines.push_str(&line);
+                lines.push('\n');
+            }
+        }
+        // Also store cursor position as a metadata line
+        lines.push_str(&format!("{{\"_cursor\":{}}}\n", edit_history.cursor));
+        if let Err(e) = std::fs::write(skill_dir.join("history.jsonl"), &lines) {
+            // Non-fatal — undo history is optional
+            tracing::warn!("Failed to write history.jsonl: {}", e);
+        }
+    }
+
     GenResponse::WorldSaved {
         path: skill_dir.to_string_lossy().into_owned(),
         skill_name: cmd.name,
@@ -503,6 +521,8 @@ pub struct WorldLoadResult {
     pub tours: Vec<TourDef>,
     pub entity_count: usize,
     pub behavior_count: usize,
+    /// Restored edit history from history.jsonl (if present).
+    pub edit_history: Option<wt::EditHistory>,
 }
 
 pub fn handle_load_world(
@@ -599,6 +619,9 @@ fn load_ron_world(world_dir: &Path, ron_path: &Path) -> Result<WorldLoadResult, 
     let tours: Vec<TourDef> = manifest.tours.iter().map(|t| t.into()).collect();
     let entity_count = scene_entities.len();
 
+    // Load edit history from history.jsonl if present
+    let edit_history = load_edit_history(&world_dir.join("history.jsonl"));
+
     Ok(WorldLoadResult {
         world_path: world_dir.to_string_lossy().into_owned(),
         scene_path: None, // No glTF needed — spawn from WorldEntity
@@ -612,6 +635,7 @@ fn load_ron_world(world_dir: &Path, ron_path: &Path) -> Result<WorldLoadResult, 
         tours,
         entity_count,
         behavior_count,
+        edit_history,
     })
 }
 
@@ -709,7 +733,45 @@ fn load_legacy_world(world_dir: &Path, toml_path: &Path) -> Result<WorldLoadResu
         camera,
         avatar,
         tours,
+        edit_history: None, // Legacy format has no history
     })
+}
+
+/// Load edit history from a JSONL file. Returns None if file doesn't exist or has errors.
+fn load_edit_history(path: &std::path::Path) -> Option<wt::EditHistory> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let mut edits = Vec::new();
+    let mut cursor = 0usize;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // Check for cursor metadata line
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+            if let Some(c) = val.get("_cursor").and_then(|v| v.as_u64()) {
+                cursor = c as usize;
+                continue;
+            }
+        }
+        // Parse as WorldEdit
+        match serde_json::from_str::<wt::WorldEdit>(line) {
+            Ok(edit) => edits.push(edit),
+            Err(e) => {
+                tracing::warn!("Skipping malformed history line: {}", e);
+            }
+        }
+    }
+
+    if edits.is_empty() {
+        return None;
+    }
+
+    // Clamp cursor to valid range
+    let cursor = cursor.min(edits.len());
+
+    Some(wt::EditHistory { edits, cursor })
 }
 
 /// Resolve a world skill path. Now checks for both world.ron and world.toml.
