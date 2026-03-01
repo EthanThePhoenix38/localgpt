@@ -1100,7 +1100,10 @@ fn handle_entity_info(
 
     GenResponse::EntityInfo(EntityInfoData {
         name: name.to_string(),
-        entity_id: entity.to_bits(),
+        entity_id: registry
+            .get_id(entity)
+            .map(|id| id.0)
+            .unwrap_or(entity.to_bits()),
         entity_type,
         position: transform.translation.to_array(),
         rotation_degrees: [
@@ -1224,12 +1227,11 @@ fn handle_spawn_primitive(
         commands.entity(entity).set_parent_in_place(parent_entity);
     }
 
-    let entity_id = entity.to_bits();
     registry.insert_with_id(cmd.name.clone(), entity, wid);
 
     GenResponse::Spawned {
         name: cmd.name,
-        entity_id,
+        entity_id: wid.0,
     }
 }
 
@@ -1540,12 +1542,11 @@ fn handle_spawn_mesh(
         ))
         .id();
 
-    let entity_id = entity.to_bits();
     registry.insert_with_id(cmd.name.clone(), entity, wid);
 
     GenResponse::Spawned {
         name: cmd.name,
-        entity_id,
+        entity_id: wid.0,
     }
 }
 
