@@ -955,10 +955,16 @@ impl Tool for GenSpawnMeshTool {
             scale: parse_f32_array(&args["scale"], [1.0, 1.0, 1.0]),
             parent: args["parent"].as_str().map(|s| s.to_string()),
             emissive: parse_f32_4(&args["emissive"], [0.0, 0.0, 0.0, 0.0]),
-            alpha_mode: args.get("alpha_mode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            alpha_mode: args
+                .get("alpha_mode")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
             unlit: args.get("unlit").and_then(|v| v.as_bool()),
             double_sided: args.get("double_sided").and_then(|v| v.as_bool()),
-            reflectance: args.get("reflectance").and_then(|v| v.as_f64()).map(|v| v as f32),
+            reflectance: args
+                .get("reflectance")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32),
         };
 
         match self.bridge.send(GenCommand::SpawnMesh(cmd)).await? {

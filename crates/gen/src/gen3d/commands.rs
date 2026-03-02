@@ -738,6 +738,12 @@ pub struct EntitySummary {
     pub scale: [f32; 3],
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<[f32; 4]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub light: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub behaviors: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -357,6 +357,11 @@ fn process_gen_commands(
                 &params.material_handles,
                 &params.materials,
                 &params.parametric_shapes,
+                &params.directional_lights,
+                &params.point_lights,
+                &params.spot_lights,
+                &params.behaviors_query,
+                &params.audio_engine,
             ),
             GenCommand::EntityInfo { name } => handle_entity_info(
                 &name,
@@ -1222,6 +1227,7 @@ fn process_pending_world_setup(
 // Command handlers
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn handle_scene_info(
     registry: &NameRegistry,
     transforms: &Query<&Transform>,
@@ -1229,6 +1235,11 @@ fn handle_scene_info(
     material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
     material_assets: &Assets<StandardMaterial>,
     parametric_shapes: &Query<&ParametricShape>,
+    directional_lights: &Query<&DirectionalLight>,
+    point_lights: &Query<&PointLight>,
+    spot_lights: &Query<&SpotLight>,
+    behaviors_query: &Query<&mut EntityBehaviors>,
+    audio_engine: &audio::AudioEngine,
 ) -> GenResponse {
     let mut entities = Vec::new();
 
@@ -1260,6 +1271,26 @@ fn handle_scene_info(
                 [c.red, c.green, c.blue, c.alpha]
             });
 
+        // Light type
+        let light = if directional_lights.get(entity).is_ok() {
+            Some("directional".to_string())
+        } else if point_lights.get(entity).is_ok() {
+            Some("point".to_string())
+        } else if spot_lights.get(entity).is_ok() {
+            Some("spot".to_string())
+        } else {
+            None
+        };
+
+        // Audio
+        let audio = audio_engine
+            .emitter_meta
+            .get(name)
+            .map(|m| m.sound_type.clone());
+
+        // Behavior count
+        let behaviors = behaviors_query.get(entity).ok().map(|b| b.behaviors.len());
+
         entities.push(EntitySummary {
             name: name.to_string(),
             entity_type,
@@ -1267,6 +1298,9 @@ fn handle_scene_info(
             position,
             scale,
             color,
+            light,
+            audio,
+            behaviors,
         });
     }
 
