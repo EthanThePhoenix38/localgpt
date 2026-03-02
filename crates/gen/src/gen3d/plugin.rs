@@ -374,6 +374,7 @@ fn process_gen_commands(
                 &params.directional_lights,
                 &params.point_lights,
                 &params.spot_lights,
+                &params.gltf_sources,
             ),
             GenCommand::Screenshot {
                 width,
@@ -1291,6 +1292,7 @@ fn handle_entity_info(
     directional_lights: &Query<&DirectionalLight>,
     point_lights: &Query<&PointLight>,
     spot_lights: &Query<&SpotLight>,
+    gltf_sources: &Query<&GltfSource>,
 ) -> GenResponse {
     let Some(entity) = registry.get_entity(name) else {
         return GenResponse::Error {
@@ -1440,6 +1442,10 @@ fn handle_entity_info(
         light: light_info,
         children,
         parent,
+        mesh_asset: gltf_sources
+            .get(entity)
+            .ok()
+            .map(|s| s.path.clone()),
         behaviors: behavior_summaries,
     }))
 }
@@ -1496,7 +1502,7 @@ fn handle_spawn_primitive(
         }
     };
 
-    let material = materials.add(StandardMaterial {
+    let mut std_mat = StandardMaterial {
         base_color: Color::srgba(cmd.color[0], cmd.color[1], cmd.color[2], cmd.color[3]),
         metallic: cmd.metallic,
         perceptual_roughness: cmd.roughness,
@@ -1507,7 +1513,14 @@ fn handle_spawn_primitive(
             cmd.emissive[3],
         ),
         ..default()
-    });
+    };
+    if let Some(ref am_str) = cmd.alpha_mode {
+        std_mat.alpha_mode = parse_alpha_mode(am_str);
+    }
+    if let Some(unlit) = cmd.unlit {
+        std_mat.unlit = unlit;
+    }
+    let material = materials.add(std_mat);
 
     let rotation = Quat::from_euler(
         EulerRot::XYZ,
@@ -2488,6 +2501,8 @@ fn apply_modify_to_snapshot(we: &mut wt::WorldEntity, cmd: &ModifyEntityCmd) {
         || cmd.metallic.is_some()
         || cmd.roughness.is_some()
         || cmd.emissive.is_some()
+        || cmd.alpha_mode.is_some()
+        || cmd.unlit.is_some()
     {
         let mut mat = we.material.clone().unwrap_or_default();
         if let Some(color) = cmd.color {
@@ -2502,7 +2517,32 @@ fn apply_modify_to_snapshot(we: &mut wt::WorldEntity, cmd: &ModifyEntityCmd) {
         if let Some(emissive) = cmd.emissive {
             mat.emissive = emissive;
         }
+        if let Some(ref am_str) = cmd.alpha_mode {
+            mat.alpha_mode = Some(match am_str.to_lowercase().as_str() {
+                "blend" => wt::AlphaModeDef::Blend,
+                "add" => wt::AlphaModeDef::Add,
+                "multiply" => wt::AlphaModeDef::Multiply,
+                s if s.starts_with("mask") => {
+                    let cutoff = s
+                        .strip_prefix("mask:")
+                        .or_else(|| s.strip_prefix("mask(").and_then(|s| s.strip_suffix(')')))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .unwrap_or(0.5);
+                    wt::AlphaModeDef::Mask(cutoff)
+                }
+                _ => wt::AlphaModeDef::Opaque,
+            });
+        }
+        if let Some(unlit) = cmd.unlit {
+            mat.unlit = Some(unlit);
+        }
         we.material = Some(mat);
+    }
+    // Parent — clear if explicitly set to None
+    if let Some(ref parent_opt) = cmd.parent
+        && parent_opt.is_none()
+    {
+        we.parent = None;
     }
 }
 

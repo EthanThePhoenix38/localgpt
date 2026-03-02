@@ -111,13 +111,30 @@ pub fn shape_to_primitive(shape: &wt::Shape) -> (PrimitiveShape, HashMap<String,
 
 impl From<&SpawnPrimitiveCmd> for wt::MaterialDef {
     fn from(cmd: &SpawnPrimitiveCmd) -> Self {
+        let alpha_mode = cmd.alpha_mode.as_deref().and_then(|s| {
+            match s.to_lowercase().as_str() {
+                "opaque" => Some(wt::AlphaModeDef::Opaque),
+                "blend" => Some(wt::AlphaModeDef::Blend),
+                "add" => Some(wt::AlphaModeDef::Add),
+                "multiply" => Some(wt::AlphaModeDef::Multiply),
+                s if s.starts_with("mask") => {
+                    let cutoff = s
+                        .strip_prefix("mask:")
+                        .or_else(|| s.strip_prefix("mask(").and_then(|s| s.strip_suffix(')')))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .unwrap_or(0.5);
+                    Some(wt::AlphaModeDef::Mask(cutoff))
+                }
+                _ => None,
+            }
+        });
         wt::MaterialDef {
             color: cmd.color,
             metallic: cmd.metallic,
             roughness: cmd.roughness,
             emissive: cmd.emissive,
-            alpha_mode: None,
-            unlit: None,
+            alpha_mode,
+            unlit: cmd.unlit,
             double_sided: None,
             reflectance: None,
         }

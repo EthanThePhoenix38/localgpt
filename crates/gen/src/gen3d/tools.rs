@@ -298,6 +298,14 @@ impl Tool for GenSpawnPrimitiveTool {
                         "default": [0, 0, 0, 0],
                         "description": "Emissive RGBA color for glowing objects"
                     },
+                    "alpha_mode": {
+                        "type": "string",
+                        "description": "Alpha/transparency mode: 'opaque' (default), 'blend' (transparent), 'mask:0.5' (cutout), 'add', 'multiply'"
+                    },
+                    "unlit": {
+                        "type": "boolean",
+                        "description": "If true, ignore lighting and render at full brightness. Good for UI planes and glow effects."
+                    },
                     "parent": {
                         "type": "string",
                         "description": "Name of parent entity for hierarchy. Omit for root-level."
@@ -333,6 +341,8 @@ impl Tool for GenSpawnPrimitiveTool {
             metallic: args["metallic"].as_f64().unwrap_or(0.0) as f32,
             roughness: args["roughness"].as_f64().unwrap_or(0.5) as f32,
             emissive: parse_f32_4(&args["emissive"], [0.0, 0.0, 0.0, 0.0]),
+            alpha_mode: args.get("alpha_mode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            unlit: args.get("unlit").and_then(|v| v.as_bool()),
             parent: args["parent"].as_str().map(|s| s.to_string()),
         };
 
@@ -442,7 +452,10 @@ impl Tool for GenModifyEntityTool {
             metallic: args["metallic"].as_f64().map(|v| v as f32),
             roughness: args["roughness"].as_f64().map(|v| v as f32),
             emissive: parse_opt_f32_4(&args["emissive"]),
-            alpha_mode: args.get("alpha_mode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            alpha_mode: args
+                .get("alpha_mode")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
             unlit: args.get("unlit").and_then(|v| v.as_bool()),
             visible: args["visible"].as_bool(),
             parent: if args.get("parent").is_some() {
@@ -679,8 +692,14 @@ impl Tool for GenSetLightTool {
             direction: parse_opt_f32_array(&args["direction"]),
             shadows: args["shadows"].as_bool().unwrap_or(true),
             range: args.get("range").and_then(|v| v.as_f64()).map(|v| v as f32),
-            outer_angle: args.get("outer_angle").and_then(|v| v.as_f64()).map(|v| v as f32),
-            inner_angle: args.get("inner_angle").and_then(|v| v.as_f64()).map(|v| v as f32),
+            outer_angle: args
+                .get("outer_angle")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32),
+            inner_angle: args
+                .get("inner_angle")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32),
         };
 
         match self.bridge.send(GenCommand::SetLight(cmd)).await? {

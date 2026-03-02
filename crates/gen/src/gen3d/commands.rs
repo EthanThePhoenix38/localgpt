@@ -115,6 +115,8 @@ pub struct SpawnPrimitiveCmd {
     pub roughness: f32,
     #[serde(default)]
     pub emissive: [f32; 4],
+    pub alpha_mode: Option<String>,
+    pub unlit: Option<bool>,
     pub parent: Option<String>,
 }
 
@@ -752,6 +754,8 @@ pub struct EntityInfoData {
     pub light: Option<LightInfoData>,
     pub children: Vec<String>,
     pub parent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mesh_asset: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub behaviors: Vec<BehaviorSummary>,
 }
