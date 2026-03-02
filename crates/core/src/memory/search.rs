@@ -134,11 +134,13 @@ impl MmrReranker {
         let mut remaining: Vec<usize> = (0..chunks.len()).collect();
 
         // Select first item (highest relevance)
-        if let Some((best_pos, _best_idx)) = remaining.iter().enumerate().max_by(|(_, a), (_, b)| {
-            original_scores[**a]
-                .partial_cmp(&original_scores[**b])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        }) {
+        if let Some((best_pos, _best_idx)) =
+            remaining.iter().enumerate().max_by(|(_, a), (_, b)| {
+                original_scores[**a]
+                    .partial_cmp(&original_scores[**b])
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        {
             selected.push(remaining.remove(best_pos));
         }
 

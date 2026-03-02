@@ -113,9 +113,7 @@ fn list_bridges() -> Result<()> {
     for bridge in &bridges {
         // Check if credentials file exists and is readable
         let cred_path = bridges_dir.join(format!("{}.enc", bridge));
-        let size = fs::metadata(&cred_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let size = fs::metadata(&cred_path).map(|m| m.len()).unwrap_or(0);
 
         println!("  {} ({} bytes encrypted)", bridge, size);
     }
@@ -172,8 +170,14 @@ async fn show_status(filter_id: Option<String>) -> Result<()> {
             health_str
         );
         println!("      Connection ID: {}", bridge.connection_id);
-        println!("      Connected:     {}", bridge.connected_at.format("%Y-%m-%d %H:%M:%S UTC"));
-        println!("      Last active:   {}", bridge.last_active.format("%Y-%m-%d %H:%M:%S UTC"));
+        println!(
+            "      Connected:     {}",
+            bridge.connected_at.format("%Y-%m-%d %H:%M:%S UTC")
+        );
+        println!(
+            "      Last active:   {}",
+            bridge.last_active.format("%Y-%m-%d %H:%M:%S UTC")
+        );
 
         if let Some(pid) = bridge.pid {
             println!("      PID:           {}", pid);
