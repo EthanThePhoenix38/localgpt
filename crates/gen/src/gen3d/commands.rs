@@ -143,6 +143,8 @@ pub struct ModifyEntityCmd {
     pub emissive: Option<[f32; 4]>,
     pub alpha_mode: Option<String>,
     pub unlit: Option<bool>,
+    pub double_sided: Option<bool>,
+    pub reflectance: Option<f32>,
     pub visible: Option<bool>,
     pub parent: Option<Option<String>>,
 }
@@ -749,6 +751,10 @@ pub struct EntityInfoData {
     pub alpha_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unlit: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub double_sided: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reflectance: Option<f32>,
     pub visible: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub light: Option<LightInfoData>,

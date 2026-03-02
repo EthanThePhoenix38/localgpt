@@ -423,6 +423,16 @@ impl Tool for GenModifyEntityTool {
                         "type": "boolean",
                         "description": "If true, material ignores lighting (flat shaded)"
                     },
+                    "double_sided": {
+                        "type": "boolean",
+                        "description": "If true, render both sides of faces (for thin geometry like leaves)"
+                    },
+                    "reflectance": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Specular reflectance (default 0.5). 0.0 = no reflection, 1.0 = mirror-like"
+                    },
                     "visible": {
                         "type": "boolean",
                         "description": "Show/hide entity"
@@ -457,6 +467,8 @@ impl Tool for GenModifyEntityTool {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string()),
             unlit: args.get("unlit").and_then(|v| v.as_bool()),
+            double_sided: args.get("double_sided").and_then(|v| v.as_bool()),
+            reflectance: args.get("reflectance").and_then(|v| v.as_f64()).map(|v| v as f32),
             visible: args["visible"].as_bool(),
             parent: if args.get("parent").is_some() {
                 Some(args["parent"].as_str().map(|s| s.to_string()))

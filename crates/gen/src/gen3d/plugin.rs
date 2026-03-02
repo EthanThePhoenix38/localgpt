@@ -1318,7 +1318,7 @@ fn handle_entity_info(
         .ok()
         .map(|p| p.shape.kind().to_string());
 
-    let (color, metallic, roughness, emissive, alpha_mode_str, unlit_val) = material_handles
+    let (color, metallic, roughness, emissive, alpha_mode_str, unlit_val, double_sided_val, reflectance_val) = material_handles
         .get(entity)
         .ok()
         .and_then(|h| material_assets.get(&h.0))
@@ -1346,9 +1346,15 @@ fn handle_entity_info(
                 },
                 am,
                 if mat.unlit { Some(true) } else { None },
+                if mat.double_sided { Some(true) } else { None },
+                if (mat.reflectance - 0.5).abs() > f32::EPSILON {
+                    Some(mat.reflectance)
+                } else {
+                    None
+                },
             )
         })
-        .unwrap_or((None, None, None, None, None, None));
+        .unwrap_or((None, None, None, None, None, None, None, None));
 
     let light_info = if let Ok(dl) = directional_lights.get(entity) {
         let c = dl.color.to_srgba();
@@ -1438,6 +1444,8 @@ fn handle_entity_info(
         emissive,
         alpha_mode: alpha_mode_str,
         unlit: unlit_val,
+        double_sided: double_sided_val,
+        reflectance: reflectance_val,
         visible,
         light: light_info,
         children,
@@ -1617,6 +1625,8 @@ fn handle_modify_entity(
         || cmd.emissive.is_some()
         || cmd.alpha_mode.is_some()
         || cmd.unlit.is_some()
+        || cmd.double_sided.is_some()
+        || cmd.reflectance.is_some()
     {
         // Get current material properties as defaults
         let current_mat = material_handles
@@ -1646,6 +1656,8 @@ fn handle_modify_entity(
                 .unwrap_or(base.emissive),
             alpha_mode,
             unlit: cmd.unlit.unwrap_or(base.unlit),
+            double_sided: cmd.double_sided.unwrap_or(base.double_sided),
+            reflectance: cmd.reflectance.unwrap_or(base.reflectance),
             ..base
         });
         entity_commands.insert(MeshMaterial3d(new_material));
@@ -2535,6 +2547,12 @@ fn apply_modify_to_snapshot(we: &mut wt::WorldEntity, cmd: &ModifyEntityCmd) {
         }
         if let Some(unlit) = cmd.unlit {
             mat.unlit = Some(unlit);
+        }
+        if let Some(ds) = cmd.double_sided {
+            mat.double_sided = Some(ds);
+        }
+        if let Some(r) = cmd.reflectance {
+            mat.reflectance = Some(r);
         }
         we.material = Some(mat);
     }
