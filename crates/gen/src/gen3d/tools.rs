@@ -880,6 +880,30 @@ impl Tool for GenSpawnMeshTool {
                     "parent": {
                         "type": "string",
                         "description": "Name of parent entity for hierarchy. Omit for root-level."
+                    },
+                    "emissive": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "default": [0, 0, 0, 0],
+                        "description": "Emissive RGBA color for glowing objects"
+                    },
+                    "alpha_mode": {
+                        "type": "string",
+                        "description": "Alpha/transparency mode: 'opaque' (default), 'blend' (transparent), 'mask:0.5' (cutout), 'add', 'multiply'"
+                    },
+                    "unlit": {
+                        "type": "boolean",
+                        "description": "If true, ignore lighting and render at full brightness"
+                    },
+                    "double_sided": {
+                        "type": "boolean",
+                        "description": "If true, render both sides of faces"
+                    },
+                    "reflectance": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Specular reflectance (default 0.5)"
                     }
                 },
                 "required": ["name", "vertices", "indices"]
@@ -930,6 +954,11 @@ impl Tool for GenSpawnMeshTool {
             rotation_degrees: parse_f32_array(&args["rotation_degrees"], [0.0, 0.0, 0.0]),
             scale: parse_f32_array(&args["scale"], [1.0, 1.0, 1.0]),
             parent: args["parent"].as_str().map(|s| s.to_string()),
+            emissive: parse_f32_4(&args["emissive"], [0.0, 0.0, 0.0, 0.0]),
+            alpha_mode: args.get("alpha_mode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            unlit: args.get("unlit").and_then(|v| v.as_bool()),
+            double_sided: args.get("double_sided").and_then(|v| v.as_bool()),
+            reflectance: args.get("reflectance").and_then(|v| v.as_f64()).map(|v| v as f32),
         };
 
         match self.bridge.send(GenCommand::SpawnMesh(cmd)).await? {

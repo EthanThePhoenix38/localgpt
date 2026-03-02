@@ -218,6 +218,12 @@ pub struct RawMeshCmd {
     #[serde(default = "default_scale")]
     pub scale: [f32; 3],
     pub parent: Option<String>,
+    #[serde(default)]
+    pub emissive: [f32; 4],
+    pub alpha_mode: Option<String>,
+    pub unlit: Option<bool>,
+    pub double_sided: Option<bool>,
+    pub reflectance: Option<f32>,
 }
 
 // ---------------------------------------------------------------------------

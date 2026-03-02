@@ -1904,12 +1904,31 @@ fn handle_spawn_mesh(
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     }
 
-    let material = materials.add(StandardMaterial {
+    let mut std_mat = StandardMaterial {
         base_color: Color::srgba(cmd.color[0], cmd.color[1], cmd.color[2], cmd.color[3]),
         metallic: cmd.metallic,
         perceptual_roughness: cmd.roughness,
+        emissive: bevy::color::LinearRgba::new(
+            cmd.emissive[0],
+            cmd.emissive[1],
+            cmd.emissive[2],
+            cmd.emissive[3],
+        ),
         ..default()
-    });
+    };
+    if let Some(ref am_str) = cmd.alpha_mode {
+        std_mat.alpha_mode = parse_alpha_mode(am_str);
+    }
+    if let Some(unlit) = cmd.unlit {
+        std_mat.unlit = unlit;
+    }
+    if let Some(ds) = cmd.double_sided {
+        std_mat.double_sided = ds;
+    }
+    if let Some(r) = cmd.reflectance {
+        std_mat.reflectance = r;
+    }
+    let material = materials.add(std_mat);
 
     let wid = next_id.alloc();
     let entity = commands
