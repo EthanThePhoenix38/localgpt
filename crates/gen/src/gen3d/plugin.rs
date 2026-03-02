@@ -2022,10 +2022,6 @@ fn spawn_world_entities(
                 parametric,
             ));
 
-            if !we.transform.visible {
-                entity_cmd.insert(Visibility::Hidden);
-            }
-
             // If entity also has a light, add it as a child or additional component
             if let Some(ref light) = we.light {
                 insert_light_component(&mut entity_cmd, light);
@@ -2081,6 +2077,11 @@ fn spawn_world_entities(
                 ))
                 .id()
         };
+
+        // Visibility — applies to all entity types
+        if !we.transform.visible {
+            commands.entity(bevy_entity).insert(Visibility::Hidden);
+        }
 
         registry.insert_with_id(name.clone(), bevy_entity, world_id);
 
