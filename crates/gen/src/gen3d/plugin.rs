@@ -1038,7 +1038,11 @@ fn process_gen_commands(
             GenResponse::WorldSaved { .. } => {
                 params.dirty_tracker.clear();
             }
-            GenResponse::WorldLoaded { .. } | GenResponse::SceneCleared { .. } => {
+            GenResponse::WorldLoaded { .. } => {
+                params.dirty_tracker.clear();
+                // History is restored in LoadWorld handler, not here
+            }
+            GenResponse::SceneCleared { .. } => {
                 params.dirty_tracker.clear();
                 params.undo_stack.history = wt::EditHistory::new();
             }
