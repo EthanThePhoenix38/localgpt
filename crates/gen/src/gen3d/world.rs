@@ -929,4 +929,53 @@ fov_degrees = 45.0
         assert_eq!(e.behaviors.len(), 1);
         assert!(e.audio.is_some());
     }
+
+    #[test]
+    fn history_jsonl_roundtrip() {
+        let mut history = wt::EditHistory::new();
+
+        // Push a couple of edits
+        let entity1 = wt::WorldEntity::new(1, "cube");
+        history.push(
+            wt::EditOp::spawn(entity1.clone()),
+            wt::EditOp::delete(entity1.id),
+            Some("test".to_string()),
+        );
+
+        let entity2 = wt::WorldEntity::new(2, "sphere");
+        history.push(
+            wt::EditOp::spawn(entity2.clone()),
+            wt::EditOp::delete(entity2.id),
+            None,
+        );
+
+        // Undo one to set cursor != edits.len()
+        history.undo();
+        assert_eq!(history.undo_count(), 1);
+        assert_eq!(history.redo_count(), 1);
+
+        // Serialize to JSONL format (same as save handler)
+        let mut lines = String::new();
+        for edit in &history.edits {
+            let line = serde_json::to_string(edit).unwrap();
+            lines.push_str(&line);
+            lines.push('\n');
+        }
+        lines.push_str(&format!("{{\"_cursor\":{}}}\n", history.cursor));
+
+        // Write to temp file and load back
+        let dir = std::env::temp_dir().join("localgpt_test_history");
+        let _ = std::fs::create_dir_all(&dir);
+        let history_path = dir.join("history.jsonl");
+        std::fs::write(&history_path, &lines).unwrap();
+
+        let loaded = load_edit_history(&history_path).unwrap();
+        assert_eq!(loaded.edits.len(), 2);
+        assert_eq!(loaded.cursor, 1); // cursor restored
+        assert_eq!(loaded.undo_count(), 1);
+        assert_eq!(loaded.redo_count(), 1);
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
