@@ -404,6 +404,15 @@ impl Tool for GenModifyEntityTool {
                         "items": {"type": "number"},
                         "description": "New emissive RGBA color"
                     },
+                    "alpha_mode": {
+                        "type": "string",
+                        "enum": ["opaque", "blend", "add", "multiply"],
+                        "description": "Alpha blending mode. Use 'mask:0.5' for alpha cutoff."
+                    },
+                    "unlit": {
+                        "type": "boolean",
+                        "description": "If true, material ignores lighting (flat shaded)"
+                    },
                     "visible": {
                         "type": "boolean",
                         "description": "Show/hide entity"
@@ -433,6 +442,8 @@ impl Tool for GenModifyEntityTool {
             metallic: args["metallic"].as_f64().map(|v| v as f32),
             roughness: args["roughness"].as_f64().map(|v| v as f32),
             emissive: parse_opt_f32_4(&args["emissive"]),
+            alpha_mode: args.get("alpha_mode").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            unlit: args.get("unlit").and_then(|v| v.as_bool()),
             visible: args["visible"].as_bool(),
             parent: if args.get("parent").is_some() {
                 Some(args["parent"].as_str().map(|s| s.to_string()))

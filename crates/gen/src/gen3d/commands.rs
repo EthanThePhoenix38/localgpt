@@ -139,6 +139,8 @@ pub struct ModifyEntityCmd {
     pub metallic: Option<f32>,
     pub roughness: Option<f32>,
     pub emissive: Option<[f32; 4]>,
+    pub alpha_mode: Option<String>,
+    pub unlit: Option<bool>,
     pub visible: Option<bool>,
     pub parent: Option<Option<String>>,
 }

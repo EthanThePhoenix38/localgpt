@@ -1585,6 +1585,8 @@ fn handle_modify_entity(
         || cmd.metallic.is_some()
         || cmd.roughness.is_some()
         || cmd.emissive.is_some()
+        || cmd.alpha_mode.is_some()
+        || cmd.unlit.is_some()
     {
         // Get current material properties as defaults
         let current_mat = material_handles
@@ -1594,6 +1596,12 @@ fn handle_modify_entity(
             .cloned();
 
         let base = current_mat.unwrap_or_default();
+
+        let alpha_mode = cmd
+            .alpha_mode
+            .as_deref()
+            .map(parse_alpha_mode)
+            .unwrap_or(base.alpha_mode);
 
         let new_material = materials.add(StandardMaterial {
             base_color: cmd
@@ -1606,6 +1614,8 @@ fn handle_modify_entity(
                 .emissive
                 .map(|e| bevy::color::LinearRgba::new(e[0], e[1], e[2], e[3]))
                 .unwrap_or(base.emissive),
+            alpha_mode,
+            unlit: cmd.unlit.unwrap_or(base.unlit),
             ..base
         });
         entity_commands.insert(MeshMaterial3d(new_material));
@@ -2033,6 +2043,25 @@ fn shape_to_mesh(shape: &wt::Shape, meshes: &mut ResMut<Assets<Mesh>>) -> Handle
         wt::Shape::Plane { x, z } => {
             meshes.add(Plane3d::new(Vec3::Y, Vec2::new(*x / 2.0, *z / 2.0)))
         }
+    }
+}
+
+/// Parse an alpha mode string (e.g., "blend", "opaque", "mask:0.5").
+fn parse_alpha_mode(s: &str) -> AlphaMode {
+    match s.to_lowercase().as_str() {
+        "opaque" => AlphaMode::Opaque,
+        "blend" => AlphaMode::Blend,
+        "add" => AlphaMode::Add,
+        "multiply" => AlphaMode::Multiply,
+        s if s.starts_with("mask") => {
+            let cutoff = s
+                .strip_prefix("mask:")
+                .or_else(|| s.strip_prefix("mask(").and_then(|s| s.strip_suffix(')')))
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.5);
+            AlphaMode::Mask(cutoff)
+        }
+        _ => AlphaMode::Opaque,
     }
 }
 
