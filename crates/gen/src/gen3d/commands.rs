@@ -741,6 +741,10 @@ pub struct EntityInfoData {
     pub roughness: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emissive: Option<[f32; 4]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alpha_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unlit: Option<bool>,
     pub visible: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub light: Option<LightInfoData>,

@@ -1299,7 +1299,7 @@ fn handle_entity_info(
         .ok()
         .map(|p| p.shape.kind().to_string());
 
-    let (color, metallic, roughness, emissive) = material_handles
+    let (color, metallic, roughness, emissive, alpha_mode_str, unlit_val) = material_handles
         .get(entity)
         .ok()
         .and_then(|h| material_assets.get(&h.0))
@@ -1308,6 +1308,14 @@ fn handle_entity_info(
             let e = mat.emissive;
             let emissive_arr = [e.red, e.green, e.blue, e.alpha];
             let has_emissive = emissive_arr.iter().any(|&v| v > 0.0);
+            let am = match mat.alpha_mode {
+                AlphaMode::Opaque => None,
+                AlphaMode::Mask(cutoff) => Some(format!("mask({:.2})", cutoff)),
+                AlphaMode::Blend => Some("blend".to_string()),
+                AlphaMode::Add => Some("add".to_string()),
+                AlphaMode::Multiply => Some("multiply".to_string()),
+                _ => None,
+            };
             (
                 Some([c.red, c.green, c.blue, c.alpha]),
                 Some(mat.metallic),
@@ -1317,9 +1325,11 @@ fn handle_entity_info(
                 } else {
                     None
                 },
+                am,
+                if mat.unlit { Some(true) } else { None },
             )
         })
-        .unwrap_or((None, None, None, None));
+        .unwrap_or((None, None, None, None, None, None));
 
     let light_info = if let Ok(dl) = directional_lights.get(entity) {
         let c = dl.color.to_srgba();
@@ -1407,6 +1417,8 @@ fn handle_entity_info(
         metallic,
         roughness,
         emissive,
+        alpha_mode: alpha_mode_str,
+        unlit: unlit_val,
         visible,
         light: light_info,
         children,
