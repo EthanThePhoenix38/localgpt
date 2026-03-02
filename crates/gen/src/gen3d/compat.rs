@@ -946,4 +946,47 @@ mod tests {
         assert_eq!(back.position, cam.position);
         assert_eq!(back.fov_degrees, 60.0);
     }
+
+    #[test]
+    fn spawn_primitive_alpha_mode_blend() {
+        let cmd = SpawnPrimitiveCmd {
+            name: "test".to_string(),
+            shape: PrimitiveShape::Cuboid,
+            dimensions: Default::default(),
+            position: [0.0, 0.0, 0.0],
+            rotation_degrees: [0.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive: [0.0, 0.0, 0.0, 0.0],
+            alpha_mode: Some("blend".to_string()),
+            unlit: Some(true),
+            parent: None,
+        };
+        let mat: wt::MaterialDef = (&cmd).into();
+        assert_eq!(mat.alpha_mode, Some(wt::AlphaModeDef::Blend));
+        assert_eq!(mat.unlit, Some(true));
+    }
+
+    #[test]
+    fn spawn_primitive_alpha_mode_mask() {
+        let cmd = SpawnPrimitiveCmd {
+            name: "test".to_string(),
+            shape: PrimitiveShape::Cuboid,
+            dimensions: Default::default(),
+            position: [0.0, 0.0, 0.0],
+            rotation_degrees: [0.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 1.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive: [0.0, 0.0, 0.0, 0.0],
+            alpha_mode: Some("mask:0.75".to_string()),
+            unlit: None,
+            parent: None,
+        };
+        let mat: wt::MaterialDef = (&cmd).into();
+        assert_eq!(mat.alpha_mode, Some(wt::AlphaModeDef::Mask(0.75)));
+    }
 }
