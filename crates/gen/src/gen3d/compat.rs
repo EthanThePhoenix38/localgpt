@@ -495,6 +495,16 @@ pub fn audio_source_to_emitter(source: &wt::AudioSource) -> Option<EmitterSound>
     }
 }
 
+/// Convert gen AmbientSound to world-types AudioSource.
+pub fn ambient_sound_to_source(sound: &AmbientSound) -> wt::AudioSource {
+    sound.into()
+}
+
+/// Convert gen EmitterSound to world-types AudioSource.
+pub fn emitter_sound_to_source(sound: &EmitterSound) -> wt::AudioSource {
+    sound.into()
+}
+
 // WaveformType conversions
 impl From<WaveformType> for wt::WaveformType {
     fn from(w: WaveformType) -> Self {
