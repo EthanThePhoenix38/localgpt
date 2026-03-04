@@ -314,6 +314,7 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
                 &openai_config.api_key,
                 &openai_config.base_url,
                 &model_id,
+                "OpenAI",
             )?))
         }
 
@@ -415,6 +416,7 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
                 &glm_config.api_key,
                 &glm_config.base_url,
                 &model_id,
+                "GLM",
             )?))
         }
 
@@ -515,15 +517,17 @@ pub struct OpenAIProvider {
     api_key: String,
     base_url: String,
     model: String,
+    provider_name: String,
 }
 
 impl OpenAIProvider {
-    pub fn new(api_key: &str, base_url: &str, model: &str) -> Result<Self> {
+    pub fn new(api_key: &str, base_url: &str, model: &str, provider_name: &str) -> Result<Self> {
         Ok(Self {
             client: Client::new(),
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
             model: model.to_string(),
+            provider_name: provider_name.to_string(),
         })
     }
 
@@ -617,7 +621,7 @@ impl OpenAIProvider {
 #[async_trait]
 impl LLMProvider for OpenAIProvider {
     fn name(&self) -> String {
-        "openai".to_string()
+        self.provider_name.clone()
     }
 
     async fn chat(
@@ -655,7 +659,7 @@ impl LLMProvider for OpenAIProvider {
 
         // Check for errors
         if let Some(error) = response_body.get("error") {
-            anyhow::bail!("OpenAI API error: {}", error);
+            anyhow::bail!("{} API error: {}", self.provider_name, error);
         }
 
         let choice = response_body["choices"]
