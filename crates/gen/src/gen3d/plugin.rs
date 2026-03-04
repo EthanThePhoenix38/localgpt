@@ -3411,7 +3411,7 @@ fn handle_export_gltf(
     mesh_handles: &Query<&Mesh3d>,
     mesh_assets: &Assets<Mesh>,
 ) -> GenResponse {
-    // Resolve output path: use provided path or default to {workspace}/exports/{timestamp}.glb
+    // Resolve output path: use provided path or default to {workspace}/exports/{datetime}.glb
     let output_path = match path {
         Some(p) if !p.is_empty() => {
             if std::path::Path::new(p).extension().is_some_and(|ext| {
@@ -3423,13 +3423,10 @@ fn handle_export_gltf(
             }
         }
         _ => {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
+            let datetime = format_export_datetime();
             let exports_dir = workspace.path.join("exports");
             exports_dir
-                .join(format!("{}.glb", timestamp))
+                .join(format!("{}.glb", datetime))
                 .to_string_lossy()
                 .into_owned()
         }
@@ -3546,7 +3543,8 @@ fn handle_export_world(
         }
         _ => {
             // Export as GLB (default)
-            let output_path = export_dir.join("scene.glb");
+            let datetime = format_export_datetime();
+            let output_path = export_dir.join(format!("{}.glb", datetime));
             match super::gltf_export::export_glb(
                 &output_path,
                 registry,
@@ -3565,6 +3563,75 @@ fn handle_export_world(
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Export helpers
+// ---------------------------------------------------------------------------
+
+/// Format current date/time for export filenames: YYYY-MM-DD_HH-MM-SS
+fn format_export_datetime() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+
+    // Convert to datetime components
+    let total_secs = duration.as_secs();
+    let days = total_secs / 86400;
+    let secs_in_day = total_secs % 86400;
+
+    // Unix epoch is January 1, 1970 (Thursday)
+    // Calculate year, month, day
+    let (year, month, day) = unix_days_to_ymd(days as i64);
+    let hour = secs_in_day / 3600;
+    let minute = (secs_in_day % 3600) / 60;
+    let second = secs_in_day % 60;
+
+    format!(
+        "{:04}-{:02}-{:02}_{:02}-{:02}-{:02}",
+        year, month, day, hour, minute, second
+    )
+}
+
+/// Convert Unix days since epoch to (year, month, day)
+fn unix_days_to_ymd(days: i64) -> (i32, u32, u32) {
+    // Unix epoch: January 1, 1970
+    let mut year = 1970i32;
+    let mut remaining_days = days;
+
+    loop {
+        let days_in_year = if is_leap_year(year) { 366 } else { 365 };
+        if remaining_days < days_in_year as i64 {
+            break;
+        }
+        remaining_days -= days_in_year as i64;
+        year += 1;
+    }
+
+    let days_in_months = if is_leap_year(year) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+
+    let mut month = 1u32;
+    for &days_in_month in &days_in_months {
+        if remaining_days < days_in_month as i64 {
+            break;
+        }
+        remaining_days -= days_in_month as i64;
+        month += 1;
+    }
+
+    let day = (remaining_days + 1) as u32; // 1-indexed
+
+    (year, month, day)
+}
+
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
 }
 
 // ---------------------------------------------------------------------------
