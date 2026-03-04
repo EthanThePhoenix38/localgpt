@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::scene::SceneRoot;
 
 use std::ffi::OsStr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use localgpt_world_types as wt;
 
@@ -112,6 +112,13 @@ pub struct WorldTours {
     pub tours: Vec<TourDef>,
 }
 
+/// Bevy resource tracking the currently loaded world name (if any).
+#[derive(Resource, Default)]
+pub struct CurrentWorld {
+    pub name: Option<String>,
+    pub path: Option<PathBuf>,
+}
+
 /// Marker component for the interactive fly camera.
 #[derive(Component)]
 struct FlyCam;
@@ -169,6 +176,7 @@ pub fn setup_gen_app(
         .init_resource::<PendingWorldSetup>()
         .init_resource::<AvatarConfig>()
         .init_resource::<WorldTours>()
+        .init_resource::<CurrentWorld>()
         .init_resource::<FlyCamConfig>()
         .init_resource::<BehaviorState>()
         .add_systems(
@@ -320,6 +328,7 @@ struct GenCommandParams<'w, 's> {
     pending_world: ResMut<'w, PendingWorldSetup>,
     avatar_config: ResMut<'w, AvatarConfig>,
     world_tours: ResMut<'w, WorldTours>,
+    current_world: ResMut<'w, CurrentWorld>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -926,6 +935,18 @@ fn process_gen_commands(
                     &params.undo_stack.history,
                 )
             }
+            GenCommand::ExportWorld { format } => handle_export_world(
+                format.as_deref(),
+                &params.workspace,
+                &params.registry,
+                &params.transforms,
+                &params.gen_entities,
+                &params.parent_query,
+                &params.material_handles,
+                &params.materials,
+                &params.mesh_handles,
+                &params.meshes,
+            ),
             GenCommand::LoadWorld { path, clear } => {
                 // Clear existing scene before loading if requested.
                 if clear {
@@ -948,8 +969,19 @@ fn process_gen_commands(
                 );
                 match result {
                     Ok(world_load) => {
+                        // Track the loaded world
+                        let world_path = PathBuf::from(&world_load.world_path);
+                        let world_name = world_path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        params.current_world.name = Some(world_name);
+                        params.current_world.path = Some(world_path);
+
                         if !world_load.world_entities.is_empty() {
                             // RON format — spawn entities directly from WorldEntity data
+                            // Pass world_dir for relative path resolution
+                            let world_dir = PathBuf::from(&world_load.world_path);
                             spawn_world_entities(
                                 &world_load.world_entities,
                                 &mut commands,
@@ -960,6 +992,7 @@ fn process_gen_commands(
                                 &mut params.behavior_state,
                                 &params.asset_server,
                                 &mut params.pending_gltf,
+                                Some(&world_dir),
                             );
                         } else if let Some(scene_path) = world_load.scene_path
                             && let Some(resolved) =
@@ -2147,7 +2180,7 @@ fn handle_spawn_mesh(
 
 /// Spawn all entities from a loaded RON `WorldManifest`.
 ///
-/// Creates Bevy ECS entities from `WorldEntity` definitions, preserving:
+/// Creates Bevy ECS entities through `WorldEntity` definitions, preserving:
 /// - Parametric shapes (via `ParametricShape` component)
 /// - Materials (via `StandardMaterial`)
 /// - Lights (directional / point / spot)
@@ -2164,6 +2197,7 @@ fn spawn_world_entities(
     behavior_state: &mut BehaviorState,
     asset_server: &Res<AssetServer>,
     pending_gltf: &mut ResMut<PendingGltfLoads>,
+    world_dir: Option<&Path>,
 ) {
     // First pass: collect world_id → entity name for parent resolution
     let id_to_name: std::collections::HashMap<u64, String> = world_entities
@@ -2230,9 +2264,26 @@ fn spawn_world_entities(
             // Light-only entity (no shape)
             spawn_light_entity(light, &name, transform, world_id, commands)
         } else if let Some(ref mesh_ref) = we.mesh_asset {
-            // Imported glTF mesh — queue async load
-            let expanded = shellexpand::tilde(&mesh_ref.path).into_owned();
-            let p = std::path::Path::new(&expanded);
+            // Imported glTF mesh — resolve path (relative or absolute)
+            let mesh_path = if mesh_ref.path.starts_with("assets/") {
+                // Relative to world directory
+                if let Some(dir) = world_dir {
+                    dir.join(&mesh_ref.path).to_string_lossy().into_owned()
+                } else {
+                    // No world_dir — can't resolve relative path, try as-is
+                    tracing::warn!(
+                        "Relative mesh path '{}' for entity '{}' but no world_dir provided",
+                        mesh_ref.path,
+                        name
+                    );
+                    mesh_ref.path.clone()
+                }
+            } else {
+                // Absolute or workspace-relative (legacy support)
+                shellexpand::tilde(&mesh_ref.path).into_owned()
+            };
+
+            let p = std::path::Path::new(&mesh_path);
             if p.exists() {
                 let asset_path = p.to_string_lossy().trim_start_matches('/').to_string();
                 let handle = asset_server.load::<Scene>(format!("{}#Scene0", asset_path));
@@ -2924,6 +2975,7 @@ fn apply_edit_op(
                 behavior_state,
                 asset_server,
                 pending_gltf,
+                None, // No world_dir for undo/redo — paths are absolute
             );
             format!("re-spawned '{}'", name)
         }
@@ -2948,6 +3000,7 @@ fn apply_edit_op(
                     behavior_state,
                     asset_server,
                     pending_gltf,
+                    None, // No world_dir for undo/redo — paths are absolute
                 );
                 format!("modified '{}'", name)
             } else {
@@ -3227,6 +3280,122 @@ fn handle_export_gltf(
     ) {
         Ok(()) => GenResponse::Exported { path: output_path },
         Err(e) => GenResponse::Error { message: e },
+    }
+}
+
+/// Export the current world to the export/ folder in the world skill directory.
+/// Supports two formats: "glb" (binary, default) or "gltf" (JSON + BIN).
+#[allow(clippy::too_many_arguments)]
+fn handle_export_world(
+    format: Option<&str>,
+    workspace: &GenWorkspace,
+    registry: &NameRegistry,
+    transforms: &Query<&Transform>,
+    gen_entities: &Query<&GenEntity>,
+    parent_query: &Query<&ChildOf>,
+    material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
+    material_assets: &Assets<StandardMaterial>,
+    mesh_handles: &Query<&Mesh3d>,
+    mesh_assets: &Assets<Mesh>,
+) -> GenResponse {
+    // Determine export format (default: glb)
+    let export_format = format.unwrap_or("glb").to_lowercase();
+
+    // Find the current world directory
+    // First try the most recent saved/loaded world
+    let world_dir = workspace
+        .path
+        .join("skills")
+        .join("current") // We'll track this via CurrentWorld resource
+        .canonicalize()
+        .ok();
+
+    // If no current world, try to find the most recently modified world
+    let world_dir = match world_dir {
+        Some(dir) => dir,
+        None => {
+            // Find the most recently modified world skill
+            let skills_dir = workspace.path.join("skills");
+            if !skills_dir.exists() {
+                return GenResponse::Error {
+                    message: "No skills directory found. Save a world first with gen_save_world."
+                        .to_string(),
+                };
+            }
+
+            let mut worlds: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir()
+                        && path.join("world.ron").exists()
+                        && let Ok(modified) = entry.metadata().and_then(|m| m.modified())
+                    {
+                        worlds.push((modified, path));
+                    }
+                }
+            }
+
+            match worlds.iter().max_by_key(|(t, _)| *t) {
+                Some((_, path)) => path.clone(),
+                None => {
+                    return GenResponse::Error {
+                        message: "No saved worlds found. Save a world first with gen_save_world."
+                            .to_string(),
+                    };
+                }
+            }
+        }
+    };
+
+    // Create export directory
+    let export_dir = world_dir.join("export");
+    if let Err(e) = std::fs::create_dir_all(&export_dir) {
+        return GenResponse::Error {
+            message: format!("Failed to create export directory: {}", e),
+        };
+    }
+
+    match export_format.as_str() {
+        "gltf" => {
+            // Export as JSON + BIN
+            match super::gltf_export::export_gltf(
+                &world_dir,
+                registry,
+                transforms,
+                gen_entities,
+                parent_query,
+                material_handles,
+                material_assets,
+                mesh_handles,
+                mesh_assets,
+            ) {
+                Ok(()) => GenResponse::Exported {
+                    path: export_dir.to_string_lossy().into_owned(),
+                },
+                Err(e) => GenResponse::Error { message: e },
+            }
+        }
+        _ => {
+            // Export as GLB (default)
+            let output_path = export_dir.join("scene.glb");
+            match super::gltf_export::export_glb(
+                &output_path,
+                registry,
+                transforms,
+                gen_entities,
+                parent_query,
+                material_handles,
+                material_assets,
+                mesh_handles,
+                mesh_assets,
+            ) {
+                Ok(()) => GenResponse::Exported {
+                    path: output_path.to_string_lossy().into_owned(),
+                },
+                Err(e) => GenResponse::Error { message: e },
+            }
+        }
     }
 }
 

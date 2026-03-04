@@ -78,6 +78,10 @@ pub enum GenCommand {
         /// Clear existing scene before loading (default: true).
         clear: bool,
     },
+    ExportWorld {
+        /// Export format: "glb" (binary) or "gltf" (JSON + BIN)
+        format: Option<String>,
+    },
 
     // Tier 8: Scene management
     ClearScene {

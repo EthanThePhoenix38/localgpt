@@ -43,6 +43,7 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         // World tools
         Box::new(GenSaveWorldTool::new(bridge.clone())),
         Box::new(GenLoadWorldTool::new(bridge.clone())),
+        Box::new(GenExportWorldTool::new(bridge.clone())),
         // Scene management
         Box::new(GenClearSceneTool::new(bridge.clone())),
         // Undo/Redo
@@ -1875,6 +1876,62 @@ impl Tool for GenLoadWorldTool {
             } => Ok(format!(
                 "World loaded from: {}\n{} entities, {} behaviors restored",
                 path, entities, behaviors
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_export_world
+// ===========================================================================
+
+struct GenExportWorldTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenExportWorldTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenExportWorldTool {
+    fn name(&self) -> &str {
+        "gen_export_world"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_export_world".into(),
+            description: "Export the current world to a glTF file for external viewers. Creates scene.glb or scene.gltf + scene.bin in the world's export/ directory. Use after gen_save_world to create portable 3D files.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "format": {
+                        "type": "string",
+                        "enum": ["glb", "gltf"],
+                        "default": "glb",
+                        "description": "Export format: 'glb' for single binary file (recommended), 'gltf' for human-readable JSON + BIN"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let format = args
+            .get("format")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        match self.bridge.send(GenCommand::ExportWorld { format }).await? {
+            GenResponse::Exported { path } => Ok(format!(
+                "World exported to: {}\n\nThis file can be opened in external 3D viewers like Blender, Unity, Unreal Engine.",
+                path
             )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),

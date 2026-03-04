@@ -484,7 +484,7 @@ pub fn export_glb(
 }
 
 /// Export to separate glTF JSON + BIN files for human readability.
-/// Creates `assets/geometry/scene.gltf` and `assets/geometry/scene.bin` under the output_dir.
+/// Creates `export/scene.gltf` and `export/scene.bin` under the output_dir.
 #[allow(clippy::too_many_arguments)]
 pub fn export_gltf(
     output_dir: &Path,
@@ -521,19 +521,19 @@ pub fn export_gltf(
         });
     }
 
-    // Create output directory
-    let geom_dir = output_dir.join("assets").join("geometry");
-    std::fs::create_dir_all(&geom_dir)
-        .map_err(|e| format!("Failed to create assets/geometry: {}", e))?;
+    // Create export directory
+    let export_dir = output_dir.join("export");
+    std::fs::create_dir_all(&export_dir)
+        .map_err(|e| format!("Failed to create export directory: {}", e))?;
 
     // Write JSON (pretty-printed for readability)
     let json = serde_json::to_string_pretty(&root)
         .map_err(|e| format!("JSON serialization failed: {}", e))?;
-    std::fs::write(geom_dir.join("scene.gltf"), json)
+    std::fs::write(export_dir.join("scene.gltf"), json)
         .map_err(|e| format!("Failed to write scene.gltf: {}", e))?;
 
     // Write binary buffer
-    std::fs::write(geom_dir.join("scene.bin"), bin_data)
+    std::fs::write(export_dir.join("scene.bin"), bin_data)
         .map_err(|e| format!("Failed to write scene.bin: {}", e))?;
 
     Ok(())

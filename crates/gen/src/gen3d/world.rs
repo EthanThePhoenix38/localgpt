@@ -8,9 +8,11 @@
 //!   world.ron          — WorldManifest with inline entities (parametric shapes preserved)
 //!   history.jsonl      — Undo/redo history
 //!   assets/
-//!     geometry/
-//!       scene.gltf     — JSON glTF for external viewers (human-readable)
-//!       scene.bin      — Binary buffer (geometry data)
+//!     meshes/
+//!       tree.glb       — Copied mesh assets (relative paths in world.ron)
+//!       rock.glb
+//!   export/            — Generated on demand via gen_export_world tool
+//!     scene.glb        — OR scene.gltf + scene.bin (format selectable)
 //! ```
 //!
 //! ## Legacy format (v0 — TOML + glTF)
@@ -82,6 +84,27 @@ fn default_audio_file() -> String {
 }
 fn default_tours_file() -> String {
     "tours.toml".to_string()
+}
+
+/// Resolve a glTF file path with fallback logic:
+/// 1. Expand `~` and try as-is
+/// 2. Try `{workspace}/{path}`
+/// 3. Return None if nothing found
+fn resolve_gltf_path(path: &str, workspace: &Path) -> Option<PathBuf> {
+    // 1. Expand ~ and try as-is
+    let expanded = shellexpand::tilde(path).into_owned();
+    let p = std::path::Path::new(&expanded);
+    if p.exists() {
+        return p.canonicalize().ok();
+    }
+
+    // 2. {workspace}/{path}
+    let wp = workspace.join(&expanded);
+    if wp.exists() {
+        return wp.canonicalize().ok();
+    }
+
+    None
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -164,8 +187,8 @@ pub fn handle_save_world(
     parent_query: &Query<&ChildOf>,
     material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
     material_assets: &Assets<StandardMaterial>,
-    mesh_handles: &Query<&Mesh3d>,
-    mesh_assets: &Assets<Mesh>,
+    _mesh_handles: &Query<&Mesh3d>,
+    _mesh_assets: &Assets<Mesh>,
     audio_engine: &AudioEngine,
     behaviors_query: &Query<&mut EntityBehaviors>,
     parametric_shapes: &Query<&ParametricShape>,
@@ -191,6 +214,68 @@ pub fn handle_save_world(
         return GenResponse::Error {
             message: format!("Failed to create skill directory: {}", e),
         };
+    }
+
+    // Create assets/meshes directory for localized mesh assets
+    let meshes_dir = skill_dir.join("assets").join("meshes");
+    if let Err(e) = std::fs::create_dir_all(&meshes_dir) {
+        return GenResponse::Error {
+            message: format!("Failed to create assets/meshes directory: {}", e),
+        };
+    }
+
+    // Collect all external mesh paths and build path mapping
+    let mut asset_paths: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (_, entity) in registry.all_names() {
+        if let Ok(gltf_src) = gltf_sources.get(entity) {
+            asset_paths.insert(gltf_src.path.clone());
+        }
+    }
+
+    // Copy each mesh to assets/meshes/ and build path mapping: original -> relative
+    let mut path_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for original_path in asset_paths {
+        let resolved = resolve_gltf_path(&original_path, &workspace.path);
+        if let Some(resolved) = resolved {
+            if let Some(filename) = resolved.file_name() {
+                let filename_str = filename.to_string_lossy().into_owned();
+                // Generate unique filename if there's a conflict
+                let unique_filename = if meshes_dir.join(&filename_str).exists() {
+                    // Add a unique suffix based on path hash to avoid collisions
+                    use std::collections::hash_map::DefaultHasher;
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = DefaultHasher::new();
+                    original_path.hash(&mut hasher);
+                    let hash = hasher.finish();
+                    let stem = std::path::Path::new(&filename_str)
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| filename_str.clone());
+                    let ext = std::path::Path::new(&filename_str)
+                        .extension()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "glb".to_string());
+                    format!("{}_{}{}.{}", stem, hash % 10000, "", ext)
+                } else {
+                    filename_str
+                };
+
+                if let Err(e) = std::fs::copy(&resolved, meshes_dir.join(&unique_filename)) {
+                    tracing::warn!("Failed to copy mesh asset '{}': {}", original_path, e);
+                    // Keep original path if copy fails
+                    path_map.insert(original_path.clone(), original_path);
+                } else {
+                    let relative_path = format!("assets/meshes/{}", unique_filename);
+                    path_map.insert(original_path.clone(), relative_path);
+                }
+            } else {
+                // Keep original path if we can't extract filename
+                path_map.insert(original_path.clone(), original_path);
+            }
+        } else {
+            // Keep original path if we can't resolve it
+            path_map.insert(original_path.clone(), original_path);
+        }
     }
 
     // Collect all entities into WorldEntity objects
@@ -245,10 +330,11 @@ pub fn handle_save_world(
             we.shape = Some(param.shape.clone());
         }
 
-        // Mesh asset (imported glTF source path)
+        // Mesh asset (imported glTF source path — use localized relative path)
         if let Ok(gltf_src) = gltf_sources.get(bevy_entity) {
+            let relative_path = path_map.get(&gltf_src.path).unwrap_or(&gltf_src.path);
             we.mesh_asset = Some(wt::MeshAssetRef {
-                path: gltf_src.path.clone(),
+                path: relative_path.clone(),
                 node: None,
             });
         }
@@ -445,22 +531,6 @@ pub fn handle_save_world(
         };
     }
 
-    // Export to glTF JSON + BIN for external viewers (human-readable)
-    if let Err(e) = super::gltf_export::export_gltf(
-        &skill_dir,
-        registry,
-        transforms,
-        gen_entities,
-        parent_query,
-        material_handles,
-        material_assets,
-        mesh_handles,
-        mesh_assets,
-    ) {
-        // Non-fatal — the RON file is the primary save
-        tracing::warn!("glTF export failed (non-fatal): {}", e);
-    }
-
     // Write SKILL.md
     let description = cmd.description.as_deref().unwrap_or("A generated 3D world");
     let skill_md = format!(
@@ -479,6 +549,8 @@ useWhen:
 
 This is a gen world skill. Load it with `gen_load_world` to restore the 3D scene,
 behaviors, audio, avatar, and tours.
+
+To export for external viewers, use `gen_export_world` with format "glb" or "gltf".
 "#,
         name = cmd.name,
         description = description,
