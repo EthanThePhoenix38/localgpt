@@ -124,6 +124,7 @@ struct App {
     messages: Vec<AppMessage>,
     is_generating: bool,
     selected_index: Option<usize>,
+    cursor_position: usize,
 }
 
 impl App {
@@ -158,6 +159,7 @@ impl App {
             ],
             is_generating: false,
             selected_index: None,
+            cursor_position: 0,
         }
     }
 }
@@ -292,6 +294,26 @@ async fn run_app(
                         return Ok(());
                     }
 
+                    // Check for Ctrl+A
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('a')
+                    {
+                        if !app.is_generating {
+                            app.cursor_position = 0;
+                        }
+                        continue;
+                    }
+
+                    // Check for Ctrl+E
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('e')
+                    {
+                        if !app.is_generating {
+                            app.cursor_position = app.input.chars().count();
+                        }
+                        continue;
+                    }
+
                     // Check for Ctrl+O
                     if key.modifiers.contains(KeyModifiers::CONTROL)
                         && key.code == KeyCode::Char('o')
@@ -331,8 +353,463 @@ async fn run_app(
                             }
                             let input = app.input.trim().to_string();
                             app.input.clear();
+                            app.cursor_position = 0;
 
                             if !input.is_empty() {
+                                if input.starts_with('/') {
+                                    app.messages.push(AppMessage::Text {
+                                        role: "You".to_string(),
+                                        content: input.clone(),
+                                    });
+
+                                    let parts: Vec<&str> = input.split_whitespace().collect();
+                                    let cmd = parts[0];
+
+                                    match cmd {
+                                        "/quit" | "/exit" | "/q" => return Ok(()),
+                                        "/help" | "/h" | "/?" => {
+                                            let help_text =
+                                                localgpt_core::commands::format_help_text(
+                                                    localgpt_core::commands::Interface::Cli,
+                                                );
+                                            app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: help_text,
+                                            });
+                                        }
+                                        "/skills" => {
+                                            match localgpt_core::agent::load_skills(
+                                                std::path::Path::new("."),
+                                            ) {
+                                                Ok(skills) => {
+                                                    app.messages.push(AppMessage::Text { role: "System".to_string(), content: localgpt_core::agent::get_skills_summary(&skills) });
+                                                }
+                                                Err(e) => {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Failed to load skills: {}",
+                                                            e
+                                                        ),
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        "/sessions" => {
+                                            match localgpt_core::agent::list_sessions_for_agent(
+                                                agent_id,
+                                            ) {
+                                                Ok(sessions) => {
+                                                    if sessions.is_empty() {
+                                                        app.messages.push(AppMessage::Text {
+                                                            role: "System".to_string(),
+                                                            content: "No saved sessions found."
+                                                                .to_string(),
+                                                        });
+                                                    } else {
+                                                        let mut out =
+                                                            String::from("Available sessions:\n");
+                                                        for (i, session) in
+                                                            sessions.iter().take(10).enumerate()
+                                                        {
+                                                            let limit = session.id.len().min(8);
+                                                            out.push_str(&format!(
+                                                                "  {}. {} ({} messages, {})\n",
+                                                                i + 1,
+                                                                &session.id[..limit],
+                                                                session.message_count,
+                                                                session
+                                                                    .created_at
+                                                                    .format("%Y-%m-%d %H:%M")
+                                                            ));
+                                                        }
+                                                        if sessions.len() > 10 {
+                                                            out.push_str(&format!(
+                                                                "  ... and {} more\n",
+                                                                sessions.len() - 10
+                                                            ));
+                                                        }
+                                                        out.push_str("\nUse /resume <id> to resume a session.");
+                                                        app.messages.push(AppMessage::Text {
+                                                            role: "System".to_string(),
+                                                            content: out,
+                                                        });
+                                                    }
+                                                }
+                                                Err(e) => app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: format!(
+                                                        "Failed to list sessions: {}",
+                                                        e
+                                                    ),
+                                                }),
+                                            }
+                                        }
+                                        "/search" => {
+                                            if parts.len() < 2 {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: "Usage: /search <query>".to_string(),
+                                                });
+                                            } else {
+                                                let query = parts[1..].join(" ");
+                                                match localgpt_core::agent::search_sessions_for_agent(agent_id, &query) {
+                                                    Ok(results) => {
+                                                        if results.is_empty() {
+                                                            app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("No sessions found matching '{}'.", query) });
+                                                        } else {
+                                                            let mut out = format!("Sessions matching '{}':\n", query);
+                                                            for (i, result) in results.iter().take(10).enumerate() {
+                                                                let limit = result.session_id.len().min(8);
+                                                                out.push_str(&format!("  {}. {} ({} matches, {})\n", i + 1, &result.session_id[..limit], result.match_count, result.created_at.format("%Y-%m-%d")));
+                                                                if !result.message_preview.is_empty() {
+                                                                    out.push_str(&format!("     \"{}\"\n", result.message_preview));
+                                                                }
+                                                            }
+                                                            app.messages.push(AppMessage::Text { role: "System".to_string(), content: out });
+                                                        }
+                                                    }
+                                                    Err(e) => app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Search failed: {}", e) }),
+                                                }
+                                            }
+                                        }
+                                        "/resume" => {
+                                            if parts.len() < 2 {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: "Usage: /resume <session-id>"
+                                                        .to_string(),
+                                                });
+                                            } else {
+                                                let session_id = parts[1];
+                                                match localgpt_core::agent::list_sessions_for_agent(
+                                                    agent_id,
+                                                ) {
+                                                    Ok(sessions) => {
+                                                        let matching: Vec<_> = sessions
+                                                            .iter()
+                                                            .filter(|s| {
+                                                                s.id.starts_with(session_id)
+                                                            })
+                                                            .collect();
+                                                        match matching.len() {
+                                                            0 => app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("No session found matching '{}'", session_id) }),
+                                                            1 => {
+                                                                let full_id = matching[0].id.clone();
+                                                                match agent.resume_session(&full_id).await {
+                                                                    Ok(()) => {
+                                                                        let status = agent.session_status();
+                                                                        let limit = full_id.len().min(8);
+                                                                        app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Resumed session {} ({} messages)", &full_id[..limit], status.message_count) });
+                                                                    }
+                                                                    Err(e) => app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Failed to resume: {}", e) }),
+                                                                }
+                                                            }
+                                                            _ => app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Multiple sessions match '{}'. Please be more specific.", session_id) }),
+                                                        }
+                                                    }
+                                                    Err(e) => app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Failed to list sessions: {}",
+                                                            e
+                                                        ),
+                                                    }),
+                                                }
+                                            }
+                                        }
+                                        "/clear" => {
+                                            agent.clear_session();
+                                            app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: "Session cleared.".to_string(),
+                                            });
+                                        }
+                                        "/new" => match agent.new_session().await {
+                                            Ok(_) => {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: "New session started.".to_string(),
+                                                });
+                                            }
+                                            Err(e) => {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: format!(
+                                                        "Failed to create new session: {}",
+                                                        e
+                                                    ),
+                                                });
+                                            }
+                                        },
+                                        "/model" => {
+                                            if parts.len() < 2 {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: format!(
+                                                        "Current model: {}",
+                                                        agent.model()
+                                                    ),
+                                                });
+                                            } else {
+                                                let model = parts[1];
+                                                if let Err(e) = agent.set_model(model) {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Failed to switch model: {}",
+                                                            e
+                                                        ),
+                                                    });
+                                                } else {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Switched to model: {}",
+                                                            model
+                                                        ),
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        "/compact" => {
+                                            match agent.compact_session().await {
+                                                Ok((before, after)) => {
+                                                    app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Session compacted. Token count: {} -> {}", before, after) });
+                                                }
+                                                Err(e) => {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Failed to compact: {}",
+                                                            e
+                                                        ),
+                                                    });
+                                                }
+                                            }
+                                        }
+                                        "/memory" => {
+                                            if parts.len() < 2 {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: "Usage: /memory <query>".to_string(),
+                                                });
+                                            } else {
+                                                let query = parts[1..].join(" ");
+                                                match agent.search_memory(&query).await {
+                                                    Ok(results) => {
+                                                        if results.is_empty() {
+                                                            app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("No results found for '{}'. Try /reindex to rebuild memory index.", query) });
+                                                        } else {
+                                                            let mut out = format!(
+                                                                "Memory search results for '{}':\n",
+                                                                query
+                                                            );
+                                                            for (i, result) in
+                                                                results.iter().enumerate()
+                                                            {
+                                                                let snippet = crate::cli::chat::extract_snippet(&result.content, &query, 120);
+                                                                out.push_str(&format!(
+                                                                    "{}. [{}:{}] {}\n",
+                                                                    i + 1,
+                                                                    result.file,
+                                                                    result.line_start,
+                                                                    snippet
+                                                                ));
+                                                            }
+                                                            app.messages.push(AppMessage::Text {
+                                                                role: "System".to_string(),
+                                                                content: out,
+                                                            });
+                                                        }
+                                                    }
+                                                    Err(e) => app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Memory search failed: {}",
+                                                            e
+                                                        ),
+                                                    }),
+                                                }
+                                            }
+                                        }
+                                        "/reindex" => match agent.reindex_memory().await {
+                                            Ok((files, chunks, embedded)) => {
+                                                if embedded > 0 {
+                                                    app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Memory index rebuilt: {} files, {} chunks, {} embeddings", files, chunks, embedded) });
+                                                } else {
+                                                    app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Memory index rebuilt: {} files, {} chunks", files, chunks) });
+                                                }
+                                            }
+                                            Err(e) => app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: format!("Failed to reindex: {}", e),
+                                            }),
+                                        },
+                                        "/save" => match agent.save_session().await {
+                                            Ok(path) => app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: format!(
+                                                    "Session saved to: {}",
+                                                    path.display()
+                                                ),
+                                            }),
+                                            Err(e) => app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: format!("Failed to save session: {}", e),
+                                            }),
+                                        },
+                                        "/status" => {
+                                            let status = agent.session_status();
+                                            let mut out = String::from("Session Status:\n");
+                                            out.push_str(&format!("  ID: {}\n", status.id));
+                                            out.push_str(&format!("  Model: {}\n", agent.model()));
+                                            out.push_str(&format!(
+                                                "  Messages: {}\n",
+                                                status.message_count
+                                            ));
+                                            out.push_str(&format!(
+                                                "  Context tokens: ~{}\n",
+                                                status.token_count
+                                            ));
+                                            out.push_str(&format!(
+                                                "  Compactions: {}\n\n",
+                                                status.compaction_count
+                                            ));
+                                            out.push_str("Memory:\n");
+                                            out.push_str(&format!(
+                                                "  Chunks: {}\n",
+                                                agent.memory_chunk_count()
+                                            ));
+                                            if agent.has_embeddings() {
+                                                out.push_str("  Embeddings: enabled\n");
+                                            }
+                                            if status.api_input_tokens > 0
+                                                || status.api_output_tokens > 0
+                                            {
+                                                out.push_str("\nAPI Usage:\n");
+                                                out.push_str(&format!(
+                                                    "  Input tokens: {}\n",
+                                                    status.api_input_tokens
+                                                ));
+                                                out.push_str(&format!(
+                                                    "  Output tokens: {}\n",
+                                                    status.api_output_tokens
+                                                ));
+                                                out.push_str(&format!(
+                                                    "  Total tokens: {}\n",
+                                                    status.api_input_tokens
+                                                        + status.api_output_tokens
+                                                ));
+                                            }
+                                            if status.search_queries > 0 {
+                                                let cache_pct = (status.search_cached_hits as f64
+                                                    / status.search_queries as f64)
+                                                    * 100.0;
+                                                out.push_str("\nSearch:\n");
+                                                out.push_str(&format!(
+                                                    "  Queries: {}\n",
+                                                    status.search_queries
+                                                ));
+                                                out.push_str(&format!(
+                                                    "  Cached hits: {} ({:.0}%)\n",
+                                                    status.search_cached_hits, cache_pct
+                                                ));
+                                                out.push_str(&format!(
+                                                    "  Estimated cost: ${:.3}",
+                                                    status.search_cost_usd
+                                                ));
+                                            }
+                                            app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: out,
+                                            });
+                                        }
+                                        "/models" => {
+                                            let mut out =
+                                                String::from("Available model prefixes:\n");
+                                            out.push_str("  claude-cli/*    - Use Claude CLI (e.g., claude-cli/opus, claude-cli/sonnet)\n");
+                                            out.push_str(
+                                                "  gpt-*           - OpenAI (requires API key)\n",
+                                            );
+                                            out.push_str("  claude-*        - Anthropic API (requires API key)\n");
+                                            out.push_str("  ollama/*        - Ollama local (e.g., ollama/llama3)\n");
+                                            out.push_str(
+                                                "  <other>         - Defaults to Ollama\n",
+                                            );
+                                            out.push_str(&format!(
+                                                "\nCurrent model: {}\n",
+                                                agent.model()
+                                            ));
+                                            out.push_str("Use /model <name> to switch.");
+                                            app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: out,
+                                            });
+                                        }
+                                        "/context" => {
+                                            let (used, usable, total) = agent.context_usage();
+                                            let pct =
+                                                (used as f64 / usable as f64 * 100.0).min(100.0);
+                                            let mut out = String::from("Context Window:\n");
+                                            out.push_str(&format!(
+                                                "  Used: {} tokens ({:.1}%)\n",
+                                                used, pct
+                                            ));
+                                            out.push_str(&format!("  Usable: {} tokens\n", usable));
+                                            out.push_str(&format!("  Total: {} tokens\n", total));
+                                            out.push_str(&format!(
+                                                "  Reserve: {} tokens\n",
+                                                total - usable
+                                            ));
+                                            if pct > 80.0 {
+                                                out.push_str("\n⚠ Context nearly full. Consider /compact or /new.");
+                                            }
+                                            app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: out,
+                                            });
+                                        }
+                                        "/export" => {
+                                            let markdown = agent.export_markdown();
+                                            if parts.len() >= 2 {
+                                                let path = parts[1..].join(" ");
+                                                let expanded =
+                                                    shellexpand::tilde(&path).to_string();
+                                                match std::fs::write(&expanded, &markdown) {
+                                                    Ok(()) => app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Session exported to: {}",
+                                                            expanded
+                                                        ),
+                                                    }),
+                                                    Err(e) => app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!("Failed to export: {}", e),
+                                                    }),
+                                                }
+                                            } else {
+                                                app.messages.push(AppMessage::Text {
+                                                    role: "System".to_string(),
+                                                    content: markdown,
+                                                });
+                                            }
+                                        }
+                                        _ => {
+                                            app.messages.push(AppMessage::Text {
+                                                role: "System".to_string(),
+                                                content: format!(
+                                                    "Unknown command: {}. Type /help for commands.",
+                                                    cmd
+                                                ),
+                                            });
+                                        }
+                                    }
+                                    app.selected_index = Some(app.messages.len() - 1);
+                                    continue;
+                                }
+
                                 app.messages.push(AppMessage::Text {
                                     role: "You".to_string(),
                                     content: input.clone(),
@@ -399,12 +876,50 @@ async fn run_app(
                         }
                         KeyCode::Char(c) => {
                             if !app.is_generating {
-                                app.input.push(c);
+                                // insert char at cursor_position
+                                let byte_index = app
+                                    .input
+                                    .char_indices()
+                                    .map(|(i, _)| i)
+                                    .nth(app.cursor_position)
+                                    .unwrap_or(app.input.len());
+                                app.input.insert(byte_index, c);
+                                app.cursor_position += 1;
                             }
                         }
                         KeyCode::Backspace => {
-                            if !app.is_generating {
-                                app.input.pop();
+                            if !app.is_generating && app.cursor_position > 0 {
+                                app.cursor_position -= 1;
+                                let byte_index = app
+                                    .input
+                                    .char_indices()
+                                    .map(|(i, _)| i)
+                                    .nth(app.cursor_position)
+                                    .unwrap_or(app.input.len());
+                                app.input.remove(byte_index);
+                            }
+                        }
+                        KeyCode::Delete => {
+                            if !app.is_generating && app.cursor_position < app.input.chars().count()
+                            {
+                                let byte_index = app
+                                    .input
+                                    .char_indices()
+                                    .map(|(i, _)| i)
+                                    .nth(app.cursor_position)
+                                    .unwrap_or(app.input.len());
+                                app.input.remove(byte_index);
+                            }
+                        }
+                        KeyCode::Left => {
+                            if !app.is_generating && app.cursor_position > 0 {
+                                app.cursor_position -= 1;
+                            }
+                        }
+                        KeyCode::Right => {
+                            if !app.is_generating && app.cursor_position < app.input.chars().count()
+                            {
+                                app.cursor_position += 1;
                             }
                         }
                         _ => {}
@@ -417,9 +932,14 @@ async fn run_app(
 }
 
 fn ui(f: &mut ratatui::Frame, app: &App) {
+    let inner_width = f.area().width.saturating_sub(2).max(1) as usize;
+    let input_char_count = app.input.chars().count();
+    let input_lines = (input_char_count / inner_width) + 1;
+    let input_height = input_lines.max(1) as u16 + 2;
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(3)])
+        .constraints([Constraint::Min(1), Constraint::Length(input_height)])
         .split(f.area());
 
     let mut lines: Vec<Line> = Vec::new();
@@ -506,23 +1026,46 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
         }
     }
 
-    let max_lines = chunks[0].height.saturating_sub(2) as usize;
-    let total_lines = lines.len();
-
-    let skip_lines = total_lines.saturating_sub(max_lines);
-
-    let visible_lines = lines.into_iter().skip(skip_lines).collect::<Vec<_>>();
-
     let title = if app.is_generating {
         " Chat (Generating...) "
     } else {
         " Chat "
     };
-    let messages_block =
-        Paragraph::new(visible_lines).block(Block::default().title(title).borders(Borders::ALL));
+
+    // Calculate how many terminal lines the wrapped text will actually take.
+    // Ratatui handles wrapping natively, but we need to compute scroll offset.
+    let wrap_width = chunks[0].width.saturating_sub(2).max(1) as usize;
+    let mut total_wrapped_lines = 0;
+
+    for line in &lines {
+        // A simple heuristic for wrapped line count: total chars / width
+        let char_count: usize = line.spans.iter().map(|s| s.content.chars().count()).sum();
+        let wrapped_count = (char_count / wrap_width) + 1;
+        total_wrapped_lines += wrapped_count;
+    }
+
+    let max_lines = chunks[0].height.saturating_sub(2) as u16;
+    let scroll_y = if total_wrapped_lines as u16 > max_lines {
+        total_wrapped_lines as u16 - max_lines
+    } else {
+        0
+    };
+
+    let messages_block = Paragraph::new(lines)
+        .block(Block::default().title(title).borders(Borders::ALL))
+        .wrap(ratatui::widgets::Wrap { trim: false })
+        .scroll((scroll_y, 0));
+
     f.render_widget(messages_block, chunks[0]);
 
     let input_block = Paragraph::new(app.input.as_str())
-        .block(Block::default().title(" Input ").borders(Borders::ALL));
+        .block(Block::default().title(" Input ").borders(Borders::ALL))
+        .wrap(ratatui::widgets::Wrap { trim: false });
     f.render_widget(input_block, chunks[1]);
+
+    if !app.is_generating {
+        let cursor_x = chunks[1].x + 1 + (app.cursor_position as u16 % inner_width as u16);
+        let cursor_y = chunks[1].y + 1 + (app.cursor_position as u16 / inner_width as u16);
+        f.set_cursor_position((cursor_x, cursor_y));
+    }
 }

@@ -41,7 +41,7 @@ fn ceil_char_boundary(s: &str, index: usize) -> usize {
 }
 
 /// Extract a snippet from content, centered around the query match
-fn extract_snippet(content: &str, query: &str, max_len: usize) -> String {
+pub fn extract_snippet(content: &str, query: &str, max_len: usize) -> String {
     // Normalize content: collapse whitespace and newlines
     let normalized: String = content.split_whitespace().collect::<Vec<_>>().join(" ");
 
