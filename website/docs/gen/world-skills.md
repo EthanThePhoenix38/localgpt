@@ -124,3 +124,7 @@ glTF scenes load asynchronously. When loading a world:
 3. The response confirms when loading is complete
 
 This ensures smooth loading even for complex scenes.
+
+## Showcase
+
+- **[localgpt-app/workspace](https://github.com/localgpt-app/workspace)** — "World as skill" examples: complete explorable worlds saved as reusable, shareable skills

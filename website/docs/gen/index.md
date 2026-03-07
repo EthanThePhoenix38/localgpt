@@ -61,3 +61,7 @@ The agent receives your prompt and iteratively builds a world — spawning shape
 
 - Visual output depends on the LLM's spatial reasoning ability
 - Requires a GPU-capable display for rendering
+
+## Showcase
+
+- **[proofof.video](https://proofof.video/)** — Video gallery comparing world generations across different models using the same or similar prompts
