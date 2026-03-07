@@ -47,7 +47,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Ecosystem',
-      items: ['ecosystem'],
+      items: ['ecosystem', 'claw', 'worlds'],
     },
   ],
 };

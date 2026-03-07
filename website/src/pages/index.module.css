@@ -4,41 +4,15 @@
  */
 
 .heroBanner {
-  padding: 3rem 0;
+  padding: 4rem 0;
   text-align: center;
   position: relative;
   overflow: hidden;
 }
 
-.heroContainer {
-  display: flex;
-  align-items: center;
-  gap: 3rem;
-}
-
-.heroLeft {
-  flex: 1;
-  min-width: 0;
-}
-
-.heroRight {
-  flex: 0 0 360px;
-}
-
 @media screen and (max-width: 996px) {
   .heroBanner {
     padding: 2rem;
-  }
-
-  .heroContainer {
-    flex-direction: column;
-    gap: 2rem;
-  }
-
-  .heroRight {
-    flex: none;
-    width: 100%;
-    max-width: 420px;
   }
 }
 
@@ -47,32 +21,47 @@
   align-items: center;
   justify-content: center;
   gap: 1.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .heroIcon {
-  width: 160px;
-  height: 160px;
+  width: 140px;
+  height: 140px;
 }
 
 .heroLogo {
-  max-width: 400px;
+  max-width: 380px;
   width: 100%;
   height: auto;
 }
 
 .installWrap {
   display: flex;
-  justify-content: center;
-  margin-bottom: 1rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.installRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.installLabel {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  width: 120px;
+  text-align: right;
 }
 
 .installCmd {
   display: inline-flex;
   align-items: center;
   gap: 1rem;
-  font-size: 1.1rem;
-  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  padding: 0.6rem 1rem;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -105,38 +94,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.genCard {
-  padding: 1.5rem 1.75rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  text-align: left;
-}
-
-.genTitle {
-  color: #fff;
-  font-size: 1.3rem;
-  margin: 0 0 0.25rem;
-}
-
-.genSubtitle {
-  color: #25c2a0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin: 0 0 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.genDescription {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 0.9rem;
-  line-height: 1.55;
-  margin-bottom: 1.25rem;
-}
-
-.genDescription a {
-  color: #25c2a0;
+  gap: 1rem;
+  margin-top: 1.5rem;
 }
