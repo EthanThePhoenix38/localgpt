@@ -108,5 +108,6 @@ async fn async_main(cli: Cli) -> Result<()> {
         Commands::Completion(args) => crate::cli::completion::run(args),
         Commands::Cron(args) => crate::cli::cron::run(args),
         Commands::Hooks(args) => crate::cli::hooks::run(args),
+        Commands::McpServer(args) => crate::cli::mcp_server::run(args).await,
     }
 }

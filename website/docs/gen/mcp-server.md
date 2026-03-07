@@ -41,10 +41,16 @@ See [Gen Tools Reference](/docs/gen/tools) for full documentation on each tool.
 
 ### Core Tools
 
-- **`memory_search`** — Search LocalGPT's memory (MEMORY.md, daily logs) using hybrid semantic + keyword search. The AI backend can recall preferences, past decisions, and context from previous sessions.
-- **`memory_get`** — Fetch specific lines from memory files. Use after `memory_search` to read relevant snippets.
-- **`web_fetch`** — Fetch and extract content from URLs. Useful for referencing documentation or inspiration during scene building.
-- **`web_search`** — Search the web (if configured in `config.toml`). Useful for researching scene concepts.
+| Tool | Description |
+|------|-------------|
+| `memory_search` | Search MEMORY.md + daily logs using hybrid semantic + keyword search |
+| `memory_get` | Fetch specific lines from memory files (use after `memory_search`) |
+| `memory_save` | Append to MEMORY.md — long-term curated knowledge |
+| `memory_log` | Append to today's daily log (`memory/YYYY-MM-DD.md`) |
+| `web_fetch` | Fetch and extract content from URLs |
+| `web_search` | Search the web (if configured in `config.toml`) |
+
+These are the same core tools available via `localgpt mcp-server` (see [Memory-only MCP Server](#memory-only-mcp-server) below).
 
 ### Why Not File/Shell Tools?
 
@@ -213,15 +219,39 @@ localgpt-gen --mcp-server --scene ./my-scene.glb
 
 The AI backend can then modify the pre-loaded scene.
 
+## Memory-only MCP Server
+
+If you don't need gen tools and just want to give an AI backend access to LocalGPT's memory, use the standalone MCP server:
+
+```bash
+localgpt mcp-server
+```
+
+This exposes only the core tools: `memory_search`, `memory_get`, `memory_save`, `memory_log`, `web_fetch`, and `web_search`. No Bevy window, no gen tools.
+
+Configure it the same way as `localgpt-gen --mcp-server`:
+
+```json
+{
+  "mcpServers": {
+    "localgpt": {
+      "command": "localgpt",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
+This is useful when you want to use Claude CLI, Gemini CLI, or an editor for regular coding tasks while still having access to LocalGPT's persistent memory system — notes, preferences, and context from past sessions.
+
 ## Memory Integration
 
 The MCP server initializes LocalGPT's memory system using the workspace configured in `~/.localgpt/config.toml`. This means:
 
 - **`memory_search`** queries the same MEMORY.md, daily logs, and knowledge files used by LocalGPT's interactive mode
 - If embeddings are enabled (`memory.embedding_provider = "local"`), semantic search works across all indexed memory chunks
-- The AI backend can tell the user about past sessions, preferences, and decisions stored in memory
-
-To write to memory, the AI backend can use its own file tools (e.g., Claude CLI's `Write` tool) to edit `MEMORY.md` or `memory/*.md` files in the workspace directory. The workspace path is shown in verbose mode.
+- **`memory_save`** and **`memory_log`** write to the same workspace files, following LocalGPT's conventions — the AI backend doesn't need to know about file paths or formats
+- Any notes saved in MCP mode are available in future `localgpt chat` sessions and vice versa
 
 ## Tips
 

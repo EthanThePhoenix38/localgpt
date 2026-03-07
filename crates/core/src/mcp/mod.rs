@@ -4,6 +4,8 @@
 //! discovers their tools, and exposes them as LocalGPT `Tool` instances.
 
 pub mod client;
+pub mod memory_tools;
+pub mod server;
 pub mod tools;
 pub mod transport;
 

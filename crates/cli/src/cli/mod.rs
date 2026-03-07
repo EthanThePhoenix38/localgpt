@@ -12,6 +12,7 @@ pub mod doctor;
 pub mod gen3d;
 pub mod hooks;
 pub mod init;
+pub mod mcp_server;
 pub mod md;
 pub mod memory;
 pub mod paths;
@@ -109,4 +110,7 @@ pub enum Commands {
 
     /// Manage event hooks
     Hooks(hooks::HooksArgs),
+
+    /// Run as MCP server (stdio) — exposes memory tools for external AI backends
+    McpServer(mcp_server::McpServerArgs),
 }
