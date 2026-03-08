@@ -6,6 +6,10 @@ All notable changes to LocalGPT are documented in this file.
 
 ### Added
 
+- **Gen MCP server** — MCP server mode for external CLI backends with core tools, memory-only mode with write tools, and Ctrl+C handling.
+- **Gen new primitives** — `pyramid`, `tetrahedron`, `icosahedron`, and `wedge` parametric shapes.
+- **Gen HTML export** — export worlds as interactive browser-based experiences with Three.js viewer.
+- **Gen avatar movement and camera control** — WASD/arrow key movement, mouse look, first-person/third-person camera modes.
 - **CLI TUI slash commands and line editing** — `/help`, `/clear`, `/exit`, `/model`, `/session` commands with readline-style editing (Ctrl+A/E, arrow keys, history).
 - **Gen streaming chat** — real-time tool call display and streaming responses in Gen mode for better visibility into scene building.
 - **Gen batch entity operations** — `gen_spawn_entities` tool for efficient multi-entity creation in a single call.
@@ -33,6 +37,7 @@ All notable changes to LocalGPT are documented in this file.
 
 ### Changed
 
+- **Gen mode architecture** — delegated to `localgpt-gen` binary via subprocess for cleaner separation.
 - **Mobile apps restructured** — `apps/ios` renamed to `apps/apple` for multi-platform support (iOS + macOS).
 - **OAuth providers removed** — all OAuth provider implementations removed for simplified authentication.
 - **Gen glTF export format** — switched to JSON format with version compatibility for better interoperability.

@@ -40,6 +40,20 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects: [
+          {
+            to: 'https://github.com/localgpt-app/localgpt-gen-workspace/blob/main/skills/desert-pyramids-ufo/SKILL.md',
+            from: '/desert-pyramids-ufo',
+          },
+        ],
+      },
+    ],
+  ],
+
   themeConfig: {
     colorMode: {
       defaultMode: 'dark',

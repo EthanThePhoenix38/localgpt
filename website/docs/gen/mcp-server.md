@@ -58,7 +58,7 @@ CLI tools like `bash`, `read_file`, `write_file`, and `edit_file` are **not** ex
 
 ## Claude CLI
 
-Add to `~/.claude.json` (or project-level `.claude/settings.json`):
+Add to project-level `.mcp.json`):
 
 ```json
 {
