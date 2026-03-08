@@ -10,9 +10,41 @@
   overflow: hidden;
 }
 
+.heroGrid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4rem;
+}
+
+.heroLeft {
+  flex: 1;
+  max-width: 480px;
+  text-align: left;
+}
+
+.heroRight {
+  flex: 1.5;
+  max-width: 840px;
+}
+
 @media screen and (max-width: 996px) {
   .heroBanner {
     padding: 2rem;
+  }
+
+  .heroGrid {
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .heroLeft {
+    text-align: center;
+    max-width: 100%;
+  }
+
+  .heroRight {
+    max-width: 100%;
   }
 }
 
@@ -96,4 +128,22 @@
   justify-content: center;
   gap: 1rem;
   margin-top: 1.5rem;
+}
+
+.videoWrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 aspect ratio */
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.videoWrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
 }

@@ -1,7 +1,7 @@
-import clsx from 'clsx';
-import Heading from '@theme/Heading';
-import Link from '@docusaurus/Link';
-import styles from './styles.module.css';
+import clsx from "clsx";
+import Heading from "@theme/Heading";
+import Link from "@docusaurus/Link";
+import styles from "./styles.module.css";
 
 type FeatureItem = {
   title: string;
@@ -10,80 +10,80 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Build Worlds with Language',
+    title: "Build Worlds with Language",
     description: (
       <>
-        Describe a scene in natural language and watch it come to life.
-        Spawn primitives, load glTF models, apply materials, set lighting,
-        and position the camera — all through conversational prompts.
+        Describe a scene in natural language and watch it come to life. Spawn
+        primitives, load glTF models, apply materials, set lighting, and
+        position the camera — all through conversational prompts.
       </>
     ),
   },
   {
-    title: 'Procedural Audio',
+    title: "Procedural Audio",
     description: (
       <>
         Add ambient soundscapes (wind, rain, forest, ocean, cave, stream) and
-        spatial audio emitters attached to entities. Real-time synthesis —
-        no audio files required.
+        spatial audio emitters attached to entities. Real-time synthesis — no
+        audio files required.
       </>
     ),
   },
   {
-    title: 'Data-Driven Behaviors',
+    title: "Data-Driven Behaviors",
     description: (
       <>
         Animate entities without scripting: orbit, spin, bob, look_at, pulse,
-        path_follow, and bounce. Stack multiple behaviors on a single entity
-        for complex motion.
+        path_follow, and bounce. Stack multiple behaviors on a single entity for
+        complex motion.
       </>
     ),
   },
   {
-    title: 'World Skills',
+    title: "World Skills",
     description: (
       <>
         Save complete worlds as reusable skills — scene geometry, behaviors,
-        audio configuration, camera tours. Load them instantly or share with others.
-        Export to glTF for use in other engines.
+        audio configuration, camera tours. Load them instantly or share with
+        others. Export to glTF for use in other engines.
       </>
     ),
   },
   {
-    title: 'Local & Private',
+    title: "Local & Private",
     description: (
       <>
         Single Rust binary. All data stays on your machine — no cloud storage,
-        no telemetry. Works with Claude CLI, Anthropic API, OpenAI, Ollama,
-        and GLM. Just <code>cargo install localgpt-gen</code>.
+        no telemetry. Works with Claude CLI, Anthropic API, OpenAI, Ollama, and
+        GLM. Just <code>cargo install localgpt-gen</code>.
       </>
     ),
   },
   {
-    title: 'MCP Server',
+    title: "MCP Server",
     description: (
       <>
-        Run as an MCP server to integrate with Claude CLI, Gemini CLI, Codex CLI,
-        and MCP-compatible editors. Drive the 3D window from your favorite AI
-        coding assistant.
+        Run standalone or as an MCP server to integrate with Claude Desktop,
+        Codex Desktop/CLI, Gemini CLI, and MCP-compatible editors. Drive the 3D
+        window from your favorite AI coding assistant.
       </>
     ),
   },
   {
-    title: 'Persistent Memory',
+    title: "Persistent Memory",
     description: (
       <>
-        Markdown-based memory with hybrid search — SQLite FTS5 plus local
-        vector embeddings. Your AI remembers context across sessions and
-        can reference previous world-building decisions.
+        Markdown-based memory with hybrid search — SQLite FTS5 plus local vector
+        embeddings. Your AI remembers context across sessions and can reference
+        previous world-building decisions.
       </>
     ),
   },
 ];
 
-function Feature({title, description}: FeatureItem) {
+function Feature({ title, description }: FeatureItem) {
   return (
-    <div className={clsx('col col--4')}>
+    <div className={clsx("col col--4")}>
       <div className="text--center padding-horiz--md">
         <Heading as="h3">{title}</Heading>
         <p>{description}</p>

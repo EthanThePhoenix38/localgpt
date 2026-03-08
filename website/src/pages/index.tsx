@@ -27,7 +27,7 @@ function InstallCommands() {
         </div>
       </div>
       <div className={styles.installRow}>
-        <span className={styles.installLabel}>CLI Assistant</span>
+        <span className={styles.installLabel}>AI Assistant</span>
         <div className={styles.installCmd} onClick={() => handleCopy('cargo install localgpt', setCopiedCli)}>
           <code>cargo install localgpt</code>
           <button className={styles.copyBtn}>{copiedCli ? 'Copied!' : 'Copy'}</button>
@@ -42,35 +42,53 @@ function HomepageHeader() {
   return (
     <header className={clsx('hero hero--dark', styles.heroBanner)}>
       <div className="container">
-        <div className={styles.heroLogos}>
-          <img
-            src="/logo/localgpt-icon.svg"
-            alt={siteConfig.title}
-            className={styles.heroIcon}
-          />
-          <img
-            src="/logo/localgpt-gear.gif"
-            alt={siteConfig.title}
-            className={styles.heroLogo}
-          />
-        </div>
-        <InstallCommands />
-        <p className="hero__subtitle">
-          Build explorable 3D worlds with natural language — geometry, materials, lighting, audio, and behaviors.
-          <br />
-          Open source, runs locally.
-        </p>
-        <div className={styles.buttons}>
-          <Link
-            className="button button--primary button--lg"
-            to="/docs/gen">
-            Start Building
-          </Link>
-          <Link
-            className="button button--secondary button--lg"
-            to="/docs/intro">
-            Documentation
-          </Link>
+        <div className={styles.heroGrid}>
+          <div className={styles.heroLeft}>
+            <div className={styles.heroLogos}>
+              <img
+                src="/logo/localgpt-icon.svg"
+                alt={siteConfig.title}
+                className={styles.heroIcon}
+              />
+              <img
+                src="/logo/localgpt-gear.gif"
+                alt={siteConfig.title}
+                className={styles.heroLogo}
+              />
+            </div>
+            <InstallCommands />
+            <p className="hero__subtitle">
+              Build explorable 3D worlds with natural language — geometry, materials, lighting, audio, and behaviors.
+              <br />
+              Open source, runs locally.
+            </p>
+            <div className={styles.buttons}>
+              <Link
+                className="button button--primary button--lg"
+                to="/docs/gen">
+                Start Building
+              </Link>
+              <Link
+                className="button button--secondary button--lg"
+                to="/docs/intro">
+                Documentation
+              </Link>
+            </div>
+          </div>
+          <div className={styles.heroRight}>
+            <div className={styles.videoWrapper}>
+              <iframe
+                width="560"
+                height="315"
+                src="https://www.youtube.com/embed/R__tg7YY0T8?si=pvVW7eIVyNgXjJb0"
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          </div>
         </div>
       </div>
     </header>
