@@ -145,6 +145,10 @@ pub enum PrimitiveShape {
     Capsule,
     Torus,
     Plane,
+    Pyramid,
+    Tetrahedron,
+    Icosahedron,
+    Wedge,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

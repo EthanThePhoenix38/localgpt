@@ -127,7 +127,7 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
     // OrbitControls
     writeln!(
         js,
-        "const controls = new THREE.OrbitControls(camera, renderer.domElement);"
+        "const controls = new OrbitControls(camera, renderer.domElement);"
     )
     .unwrap();
     writeln!(
@@ -260,9 +260,17 @@ body {{ overflow: hidden; background: #000; }}
 <div id="scene"></div>
 <div id="info">{title}<br><small>Drag to orbit &middot; Scroll to zoom</small></div>
 <button id="audio-btn" style="display:none" onclick="toggleAudio()">Sound On</button>
-<script src="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.170.0/examples/js/controls/OrbitControls.js"></script>
-<script>
+<script type="importmap">
+{{
+  "imports": {{
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }}
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
 {js}
 </script>
 </body>
@@ -425,6 +433,88 @@ fn emit_geometry(js: &mut String, shape: &wt::Shape, var: &str) {
             )
             .unwrap();
             writeln!(js, "{}_geo.rotateX(-Math.PI / 2);", var).unwrap();
+        }
+        wt::Shape::Pyramid {
+            base_x,
+            base_z,
+            height,
+        } => {
+            // Three.js ConeGeometry with 4 radial segments = square pyramid
+            let radius = (*base_x).max(*base_z) / 2.0;
+            writeln!(
+                js,
+                "const {v}_geo = new THREE.ConeGeometry({r:.4}, {h:.4}, 4);",
+                v = var,
+                r = radius,
+                h = height
+            )
+            .unwrap();
+            // Rotate to align base with XZ plane
+            writeln!(js, "{}_geo.rotateY(Math.PI / 4);", var).unwrap();
+        }
+        wt::Shape::Tetrahedron { radius } => {
+            writeln!(
+                js,
+                "const {v}_geo = new THREE.TetrahedronGeometry({r:.4});",
+                v = var,
+                r = radius
+            )
+            .unwrap();
+        }
+        wt::Shape::Icosahedron { radius } => {
+            writeln!(
+                js,
+                "const {v}_geo = new THREE.IcosahedronGeometry({r:.4}, 0);",
+                v = var,
+                r = radius
+            )
+            .unwrap();
+        }
+        wt::Shape::Wedge { x, y, z } => {
+            // Wedge is a triangular prism - use BufferGeometry
+            writeln!(
+                js,
+                r#"const {v}_geo = new THREE.BufferGeometry();
+const {v}_hx = {x:.4} / 2, {v}_hy = {y:.4} / 2, {v}_hz = {z:.4} / 2;
+const {v}_vertices = new Float32Array([
+  // Bottom face (2 triangles)
+  -{v}_hx, -{v}_hy, -{v}_hz,
+  -{v}_hx, -{v}_hy, {v}_hz,
+  {v}_hx, -{v}_hy, -{v}_hz,
+  {v}_hx, -{v}_hy, -{v}_hz,
+  -{v}_hx, -{v}_hy, {v}_hz,
+  {v}_hx, -{v}_hy, {v}_hz,
+  // Front face (2 triangles)
+  -{v}_hx, -{v}_hy, -{v}_hz,
+  {v}_hx, -{v}_hy, -{v}_hz,
+  {v}_hx, {v}_hy, -{v}_hz,
+  -{v}_hx, -{v}_hy, -{v}_hz,
+  {v}_hx, {v}_hy, -{v}_hz,
+  -{v}_hx, {v}_hy, -{v}_hz,
+  // Back slope (2 triangles)
+  -{v}_hx, -{v}_hy, {v}_hz,
+  -{v}_hx, {v}_hy, -{v}_hz,
+  {v}_hx, {v}_hy, -{v}_hz,
+  -{v}_hx, -{v}_hy, {v}_hz,
+  {v}_hx, {v}_hy, -{v}_hz,
+  {v}_hx, -{v}_hy, {v}_hz,
+  // Left face (2 triangles)
+  -{v}_hx, -{v}_hy, {v}_hz,
+  -{v}_hx, -{v}_hy, -{v}_hz,
+  -{v}_hx, {v}_hy, -{v}_hz,
+  // Right face (2 triangles)
+  {v}_hx, -{v}_hy, -{v}_hz,
+  {v}_hx, -{v}_hy, {v}_hz,
+  {v}_hx, {v}_hy, -{v}_hz,
+]);
+{v}_geo.setAttribute('position', new THREE.BufferAttribute({v}_vertices, 3));
+{v}_geo.computeVertexNormals();"#,
+                v = var,
+                x = x,
+                y = y,
+                z = z
+            )
+            .unwrap();
         }
     }
 }

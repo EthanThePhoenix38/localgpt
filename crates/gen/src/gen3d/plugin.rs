@@ -9,6 +9,7 @@ use bevy::scene::SceneRoot;
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use localgpt_world_types as wt;
 
@@ -24,6 +25,44 @@ use super::registry::*;
 #[derive(Resource, Clone)]
 pub struct GenWorkspace {
     pub path: PathBuf,
+}
+
+/// Current world skill folder being edited (auto-created when user starts generating).
+#[derive(Resource, Default)]
+pub struct CurrentWorldSkill {
+    /// Path to the world skill folder (e.g., workspace/skills/my-world/)
+    pub path: Option<PathBuf>,
+    /// Name of the world skill
+    pub name: Option<String>,
+}
+
+impl CurrentWorldSkill {
+    /// Get the screenshots folder path, creating it if necessary.
+    pub fn screenshots_folder(&self) -> Option<PathBuf> {
+        self.path.as_ref().map(|p| {
+            let folder = p.join("screenshots");
+            let _ = std::fs::create_dir_all(&folder);
+            folder
+        })
+    }
+
+    /// Generate a timestamped screenshot filename.
+    pub fn screenshot_filename(&self) -> String {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let name = self.name.as_deref().unwrap_or("world");
+        format!("{}-{}.png", name, timestamp)
+    }
+}
+
+/// Marker resource indicating the world has unsaved changes.
+#[derive(Resource, Default)]
+pub struct WorldDirty {
+    pub dirty: bool,
+    /// Cooldown frames before auto-save triggers
+    pub cooldown_frames: u32,
 }
 
 /// Bevy resource wrapping the channel endpoints.
@@ -44,12 +83,14 @@ pub struct PendingScreenshots {
     queue: Vec<PendingScreenshot>,
 }
 
-#[allow(dead_code)]
 struct PendingScreenshot {
     frames_remaining: u32,
     width: u32,
     height: u32,
-    path: Option<String>,
+    /// Optional explicit path; if None, saves to world skill's screenshots folder.
+    path: Option<PathBuf>,
+    /// Whether to also save to the world skill's screenshots folder.
+    save_to_skill: bool,
 }
 
 /// Initial glTF scene to load at startup.
@@ -177,6 +218,8 @@ pub fn setup_gen_app(
         .init_resource::<PendingWorldSetup>()
         .init_resource::<AvatarConfig>()
         .init_resource::<WorldTours>()
+        .init_resource::<CurrentWorldSkill>()
+        .init_resource::<WorldDirty>()
         .init_resource::<CurrentWorld>()
         .init_resource::<FlyCamConfig>()
         .init_resource::<BehaviorState>()
@@ -446,6 +489,7 @@ fn process_gen_commands(
                     width,
                     height,
                     path: None,
+                    save_to_skill: true,
                 });
                 // Response will be sent by process_pending_screenshots
                 continue;
@@ -841,7 +885,8 @@ fn process_gen_commands(
                     frames_remaining: 3,
                     width,
                     height,
-                    path: Some(path),
+                    path: Some(PathBuf::from(path)),
+                    save_to_skill: true, // Also save to skill folder
                 });
                 continue;
             }
@@ -1463,9 +1508,14 @@ fn process_gen_commands(
 
 /// Process pending screenshots that need frame delays.
 fn process_pending_screenshots(
-    channel_res: ResMut<GenChannelRes>,
+    mut channel_res: ResMut<GenChannelRes>,
     mut pending: ResMut<PendingScreenshots>,
+    current_skill: Res<CurrentWorldSkill>,
+    mut commands: Commands,
+    cameras: Query<Entity, With<Camera>>,
 ) {
+    use bevy::render::view::screenshot::{Screenshot, save_to_disk};
+
     let mut completed = Vec::new();
 
     for (i, screenshot) in pending.queue.iter_mut().enumerate() {
@@ -1478,29 +1528,70 @@ fn process_pending_screenshots(
 
     // Process completed screenshots in reverse order to preserve indices
     for i in completed.into_iter().rev() {
-        let screenshot = pending.queue.remove(i);
+        let screenshot_req = pending.queue.remove(i);
 
-        // Determine output path
-        let path = screenshot.path.unwrap_or_else(|| {
-            let tmp = std::env::temp_dir().join(format!(
-                "localgpt_gen_screenshot_{}.png",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
+        // Determine output path(s)
+        let paths: Vec<PathBuf> = if let Some(ref explicit_path) = screenshot_req.path {
+            // User specified a path
+            let mut paths = vec![explicit_path.clone()];
+            // Also save to skill folder if requested and skill exists
+            if screenshot_req.save_to_skill {
+                if let Some(skill_folder) = current_skill.screenshots_folder() {
+                    let filename = explicit_path
+                        .file_name()
+                        .unwrap_or(std::ffi::OsStr::new("screenshot.png"));
+                    paths.push(skill_folder.join(filename));
+                }
+            }
+            paths
+        } else if screenshot_req.save_to_skill {
+            // No explicit path, save to skill folder
+            if let Some(skill_folder) = current_skill.screenshots_folder() {
+                vec![skill_folder.join(current_skill.screenshot_filename())]
+            } else {
+                // No skill folder, use temp
+                vec![std::env::temp_dir().join(format!(
+                    "localgpt_screenshot_{}.png",
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                ))]
+            }
+        } else {
+            // Fallback to temp
+            vec![std::env::temp_dir().join(format!(
+                "localgpt_screenshot_{}.png",
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_millis()
-            ));
-            tmp.to_string_lossy().into_owned()
-        });
+            ))]
+        };
 
-        // TODO: Actual Bevy screenshot capture requires camera entity access
-        // and render-to-texture. For now, we create a placeholder and report
-        // the path. Full implementation needs Bevy's Screenshot observer or
-        // render target approach.
-        //
-        // In a full implementation:
-        //   commands.entity(camera).trigger(Screenshot::to_disk(path));
+        // Find the primary camera
+        let camera_entity = cameras.iter().next();
+
+        // Take screenshot using Bevy's Screenshot API
+        if let Some(camera) = camera_entity {
+            // Create screenshot entity and observer for each path
+            for path in &paths {
+                // Ensure parent directory exists
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+
+                let path_clone = path.clone();
+                commands
+                    .spawn(Screenshot::primary_window())
+                    .observe(save_to_disk(path_clone));
+            }
+        }
+
+        // Send response with the first (primary) path
+        let primary_path = paths.first().cloned().unwrap_or_default();
         let response = GenResponse::Screenshot {
-            image_path: path.clone(),
+            image_path: primary_path.to_string_lossy().into_owned(),
         };
         let _ = channel_res.channels.resp_tx.send(response);
     }
@@ -1974,6 +2065,26 @@ fn handle_spawn_primitive(
             let z = cmd.dimensions.get("z").copied().unwrap_or(1.0);
             meshes.add(Plane3d::new(Vec3::Y, Vec2::new(x / 2.0, z / 2.0)))
         }
+        PrimitiveShape::Pyramid => {
+            let base_x = cmd.dimensions.get("base_x").copied().unwrap_or(1.0);
+            let base_z = cmd.dimensions.get("base_z").copied().unwrap_or(1.0);
+            let height = cmd.dimensions.get("height").copied().unwrap_or(1.0);
+            meshes.add(create_pyramid_mesh(base_x, base_z, height))
+        }
+        PrimitiveShape::Tetrahedron => {
+            let radius = cmd.dimensions.get("radius").copied().unwrap_or(1.0);
+            meshes.add(create_tetrahedron_mesh(radius))
+        }
+        PrimitiveShape::Icosahedron => {
+            let radius = cmd.dimensions.get("radius").copied().unwrap_or(1.0);
+            meshes.add(create_icosahedron_mesh(radius))
+        }
+        PrimitiveShape::Wedge => {
+            let x = cmd.dimensions.get("x").copied().unwrap_or(1.0);
+            let y = cmd.dimensions.get("y").copied().unwrap_or(1.0);
+            let z = cmd.dimensions.get("z").copied().unwrap_or(1.0);
+            meshes.add(create_wedge_mesh(x, y, z))
+        }
     };
 
     let mut std_mat = StandardMaterial {
@@ -2368,6 +2479,7 @@ fn handle_spawn_mesh(
     if let Some(normals) = cmd.normals {
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     } else {
+        mesh.duplicate_vertices();
         mesh.compute_flat_normals();
     }
 
@@ -2659,7 +2771,353 @@ fn shape_to_mesh(shape: &wt::Shape, meshes: &mut ResMut<Assets<Mesh>>) -> Handle
         wt::Shape::Plane { x, z } => {
             meshes.add(Plane3d::new(Vec3::Y, Vec2::new(*x / 2.0, *z / 2.0)))
         }
+        wt::Shape::Pyramid {
+            base_x,
+            base_z,
+            height,
+        } => meshes.add(create_pyramid_mesh(*base_x, *base_z, *height)),
+        wt::Shape::Tetrahedron { radius } => meshes.add(create_tetrahedron_mesh(*radius)),
+        wt::Shape::Icosahedron { radius } => meshes.add(create_icosahedron_mesh(*radius)),
+        wt::Shape::Wedge { x, y, z } => meshes.add(create_wedge_mesh(*x, *y, *z)),
     }
+}
+
+/// Create a pyramid mesh (square base, 4 triangular sides meeting at apex).
+fn create_pyramid_mesh(base_x: f32, base_z: f32, height: f32) -> Mesh {
+    let hx = base_x / 2.0;
+    let hz = base_z / 2.0;
+
+    // Vertices: 4 base corners + 1 apex (apex at index 4)
+    let vertices = [
+        // Base corners (0-3)
+        [-hx, 0.0, -hz],
+        [hx, 0.0, -hz],
+        [hx, 0.0, hz],
+        [-hx, 0.0, hz],
+        // Apex (4)
+        [0.0, height, 0.0],
+    ];
+
+    // Build flat-shaded vertices (duplicated per face)
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+
+    // Build flat-shaded vertices (duplicated per face)
+    let mut flat_vertices = Vec::new();
+    let mut flat_normals = Vec::new();
+    let mut flat_uvs = Vec::new();
+    let mut indices = Vec::new();
+    let mut idx: u32 = 0;
+
+    // Helper to add a triangle with computed normal
+    let mut add_triangle = |v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]| {
+        // Compute face normal
+        let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+        let n = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ];
+        let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        let normal = if len > 0.0 {
+            [n[0] / len, n[1] / len, n[2] / len]
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+
+        flat_vertices.push(v0);
+        flat_vertices.push(v1);
+        flat_vertices.push(v2);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_uvs.push([0.0, 0.0]);
+        flat_uvs.push([1.0, 0.0]);
+        flat_uvs.push([0.5, 1.0]);
+        indices.push(idx);
+        indices.push(idx + 1);
+        indices.push(idx + 2);
+        idx += 3;
+    };
+
+    let apex = [0.0, height, 0.0];
+
+    // 4 side triangles (front, right, back, left)
+    add_triangle(vertices[0], vertices[1], apex); // front
+    add_triangle(vertices[1], vertices[2], apex); // right
+    add_triangle(vertices[2], vertices[3], apex); // back
+    add_triangle(vertices[3], vertices[0], apex); // left
+
+    // Base (2 triangles, wound clockwise for downward-facing normal)
+    add_triangle(vertices[0], vertices[3], vertices[1]);
+    add_triangle(vertices[1], vertices[3], vertices[2]);
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, flat_vertices);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, flat_normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, flat_uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
+/// Create a tetrahedron mesh (4 equilateral triangular faces).
+fn create_tetrahedron_mesh(radius: f32) -> Mesh {
+    // Proper regular tetrahedron vertices
+    let s = radius * 1.632993; // edge length scale
+    let vertices = [
+        [s * 0.5, -s * 0.288675, s * 0.408248],
+        [-s * 0.5, -s * 0.288675, s * 0.408248],
+        [0.0, -s * 0.288675, -s * 0.816497],
+        [0.0, s * 0.866025, 0.0],
+    ];
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    let mut flat_vertices = Vec::new();
+    let mut flat_normals = Vec::new();
+    let mut flat_uvs = Vec::new();
+    let mut indices = Vec::new();
+    let mut idx: u32 = 0;
+
+    let mut add_triangle = |v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]| {
+        let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+        let n = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ];
+        let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        let normal = if len > 0.0 {
+            [n[0] / len, n[1] / len, n[2] / len]
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+
+        flat_vertices.push(v0);
+        flat_vertices.push(v1);
+        flat_vertices.push(v2);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_uvs.push([0.0, 0.0]);
+        flat_uvs.push([1.0, 0.0]);
+        flat_uvs.push([0.5, 1.0]);
+        indices.push(idx);
+        indices.push(idx + 1);
+        indices.push(idx + 2);
+        idx += 3;
+    };
+
+    // 4 faces (wound for outward normals)
+    add_triangle(vertices[0], vertices[2], vertices[1]); // base
+    add_triangle(vertices[0], vertices[1], vertices[3]); // side 1
+    add_triangle(vertices[1], vertices[2], vertices[3]); // side 2
+    add_triangle(vertices[2], vertices[0], vertices[3]); // side 3
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, flat_vertices);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, flat_normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, flat_uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
+/// Create an icosahedron mesh (20 triangular faces).
+fn create_icosahedron_mesh(radius: f32) -> Mesh {
+    // Golden ratio
+    let phi = (1.0 + 5.0f32.sqrt()) / 2.0;
+
+    // 12 vertices of a regular icosahedron
+    let vertices: Vec<[f32; 3]> = vec![
+        [-1.0, phi, 0.0],
+        [1.0, phi, 0.0],
+        [-1.0, -phi, 0.0],
+        [1.0, -phi, 0.0],
+        [0.0, -1.0, phi],
+        [0.0, 1.0, phi],
+        [0.0, -1.0, -phi],
+        [0.0, 1.0, -phi],
+        [phi, 0.0, -1.0],
+        [phi, 0.0, 1.0],
+        [-phi, 0.0, -1.0],
+        [-phi, 0.0, 1.0],
+    ];
+
+    // Normalize and scale to radius
+    let vertices: Vec<[f32; 3]> = vertices
+        .iter()
+        .map(|v| {
+            let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            [
+                v[0] / len * radius,
+                v[1] / len * radius,
+                v[2] / len * radius,
+            ]
+        })
+        .collect();
+
+    // 20 faces (each face connects 3 vertices)
+    let faces: [[usize; 3]; 20] = [
+        [0, 11, 5],
+        [0, 5, 1],
+        [0, 1, 7],
+        [0, 7, 10],
+        [0, 10, 11],
+        [1, 5, 9],
+        [5, 11, 4],
+        [11, 10, 2],
+        [10, 7, 6],
+        [7, 1, 8],
+        [3, 9, 4],
+        [3, 4, 2],
+        [3, 2, 6],
+        [3, 6, 8],
+        [3, 8, 9],
+        [4, 9, 5],
+        [2, 4, 11],
+        [6, 2, 10],
+        [8, 6, 7],
+        [9, 8, 1],
+    ];
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    let mut flat_vertices = Vec::new();
+    let mut flat_normals = Vec::new();
+    let mut flat_uvs = Vec::new();
+    let mut indices = Vec::new();
+    let mut idx: u32 = 0;
+
+    for face in &faces {
+        let v0 = vertices[face[0]];
+        let v1 = vertices[face[1]];
+        let v2 = vertices[face[2]];
+
+        // Compute face normal
+        let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+        let n = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ];
+        let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        let normal = if len > 0.0 {
+            [n[0] / len, n[1] / len, n[2] / len]
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+
+        flat_vertices.push(v0);
+        flat_vertices.push(v1);
+        flat_vertices.push(v2);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_uvs.push([0.0, 0.0]);
+        flat_uvs.push([1.0, 0.0]);
+        flat_uvs.push([0.5, 1.0]);
+        indices.push(idx);
+        indices.push(idx + 1);
+        indices.push(idx + 2);
+        idx += 3;
+    }
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, flat_vertices);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, flat_normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, flat_uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
+}
+
+/// Create a wedge mesh (triangular prism / ramp shape).
+fn create_wedge_mesh(x: f32, y: f32, z: f32) -> Mesh {
+    let hx = x / 2.0;
+    let hy = y / 2.0;
+    let hz = z / 2.0;
+
+    // 6 vertices: 3 on bottom (y = -hy), 3 on top (y = +hy)
+    // Bottom triangle (pointing in -Z direction, sloping up toward +Z)
+    // Top triangle (same shape, elevated)
+    let vertices: [[f32; 3]; 6] = [
+        // Bottom face (y = -hy)
+        [-hx, -hy, -hz], // 0: bottom-left-front
+        [hx, -hy, -hz],  // 1: bottom-right-front
+        [-hx, -hy, hz],  // 2: bottom-left-back
+        // Top face (y = +hy, only at front edge)
+        [-hx, hy, -hz], // 3: top-left-front
+        [hx, hy, -hz],  // 4: top-right-front
+        [-hx, hy, hz],  // 5: top-left-back
+    ];
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    let mut flat_vertices = Vec::new();
+    let mut flat_normals = Vec::new();
+    let mut flat_uvs = Vec::new();
+    let mut indices = Vec::new();
+    let mut idx: u32 = 0;
+
+    let mut add_triangle = |v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]| {
+        let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+        let n = [
+            e1[1] * e2[2] - e1[2] * e2[1],
+            e1[2] * e2[0] - e1[0] * e2[2],
+            e1[0] * e2[1] - e1[1] * e2[0],
+        ];
+        let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        let normal = if len > 0.0 {
+            [n[0] / len, n[1] / len, n[2] / len]
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+
+        flat_vertices.push(v0);
+        flat_vertices.push(v1);
+        flat_vertices.push(v2);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_normals.push(normal);
+        flat_uvs.push([0.0, 0.0]);
+        flat_uvs.push([1.0, 0.0]);
+        flat_uvs.push([0.5, 1.0]);
+        indices.push(idx);
+        indices.push(idx + 1);
+        indices.push(idx + 2);
+        idx += 3;
+    };
+
+    // Bottom face (2 triangles)
+    add_triangle(vertices[0], vertices[2], vertices[1]);
+    // Top face (sloped, 2 triangles)
+    add_triangle(vertices[3], vertices[4], vertices[5]);
+    // Front face (1 triangle)
+    add_triangle(vertices[0], vertices[1], vertices[4]);
+    add_triangle(vertices[0], vertices[4], vertices[3]);
+    // Back face (1 triangle)
+    add_triangle(vertices[2], vertices[5], vertices[1]);
+    add_triangle(vertices[1], vertices[5], vertices[4]);
+    // Left face (1 triangle)
+    add_triangle(vertices[0], vertices[3], vertices[2]);
+    add_triangle(vertices[2], vertices[3], vertices[5]);
+    // Right face (1 triangle)
+    add_triangle(vertices[1], vertices[2], vertices[4]);
+    add_triangle(vertices[4], vertices[2], vertices[5]);
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, flat_vertices);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, flat_normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, flat_uvs);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
 }
 
 /// Parse an alpha mode string (e.g., "blend", "opaque", "mask:0.5").

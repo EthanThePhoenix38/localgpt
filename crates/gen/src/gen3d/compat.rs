@@ -47,6 +47,22 @@ pub fn shape_from_primitive(shape: PrimitiveShape, dims: &HashMap<String, f32>) 
             x: dims.get("x").copied().unwrap_or(1.0),
             z: dims.get("z").copied().unwrap_or(1.0),
         },
+        PrimitiveShape::Pyramid => wt::Shape::Pyramid {
+            base_x: dims.get("base_x").copied().unwrap_or(1.0),
+            base_z: dims.get("base_z").copied().unwrap_or(1.0),
+            height: dims.get("height").copied().unwrap_or(1.0),
+        },
+        PrimitiveShape::Tetrahedron => wt::Shape::Tetrahedron {
+            radius: dims.get("radius").copied().unwrap_or(1.0),
+        },
+        PrimitiveShape::Icosahedron => wt::Shape::Icosahedron {
+            radius: dims.get("radius").copied().unwrap_or(1.0),
+        },
+        PrimitiveShape::Wedge => wt::Shape::Wedge {
+            x: dims.get("x").copied().unwrap_or(1.0),
+            y: dims.get("y").copied().unwrap_or(1.0),
+            z: dims.get("z").copied().unwrap_or(1.0),
+        },
     }
 }
 
@@ -101,6 +117,34 @@ pub fn shape_to_primitive(shape: &wt::Shape) -> (PrimitiveShape, HashMap<String,
             dims.insert("x".into(), *x);
             dims.insert("z".into(), *z);
             (PrimitiveShape::Plane, dims)
+        }
+        wt::Shape::Pyramid {
+            base_x,
+            base_z,
+            height,
+        } => {
+            let mut dims = HashMap::new();
+            dims.insert("base_x".into(), *base_x);
+            dims.insert("base_z".into(), *base_z);
+            dims.insert("height".into(), *height);
+            (PrimitiveShape::Pyramid, dims)
+        }
+        wt::Shape::Tetrahedron { radius } => {
+            let mut dims = HashMap::new();
+            dims.insert("radius".into(), *radius);
+            (PrimitiveShape::Tetrahedron, dims)
+        }
+        wt::Shape::Icosahedron { radius } => {
+            let mut dims = HashMap::new();
+            dims.insert("radius".into(), *radius);
+            (PrimitiveShape::Icosahedron, dims)
+        }
+        wt::Shape::Wedge { x, y, z } => {
+            let mut dims = HashMap::new();
+            dims.insert("x".into(), *x);
+            dims.insert("y".into(), *y);
+            dims.insert("z".into(), *z);
+            (PrimitiveShape::Wedge, dims)
         }
     }
 }

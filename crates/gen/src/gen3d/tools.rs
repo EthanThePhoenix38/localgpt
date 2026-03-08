@@ -255,12 +255,12 @@ impl Tool for GenSpawnPrimitiveTool {
                     },
                     "shape": {
                         "type": "string",
-                        "enum": ["Cuboid", "Sphere", "Cylinder", "Cone", "Capsule", "Torus", "Plane"],
+                        "enum": ["Cuboid", "Sphere", "Cylinder", "Cone", "Capsule", "Torus", "Plane", "Pyramid", "Tetrahedron", "Icosahedron", "Wedge"],
                         "description": "Primitive shape type"
                     },
                     "dimensions": {
                         "type": "object",
-                        "description": "Shape-specific dimensions. Cuboid: {x,y,z}. Sphere: {radius}. Cylinder: {radius, height}. Cone: {radius, height}. Torus: {major_radius, minor_radius}."
+                        "description": "Shape-specific dimensions. Cuboid: {x,y,z}. Sphere: {radius}. Cylinder: {radius, height}. Cone: {radius, height}. Torus: {major_radius, minor_radius}. Pyramid: {base_x, base_z, height}. Tetrahedron: {radius}. Icosahedron: {radius}. Wedge: {x, y, z}."
                     },
                     "position": {
                         "type": "array",

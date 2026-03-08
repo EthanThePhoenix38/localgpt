@@ -51,6 +51,30 @@ pub enum Shape {
         #[serde(default = "default_ten")]
         z: f32,
     },
+    Pyramid {
+        #[serde(default = "default_one")]
+        base_x: f32,
+        #[serde(default = "default_one")]
+        base_z: f32,
+        #[serde(default = "default_one")]
+        height: f32,
+    },
+    Tetrahedron {
+        #[serde(default = "default_one")]
+        radius: f32,
+    },
+    Icosahedron {
+        #[serde(default = "default_one")]
+        radius: f32,
+    },
+    Wedge {
+        #[serde(default = "default_one")]
+        x: f32,
+        #[serde(default = "default_one")]
+        y: f32,
+        #[serde(default = "default_one")]
+        z: f32,
+    },
 }
 
 fn default_one() -> f32 {
@@ -77,6 +101,10 @@ impl Shape {
             Shape::Capsule { .. } => 1520, // 2 hemispheres + cylinder
             Shape::Torus { .. } => 2048,   // 32x32 segments
             Shape::Plane { .. } => 2,
+            Shape::Pyramid { .. } => 6, // 4 triangular sides + 2 for base quad
+            Shape::Tetrahedron { .. } => 4, // 4 triangular faces
+            Shape::Icosahedron { .. } => 20, // 20 triangular faces
+            Shape::Wedge { .. } => 8,   // 2 end caps + 3 sides (as triangles)
         }
     }
 
@@ -100,6 +128,14 @@ impl Shape {
                 major_radius + minor_radius,
             ],
             Shape::Plane { x, z } => [x / 2.0, 0.0, z / 2.0],
+            Shape::Pyramid {
+                base_x,
+                base_z,
+                height,
+            } => [base_x / 2.0, height / 2.0, base_z / 2.0],
+            Shape::Tetrahedron { radius } => [*radius, *radius, *radius],
+            Shape::Icosahedron { radius } => [*radius, *radius, *radius],
+            Shape::Wedge { x, y, z } => [x / 2.0, y / 2.0, z / 2.0],
         }
     }
 
@@ -113,6 +149,10 @@ impl Shape {
             Shape::Capsule { .. } => "capsule",
             Shape::Torus { .. } => "torus",
             Shape::Plane { .. } => "plane",
+            Shape::Pyramid { .. } => "pyramid",
+            Shape::Tetrahedron { .. } => "tetrahedron",
+            Shape::Icosahedron { .. } => "icosahedron",
+            Shape::Wedge { .. } => "wedge",
         }
     }
 }
@@ -127,6 +167,10 @@ pub enum PrimitiveShapeKind {
     Capsule,
     Torus,
     Plane,
+    Pyramid,
+    Tetrahedron,
+    Icosahedron,
+    Wedge,
 }
 
 impl Shape {
@@ -140,6 +184,10 @@ impl Shape {
             Shape::Capsule { .. } => PrimitiveShapeKind::Capsule,
             Shape::Torus { .. } => PrimitiveShapeKind::Torus,
             Shape::Plane { .. } => PrimitiveShapeKind::Plane,
+            Shape::Pyramid { .. } => PrimitiveShapeKind::Pyramid,
+            Shape::Tetrahedron { .. } => PrimitiveShapeKind::Tetrahedron,
+            Shape::Icosahedron { .. } => PrimitiveShapeKind::Icosahedron,
+            Shape::Wedge { .. } => PrimitiveShapeKind::Wedge,
         }
     }
 }
@@ -162,6 +210,18 @@ mod tests {
                 minor_radius: 0.5,
             },
             Shape::Plane { x: 20.0, z: 20.0 },
+            Shape::Pyramid {
+                base_x: 4.0,
+                base_z: 4.0,
+                height: 3.0,
+            },
+            Shape::Tetrahedron { radius: 1.5 },
+            Shape::Icosahedron { radius: 2.0 },
+            Shape::Wedge {
+                x: 2.0,
+                y: 1.0,
+                z: 3.0,
+            },
         ];
 
         for shape in &shapes {
@@ -207,6 +267,18 @@ mod tests {
                 minor_radius: 0.25,
             },
             Shape::Plane { x: 1.0, z: 1.0 },
+            Shape::Pyramid {
+                base_x: 4.0,
+                base_z: 4.0,
+                height: 3.0,
+            },
+            Shape::Tetrahedron { radius: 1.0 },
+            Shape::Icosahedron { radius: 1.0 },
+            Shape::Wedge {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
         ];
         for s in &shapes {
             assert!(s.estimate_triangles() > 0, "{} has 0 triangles", s.kind());
