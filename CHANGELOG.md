@@ -4,6 +4,8 @@ All notable changes to LocalGPT are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-03-08
+
 ### Added
 
 - **Gen MCP server** — MCP server mode for external CLI backends with core tools, memory-only mode with write tools, and Ctrl+C handling.
@@ -15,8 +17,28 @@ All notable changes to LocalGPT are documented in this file.
 - **Gen batch entity operations** — `gen_spawn_entities` tool for efficient multi-entity creation in a single call.
 - **Gen on-demand export** — `gen_export_world` tool with mesh asset localization for portable scene exports.
 - **Gen human-readable filenames** — export filenames now use `YYYY-MM-DD_HH-MM-SS` format instead of timestamps.
-- **Gen audio undo/redo** — audio emitter commands now support full undo/redo with `gen_audio_emitter` and `gen_modify_audio` operations reversible.
+
+### Changed
+
+- **Gen mode architecture** — delegated to `localgpt-gen` binary via subprocess for cleaner separation.
+- **Gen glTF export format** — switched to JSON format with version compatibility for better interoperability.
+
+### Fixed
+
+- **Core provider error messages** — API errors now show actual provider name instead of generic label for easier debugging.
+- **Agent streaming** — correct tool message ordering in streaming path. ([#88](https://github.com/localgpt-app/localgpt/pull/88))
+- **Gen compiler warnings** — silenced warnings in plugin.rs.
+
+### Contributors
+
+Thanks to **[@itripn](https://github.com/itripn)** (Ron Forrester) for fixing tool message ordering in the streaming path!
+
+## [0.3.1] - 2026-03-03
+
+### Added
+
 - **Gen undo/redo system** — full undo/redo support with stable entity IDs, LLM tools (`gen_undo`, `gen_redo`), and persistence via `history.jsonl`. Covers entities, lights, behaviors, camera, and environment.
+- **Gen audio undo/redo** — audio emitter commands now support full undo/redo with `gen_audio_emitter` and `gen_modify_audio` operations reversible.
 - **Gen behavior system** — declarative entity animations: `orbit`, `spin`, `bob`, `look_at`, `pulse`, `path_follow`, `bounce`. Behaviors stack and persist through save/load.
 - **Gen world save/load** — complete worlds serialized as skills (`SKILL.md` + `world.toml` + `scene.glb` + `behaviors.toml` + `audio.toml` + `tours.toml`). Includes `gen_save_world`, `gen_load_world`, and `gen_clear_scene` tools.
 - **Gen avatar and tours** — `[avatar]` section in `world.toml` for user presence; `tours.toml` for guided waypoint sequences with descriptions and movement modes.
@@ -37,14 +59,11 @@ All notable changes to LocalGPT are documented in this file.
 
 ### Changed
 
-- **Gen mode architecture** — delegated to `localgpt-gen` binary via subprocess for cleaner separation.
 - **Mobile apps restructured** — `apps/ios` renamed to `apps/apple` for multi-platform support (iOS + macOS).
 - **OAuth providers removed** — all OAuth provider implementations removed for simplified authentication.
-- **Gen glTF export format** — switched to JSON format with version compatibility for better interoperability.
 
 ### Fixed
 
-- **Core provider error messages** — API errors now show actual provider name instead of generic label for easier debugging.
 - **Gen visibility persistence** — visibility state now persists correctly through save/load and undo snapshots.
 - **Gen camera FOV** — saves actual camera FOV instead of hardcoded 45 degrees.
 - **Gen light saving** — light components save on any entity type, not just `GenEntityType::Light`.
@@ -220,7 +239,9 @@ Initial release of LocalGPT — a local-only AI assistant with persistent markdo
 - **Zero-config startup** defaulting to `claude-cli/opus`.
 - **Auto-migration** from OpenClaw config if present.
 
-[Unreleased]: https://github.com/localgpt-app/localgpt/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/localgpt-app/localgpt/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/localgpt-app/localgpt/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/localgpt-app/localgpt/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/localgpt-app/localgpt/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/localgpt-app/localgpt/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/localgpt-app/localgpt/compare/v0.1.2...v0.1.3
