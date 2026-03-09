@@ -609,6 +609,10 @@ pub struct ServerConfig {
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
 
+    /// Allowed CORS origins. If empty, defaults to local access.
+    #[serde(default)]
+    pub cors_origins: Vec<String>,
+
     /// Maximum request body size in bytes.
     /// Requests larger than this return 413 Payload Too Large.
     /// Default: 10MB
@@ -970,6 +974,7 @@ impl Default for ServerConfig {
             bind: default_bind(),
             auth_token: None,
             rate_limit: RateLimitConfig::default(),
+            cors_origins: Vec::new(),
             max_request_body: default_max_request_body(),
         }
     }

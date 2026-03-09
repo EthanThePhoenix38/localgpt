@@ -155,10 +155,42 @@ impl Server {
             }
         });
 
-        let cors = CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any);
+        let cors = if self.config.server.cors_origins.is_empty() {
+            // Remove permissive Any CORS; default to common local development origins
+            let default_origins = vec![
+                "http://localhost:3000"
+                    .parse::<axum::http::HeaderValue>()
+                    .unwrap(),
+                "http://127.0.0.1:3000"
+                    .parse::<axum::http::HeaderValue>()
+                    .unwrap(),
+                "http://localhost:8080"
+                    .parse::<axum::http::HeaderValue>()
+                    .unwrap(),
+                "http://127.0.0.1:8080"
+                    .parse::<axum::http::HeaderValue>()
+                    .unwrap(),
+                "http://localhost:1420"
+                    .parse::<axum::http::HeaderValue>()
+                    .unwrap(),
+            ];
+            CorsLayer::new()
+                .allow_origin(default_origins)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        } else {
+            let origins: Vec<axum::http::HeaderValue> = self
+                .config
+                .server
+                .cors_origins
+                .iter()
+                .filter_map(|o| o.parse().ok())
+                .collect();
+            CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(Any)
+                .allow_headers(Any)
+        };
 
         // Public routes (no auth required)
         let public_routes = Router::new()
