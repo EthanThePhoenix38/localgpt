@@ -231,6 +231,8 @@ impl UiState {
                     message_count,
                     created_at: chrono::Utc::now(),
                     file_size: 0,
+                    preview: String::new(),
+                    end_preview: String::new(),
                 });
                 // Clear chat on session change
                 self.messages.clear();

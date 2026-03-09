@@ -228,6 +228,14 @@ async fn handle_gen_command(
                                 session.message_count,
                                 session.created_at.format("%Y-%m-%d %H:%M")
                             );
+                            if !session.preview.is_empty() {
+                                if session.preview != session.end_preview {
+                                    println!("     B: \"{}\"", session.preview);
+                                    println!("     E: \"{}\"", session.end_preview);
+                                } else {
+                                    println!("     \"{}\"", session.preview);
+                                }
+                            }
                         }
                         if sessions.len() > 10 {
                             println!("  ... and {} more", sessions.len() - 10);
@@ -265,6 +273,54 @@ async fn handle_gen_command(
                                         &full_id[..full_id.floor_char_boundary(8)],
                                         status.message_count
                                     );
+
+                                    for msg in agent.raw_session_messages() {
+                                        if msg.message.role == localgpt_core::agent::Role::System {
+                                            continue;
+                                        }
+
+                                        let role_str = match msg.message.role {
+                                            localgpt_core::agent::Role::User => {
+                                                "\x1b[36mYou\x1b[0m"
+                                            }
+                                            localgpt_core::agent::Role::Assistant => {
+                                                "\x1b[32mAssistant\x1b[0m"
+                                            }
+                                            localgpt_core::agent::Role::Tool => {
+                                                "\x1b[35mTool\x1b[0m"
+                                            }
+                                            _ => "",
+                                        };
+
+                                        if let Some(ref calls) = msg.message.tool_calls {
+                                            for call in calls {
+                                                println!(
+                                                    "\n{}: \x1b[35m[Tool Call: {}({})]\x1b[0m",
+                                                    role_str,
+                                                    call.name,
+                                                    call.arguments.trim()
+                                                );
+                                            }
+                                        }
+
+                                        if !msg.message.content.is_empty() {
+                                            if msg.message.role == localgpt_core::agent::Role::Tool
+                                            {
+                                                println!(
+                                                    "\n{}:\n\x1b[90m{}\x1b[0m",
+                                                    role_str,
+                                                    msg.message.content.trim()
+                                                );
+                                            } else {
+                                                println!(
+                                                    "\n{}:\n{}",
+                                                    role_str,
+                                                    msg.message.content.trim()
+                                                );
+                                            }
+                                        }
+                                    }
+                                    println!();
                                 }
                                 Err(e) => eprintln!("\nError: Failed to resume: {}\n", e),
                             }

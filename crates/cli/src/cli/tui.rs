@@ -120,6 +120,7 @@ enum AppMessage {
 }
 
 struct App {
+    header: String,
     input: String,
     messages: Vec<AppMessage>,
     is_generating: bool,
@@ -145,18 +146,13 @@ impl App {
         );
 
         Self {
+            header,
             input: String::new(),
-            messages: vec![
-                AppMessage::Text {
-                    role: "System".to_string(),
-                    content: header,
-                },
-                AppMessage::Text {
-                    role: "System".to_string(),
-                    content: "Use Up/Down to select, Ctrl+O to expand tools. Esc/Ctrl+C to quit."
-                        .to_string(),
-                },
-            ],
+            messages: vec![AppMessage::Text {
+                role: "System".to_string(),
+                content: "Use Up/Down to select, Ctrl+O to expand tools. Esc/Ctrl+C to quit."
+                    .to_string(),
+            }],
             is_generating: false,
             selected_index: None,
             cursor_position: 0,
@@ -169,19 +165,7 @@ enum AppEvent {
     Tick,
 }
 
-async fn run_app(
-    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
-    agent: &mut Agent,
-    agent_id: &str,
-) -> Result<()> {
-    let mut app = App::new(
-        agent_id,
-        agent.model(),
-        agent.memory_chunk_count(),
-        agent.has_embeddings(),
-    );
-
-    // Load history messages if resuming (use raw_session_messages to avoid printing the appended security block)
+fn load_agent_messages_into_app(app: &mut App, agent: &Agent) {
     let mut pending_tool_outputs: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
 
@@ -259,6 +243,22 @@ async fn run_app(
             }
         }
     }
+}
+
+async fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    agent: &mut Agent,
+    agent_id: &str,
+) -> Result<()> {
+    let mut app = App::new(
+        agent_id,
+        agent.model(),
+        agent.memory_chunk_count(),
+        agent.has_embeddings(),
+    );
+
+    // Load history messages if resuming (use raw_session_messages to avoid printing the appended security block)
+    load_agent_messages_into_app(&mut app, agent);
 
     app.selected_index = if app.messages.is_empty() {
         None
@@ -422,6 +422,25 @@ async fn run_app(
                                                                     .created_at
                                                                     .format("%Y-%m-%d %H:%M")
                                                             ));
+                                                            if !session.preview.is_empty() {
+                                                                if session.preview
+                                                                    != session.end_preview
+                                                                {
+                                                                    out.push_str(&format!(
+                                                                        "     B: \"{}\"\n",
+                                                                        session.preview
+                                                                    ));
+                                                                    out.push_str(&format!(
+                                                                        "     E: \"{}\"\n",
+                                                                        session.end_preview
+                                                                    ));
+                                                                } else {
+                                                                    out.push_str(&format!(
+                                                                        "     \"{}\"\n",
+                                                                        session.preview
+                                                                    ));
+                                                                }
+                                                            }
                                                         }
                                                         if sessions.len() > 10 {
                                                             out.push_str(&format!(
@@ -500,6 +519,8 @@ async fn run_app(
                                                                     Ok(()) => {
                                                                         let status = agent.session_status();
                                                                         let limit = full_id.len().min(8);
+                                                                        app.messages.clear();
+                                                                        load_agent_messages_into_app(&mut app, agent);
                                                                         app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Resumed session {} ({} messages)", &full_id[..limit], status.message_count) });
                                                                     }
                                                                     Err(e) => app.messages.push(AppMessage::Text { role: "System".to_string(), content: format!("Failed to resume: {}", e) }),
@@ -525,23 +546,43 @@ async fn run_app(
                                                 content: "Session cleared.".to_string(),
                                             });
                                         }
-                                        "/new" => match agent.new_session().await {
-                                            Ok(_) => {
-                                                app.messages.push(AppMessage::Text {
-                                                    role: "System".to_string(),
-                                                    content: "New session started.".to_string(),
-                                                });
+                                        "/new" => {
+                                            match agent.save_session_to_memory().await {
+                                                Ok(Some(path)) => {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Session saved to: {}",
+                                                            path.display()
+                                                        ),
+                                                    });
+                                                }
+                                                Ok(None) => {}
+                                                Err(e) => {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!("Warning: Failed to save session to memory: {}", e),
+                                                    });
+                                                }
                                             }
-                                            Err(e) => {
-                                                app.messages.push(AppMessage::Text {
-                                                    role: "System".to_string(),
-                                                    content: format!(
-                                                        "Failed to create new session: {}",
-                                                        e
-                                                    ),
-                                                });
+                                            match agent.new_session().await {
+                                                Ok(_) => {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: "New session started.".to_string(),
+                                                    });
+                                                }
+                                                Err(e) => {
+                                                    app.messages.push(AppMessage::Text {
+                                                        role: "System".to_string(),
+                                                        content: format!(
+                                                            "Failed to create new session: {}",
+                                                            e
+                                                        ),
+                                                    });
+                                                }
                                             }
-                                        },
+                                        }
                                         "/model" => {
                                             if parts.len() < 2 {
                                                 app.messages.push(AppMessage::Text {
@@ -872,6 +913,16 @@ async fn run_app(
                                 }
                                 app.is_generating = false;
                                 app.selected_index = Some(app.messages.len() - 1);
+
+                                if let Err(e) = agent.auto_save_session() {
+                                    app.messages.push(AppMessage::Text {
+                                        role: "System".to_string(),
+                                        content: format!(
+                                            "Warning: Failed to auto-save session: {}",
+                                            e
+                                        ),
+                                    });
+                                }
                             }
                         }
                         KeyCode::Char(c) => {
@@ -932,7 +983,7 @@ async fn run_app(
 }
 
 fn ui(f: &mut ratatui::Frame, app: &App) {
-    let inner_width = f.area().width.saturating_sub(2).max(1) as usize;
+    let inner_width = f.area().width.max(1) as usize;
     let input_char_count = app.input.chars().count();
     let input_lines = (input_char_count / inner_width) + 1;
     let input_height = input_lines.max(1) as u16 + 2;
@@ -1027,14 +1078,14 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     }
 
     let title = if app.is_generating {
-        " Chat (Generating...) "
+        format!(" {} (Generating...) ", app.header)
     } else {
-        " Chat "
+        format!(" {} ", app.header)
     };
 
     // Calculate how many terminal lines the wrapped text will actually take.
     // Ratatui handles wrapping natively, but we need to compute scroll offset.
-    let wrap_width = chunks[0].width.saturating_sub(2).max(1) as usize;
+    let wrap_width = chunks[0].width.max(1) as usize;
     let mut total_wrapped_lines = 0;
 
     for line in &lines {
@@ -1048,19 +1099,27 @@ fn ui(f: &mut ratatui::Frame, app: &App) {
     let scroll_y = (total_wrapped_lines as u16).saturating_sub(max_lines);
 
     let messages_block = Paragraph::new(lines)
-        .block(Block::default().title(title).borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(title)
+                .borders(Borders::TOP | Borders::BOTTOM),
+        )
         .wrap(ratatui::widgets::Wrap { trim: false })
         .scroll((scroll_y, 0));
 
     f.render_widget(messages_block, chunks[0]);
 
     let input_block = Paragraph::new(app.input.as_str())
-        .block(Block::default().title(" Input ").borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(" Input ")
+                .borders(Borders::TOP | Borders::BOTTOM),
+        )
         .wrap(ratatui::widgets::Wrap { trim: false });
     f.render_widget(input_block, chunks[1]);
 
     if !app.is_generating {
-        let cursor_x = chunks[1].x + 1 + (app.cursor_position as u16 % inner_width as u16);
+        let cursor_x = chunks[1].x + (app.cursor_position as u16 % inner_width as u16);
         let cursor_y = chunks[1].y + 1 + (app.cursor_position as u16 / inner_width as u16);
         f.set_cursor_position((cursor_x, cursor_y));
     }
