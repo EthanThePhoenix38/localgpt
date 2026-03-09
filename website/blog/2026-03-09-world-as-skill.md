@@ -30,4 +30,8 @@ This is inspired by [blender-mcp](https://github.com/ahujasid/blender-mcp) and [
 
 LocalGPT Gen is closer to the domain of tools for [Explorable World](/docs/worlds) like Genie 3, SIMA 2, Marble, Intangible and Artcraft.
 
+**Showcases:**
+- [localgpt-gen-workspace](https://github.com/localgpt-app/localgpt-gen-workspace) — "World as skill" examples: complete explorable worlds saved as reusable, shareable skills
+- [proofof.video](https://proofof.video/) — Video gallery comparing world generations across different models using the same or similar prompts
+
 Many players are advancing the [Claw Ecosystem](/docs/claw) so the agent memory and orchestration will improve automatically.

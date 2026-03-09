@@ -127,4 +127,4 @@ This ensures smooth loading even for complex scenes.
 
 ## Showcase
 
-- **[localgpt-app/workspace](https://github.com/localgpt-app/workspace)** — "World as skill" examples: complete explorable worlds saved as reusable, shareable skills
+- **[localgpt-gen-workspace](https://github.com/localgpt-app/localgpt-gen-workspace)** — "World as skill" examples: complete explorable worlds saved as reusable, shareable skills

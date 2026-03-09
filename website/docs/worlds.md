@@ -58,7 +58,7 @@ Spatial intelligence platform focused on camera-centric 3D composition. Designed
 Open-source, local-first 3D world generation powered by Bevy. Features procedural audio synthesis, data-driven behaviors, and full glTF export. Runs entirely on your machine without cloud dependencies.
 
 **Showcases:**
-- [localgpt-app/workspace](https://github.com/localgpt-app/workspace) — "World as skill" examples: complete explorable worlds saved as reusable, shareable skills
+- [localgpt-gen-workspace](https://github.com/localgpt-app/localgpt-gen-workspace) — "World as skill" examples: complete explorable worlds saved as reusable, shareable skills
 - [proofof.video](https://proofof.video/) — Video gallery comparing world generations across different models using the same or similar prompts
 
 See the [Gen documentation](/docs/gen) for details on LocalGPT's world generation capabilities.
