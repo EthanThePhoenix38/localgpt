@@ -10,7 +10,7 @@ tags: [localgpt, gen, 3d, architecture, skills, world]
 
 <!--truncate-->
 
-`localgpt-gen` now save complete worlds as skill directories containing:
+`localgpt-gen` now saves complete worlds as skill directories containing:
 
 *   **Scene geometry** — All entities, meshes, and transforms
 *   **Behaviors** — Animations like orbit, spin, bob, path following
@@ -26,8 +26,8 @@ skills/my-world/
     └── scene.glb     # glTF export (generated on demand)
 ```
 
-This is inspired by [blender-mcp](https://github.com/ahujasid/blender-mcp) and [bevy_brp](https://github.com/natepiano/bevy_brp), and may shrink the software supplychain from intent to result a little bit more.
+This is inspired by [blender-mcp](https://github.com/ahujasid/blender-mcp) and [bevy_brp](https://github.com/natepiano/bevy_brp), and may shrink the software supply chain from intent to result a little bit more.
 
 LocalGPT Gen is closer to the domain of tools for [Explorable World](/docs/worlds) like Genie 3, SIMA 2, Marble, Intangible and Artcraft.
 
-Many players are advancing the [claw ecosystem](/docs/claw) so the agent memory and orchestration will improve automatically.
+Many players are advancing the [Claw Ecosystem](/docs/claw) so the agent memory and orchestration will improve automatically.
