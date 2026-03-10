@@ -1459,6 +1459,57 @@ fn process_gen_commands(
                 entity_count: params.registry.len(),
                 dirty_count: params.dirty_tracker.dirty_count(),
             },
+
+            // Tier 10: Avatar & Character System (P1) - TODO: Implement handlers
+            GenCommand::SpawnPlayer(_params) => GenResponse::Error {
+                message: "SpawnPlayer not yet implemented".to_string(),
+            },
+            GenCommand::SetSpawnPoint(_params) => GenResponse::Error {
+                message: "SetSpawnPoint not yet implemented".to_string(),
+            },
+            GenCommand::SpawnNpc(_params) => GenResponse::Error {
+                message: "SpawnNpc not yet implemented".to_string(),
+            },
+            GenCommand::SetNpcDialogue(_params) => GenResponse::Error {
+                message: "SetNpcDialogue not yet implemented".to_string(),
+            },
+            GenCommand::SetPlayerCameraMode(_params) => GenResponse::Error {
+                message: "SetPlayerCameraMode not yet implemented".to_string(),
+            },
+
+            // Tier 11: Interaction & Trigger System (P2) - TODO: Implement handlers
+            GenCommand::AddTrigger(_params) => GenResponse::Error {
+                message: "AddTrigger not yet implemented".to_string(),
+            },
+            GenCommand::AddTeleporter(_params) => GenResponse::Error {
+                message: "AddTeleporter not yet implemented".to_string(),
+            },
+            GenCommand::AddCollectible(_params) => GenResponse::Error {
+                message: "AddCollectible not yet implemented".to_string(),
+            },
+            GenCommand::AddDoor(_params) => GenResponse::Error {
+                message: "AddDoor not yet implemented".to_string(),
+            },
+            GenCommand::LinkEntities(_params) => GenResponse::Error {
+                message: "LinkEntities not yet implemented".to_string(),
+            },
+
+            // Tier 12: Terrain & Landscape (P3) - TODO: Implement handlers
+            GenCommand::AddTerrain(_params) => GenResponse::Error {
+                message: "AddTerrain not yet implemented".to_string(),
+            },
+            GenCommand::AddWater(_params) => GenResponse::Error {
+                message: "AddWater not yet implemented".to_string(),
+            },
+            GenCommand::AddPath(_params) => GenResponse::Error {
+                message: "AddPath not yet implemented".to_string(),
+            },
+            GenCommand::AddFoliage(_params) => GenResponse::Error {
+                message: "AddFoliage not yet implemented".to_string(),
+            },
+            GenCommand::SetSky(_params) => GenResponse::Error {
+                message: "SetSky not yet implemented".to_string(),
+            },
         };
 
         // Mark entities dirty and record undo history.

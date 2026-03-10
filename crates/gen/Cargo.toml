@@ -50,3 +50,16 @@ cpal = "0.17"
 # World skill serialization
 toml = "0.8"
 ron = "0.9"
+
+# Physics and character controller (P1, P5)
+avian2d = "0.3"
+avian3d = "0.3"
+
+# Noise for procedural terrain (P3)
+noise = "0.9"
+
+# Interpolation for animations
+splines = "4.3"
+
+# Random number generation (for NPC wander, foliage scattering)
+rand = "0.9"

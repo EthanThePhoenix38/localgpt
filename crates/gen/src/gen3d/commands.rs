@@ -3,6 +3,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// Import from crate root for P1/P2 types
+use crate::character;
+use crate::interaction;
+use crate::terrain;
+
 // ---------------------------------------------------------------------------
 // Commands (agent → Bevy)
 // ---------------------------------------------------------------------------
@@ -105,6 +110,27 @@ pub enum GenCommand {
     Undo,
     Redo,
     UndoInfo,
+
+    // Tier 10: Avatar & Character System (P1)
+    SpawnPlayer(character::SpawnPlayerParams),
+    SetSpawnPoint(character::SpawnPointParams),
+    SpawnNpc(character::SpawnNpcParams),
+    SetNpcDialogue(character::SetDialogueParams),
+    SetPlayerCameraMode(character::SetCameraModeParams),
+
+    // Tier 11: Interaction & Trigger System (P2)
+    AddTrigger(interaction::AddTriggerParams),
+    AddTeleporter(interaction::TeleporterParams),
+    AddCollectible(interaction::CollectibleParams),
+    AddDoor(interaction::DoorParams),
+    LinkEntities(interaction::LinkEntitiesParams),
+
+    // Tier 12: Terrain & Landscape (P3)
+    AddTerrain(terrain::TerrainParams),
+    AddWater(terrain::WaterParams),
+    AddPath(terrain::PathParams),
+    AddFoliage(terrain::FoliageParams),
+    SetSky(terrain::SkyParams),
 }
 
 // ---------------------------------------------------------------------------

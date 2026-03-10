@@ -12,9 +12,10 @@ use localgpt_core::commands::Interface;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
-mod avatar_tools;
-mod gen3d;
-mod mcp_server;
+// Use library modules
+use localgpt_gen::character_tools;
+use localgpt_gen::gen3d;
+use localgpt_gen::mcp_server;
 
 /// Result of handling a slash command.
 enum CommandResult {
@@ -720,9 +721,9 @@ async fn run_headless_control_loop(
     let memory = MemoryManager::new_with_agent(&config.memory, agent_id)?;
     let memory = Arc::new(memory);
 
-    // Create safe tools + avatar tools pointing to the external URL
+    // Create safe tools + character tools pointing to the external URL
     let mut tools = create_safe_tools(&config, Some(memory.clone()))?;
-    tools.extend(crate::avatar_tools::create_avatar_tools());
+    tools.extend(character_tools::create_avatar_tools());
     tools.extend(vec![create_spawn_agent_tool(
         config.clone(),
         memory.clone(),

@@ -1,0 +1,7 @@
+//! MCP tool handlers for LocalGPT Gen.
+//!
+//! This module contains tool implementations that bridge the agent
+//! to Bevy scene manipulation.
+
+// Re-export character tools from crate root module
+pub use crate::character_tools::create_avatar_tools;
