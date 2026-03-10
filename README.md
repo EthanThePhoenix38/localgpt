@@ -176,8 +176,8 @@ Full CLI reference: [`docs/cli-commands.md`](docs/cli-commands.md)
 
 ## Blog
 
-[Explorable World as Agent Skill](https://localgpt.app/blog/world-as-skill)
-[Why I Built LocalGPT in 4 Nights](https://localgpt.app/blog/why-i-built-localgpt-in-4-nights)
+- [Explorable World as Agent Skill](https://localgpt.app/blog/world-as-skill)
+- [Why I Built LocalGPT in 4 Nights](https://localgpt.app/blog/why-i-built-localgpt-in-4-nights)
 
 ## Built With
 
