@@ -3,10 +3,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// Import from crate root for P1/P2 types
+// Import from crate root for P1/P2/P3/P4/P5 types
 use crate::character;
 use crate::interaction;
+use crate::physics;
 use crate::terrain;
+use crate::ui;
 
 // ---------------------------------------------------------------------------
 // Commands (agent → Bevy)
@@ -131,6 +133,20 @@ pub enum GenCommand {
     AddPath(terrain::PathParams),
     AddFoliage(terrain::FoliageParams),
     SetSky(terrain::SkyParams),
+
+    // Tier 13: In-World Text & UI (P4)
+    AddSign(ui::SignParams),
+    AddHud(ui::HudParams),
+    AddLabel(ui::LabelParams),
+    AddTooltip(ui::TooltipParams),
+    AddNotification(ui::NotificationParams),
+
+    // Tier 14: Physics Integration (P5)
+    SetPhysics(physics::PhysicsParams),
+    AddCollider(physics::ColliderParams),
+    AddJoint(physics::JointParams),
+    AddForce(physics::ForceParams),
+    SetGravity(physics::GravityParams),
 }
 
 // ---------------------------------------------------------------------------

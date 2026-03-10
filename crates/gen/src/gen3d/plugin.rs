@@ -1510,6 +1510,40 @@ fn process_gen_commands(
             GenCommand::SetSky(_params) => GenResponse::Error {
                 message: "SetSky not yet implemented".to_string(),
             },
+
+            // Tier 13: In-World Text & UI (P4) - TODO: Implement handlers
+            GenCommand::AddSign(_params) => GenResponse::Error {
+                message: "AddSign not yet implemented".to_string(),
+            },
+            GenCommand::AddHud(_params) => GenResponse::Error {
+                message: "AddHud not yet implemented".to_string(),
+            },
+            GenCommand::AddLabel(_params) => GenResponse::Error {
+                message: "AddLabel not yet implemented".to_string(),
+            },
+            GenCommand::AddTooltip(_params) => GenResponse::Error {
+                message: "AddTooltip not yet implemented".to_string(),
+            },
+            GenCommand::AddNotification(_params) => GenResponse::Error {
+                message: "AddNotification not yet implemented".to_string(),
+            },
+
+            // Tier 14: Physics Integration (P5) - TODO: Implement handlers
+            GenCommand::SetPhysics(_params) => GenResponse::Error {
+                message: "SetPhysics not yet implemented".to_string(),
+            },
+            GenCommand::AddCollider(_params) => GenResponse::Error {
+                message: "AddCollider not yet implemented".to_string(),
+            },
+            GenCommand::AddJoint(_params) => GenResponse::Error {
+                message: "AddJoint not yet implemented".to_string(),
+            },
+            GenCommand::AddForce(_params) => GenResponse::Error {
+                message: "AddForce not yet implemented".to_string(),
+            },
+            GenCommand::SetGravity(_params) => GenResponse::Error {
+                message: "SetGravity not yet implemented".to_string(),
+            },
         };
 
         // Mark entities dirty and record undo history.

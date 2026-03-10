@@ -9,8 +9,6 @@ pub mod gen3d;
 pub mod interaction;
 pub mod mcp;
 pub mod mcp_server;
+pub mod physics;
 pub mod terrain;
-
-// P4-P5 modules (to be implemented)
-// pub mod physics;
-// pub mod ui;
+pub mod ui;
