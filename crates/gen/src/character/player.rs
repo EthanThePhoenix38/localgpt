@@ -5,6 +5,10 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use avian3d::prelude::*;
+use bevy_tnua::prelude::*;
+use bevy_tnua_avian3d::*;
+
 /// Marker component for the player entity.
 #[derive(Component)]
 pub struct Player;
@@ -50,13 +54,6 @@ pub enum CameraMode {
     /// Camera orbits behind player, player mesh visible.
     #[default]
     ThirdPerson,
-}
-
-/// Player velocity for physics-based movement.
-#[derive(Component, Default)]
-pub struct PlayerVelocity {
-    pub linear: Vec3,
-    pub is_grounded: bool,
 }
 
 /// Component for tracking player input.
@@ -187,21 +184,28 @@ pub fn spawn_player(
     });
 
     // Spawn player entity
-    let player_entity = commands
+    commands
         .spawn((
             Name::new("Player"),
             Player,
             params.to_config(),
-            PlayerVelocity::default(),
             PlayerInput::default(),
             Transform::from_translation(position).with_rotation(rotation),
             Visibility::default(),
             Mesh3d(capsule_mesh),
             MeshMaterial3d(capsule_material),
+            // Physics: Avian
+            RigidBody::Dynamic,
+            Collider::capsule(
+                params.collision_radius,
+                params.collision_height - params.collision_radius * 2.0,
+            ),
+            LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z,
+            // Controller: Tnua
+            TnuaControllerBundle::default(),
+            TnuaAvian3dSensorShape(Collider::cylinder(params.collision_radius * 0.95, 0.0)),
         ))
-        .id();
-
-    player_entity
+        .id()
 }
 
 /// Despawn any existing player entity.
@@ -247,20 +251,11 @@ pub fn player_input_system(
     }
 }
 
-/// System to apply player movement.
+/// System to apply player movement via Tnua.
 pub fn player_movement_system(
-    time: Res<Time>,
-    mut query: Query<
-        (
-            &PlayerConfig,
-            &PlayerInput,
-            &mut Transform,
-            &mut PlayerVelocity,
-        ),
-        With<Player>,
-    >,
+    mut query: Query<(&PlayerConfig, &PlayerInput, &mut TnuaController, &Transform), With<Player>>,
 ) {
-    for (config, input, mut transform, mut velocity) in query.iter_mut() {
+    for (config, input, mut controller, transform) in query.iter_mut() {
         // Calculate movement direction relative to player facing direction
         let forward = transform.forward().xz().normalize_or_zero();
         let right = transform.right().xz().normalize_or_zero();
@@ -274,30 +269,21 @@ pub fn player_movement_system(
 
         // Calculate desired velocity
         let move_dir = forward * input.move_forward + right * input.move_right;
-        let target_velocity = move_dir.normalize_or_zero() * speed;
+        let desired_velocity = move_dir.normalize_or_zero() * speed;
 
-        // Simple movement (no physics for MVP - just translate)
-        let delta = target_velocity * time.delta_secs();
-        transform.translation.x += delta.x;
-        transform.translation.z += delta.y;
-
-        // Simple gravity
-        if !velocity.is_grounded {
-            velocity.linear.y -= 20.0 * time.delta_secs();
-            transform.translation.y += velocity.linear.y * time.delta_secs();
-
-            // Ground check
-            if transform.translation.y < 1.0 {
-                transform.translation.y = 1.0;
-                velocity.linear.y = 0.0;
-                velocity.is_grounded = true;
-            }
-        }
+        // Apply to Tnua controller
+        controller.basis(TnuaBuiltinWalk {
+            desired_velocity,
+            float_height: 1.0,
+            ..Default::default()
+        });
 
         // Jump
-        if input.jump && velocity.is_grounded {
-            velocity.linear.y = config.jump_force;
-            velocity.is_grounded = false;
+        if input.jump {
+            controller.action(TnuaBuiltinJump {
+                height: config.jump_force,
+                ..Default::default()
+            });
         }
     }
 }
@@ -311,5 +297,6 @@ impl Plugin for PlayerPlugin {
             Update,
             (player_input_system, player_movement_system).chain(),
         );
+        // Ensure Tnua plugin is added in main.rs or app setup
     }
 }

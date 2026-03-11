@@ -14,6 +14,10 @@ pub struct Npc {
     pub dialogue_id: Option<String>,
 }
 
+/// Marker component for NPC nameplate.
+#[derive(Component)]
+pub struct NpcNameplate;
+
 /// NPC behavior state machine.
 #[derive(Component, Clone, Debug)]
 pub enum NpcBehavior {
@@ -128,7 +132,7 @@ pub fn spawn_npc(
         _ => NpcBehavior::Idle,
     };
 
-    commands
+    let npc_entity = commands
         .spawn((
             Name::new(params.name.clone()),
             Npc {
@@ -141,7 +145,19 @@ pub fn spawn_npc(
             Mesh3d(capsule_mesh),
             MeshMaterial3d(npc_material),
         ))
-        .id()
+        .id();
+
+    // Spawn Nameplate
+    commands.spawn((
+        Name::new("Nameplate"),
+        Text2d::new(params.name.clone()),
+        TextColor(Color::WHITE),
+        TextLayout::new_with_justify(JustifyText::Center),
+        Transform::from_xyz(0.0, 1.1, 0.0).with_scale(Vec3::splat(0.01)), // Scale down text
+        NpcNameplate,
+    )).set_parent(npc_entity);
+
+    npc_entity
 }
 
 /// System for NPC idle behavior - face nearby player.
@@ -263,6 +279,25 @@ pub fn npc_wander_system(
     }
 }
 
+/// System to billboard nameplates (face camera).
+pub fn nameplate_billboard_system(
+    camera_query: Query<&GlobalTransform, With<Camera3d>>,
+    mut nameplate_query: Query<&mut Transform, With<NpcNameplate>>,
+) {
+    let Ok(camera_transform) = camera_query.get_single() else {
+        return;
+    };
+
+    for mut transform in nameplate_query.iter_mut() {
+        transform.look_at(camera_transform.translation(), Vec3::Y);
+        // Flip it because look_at makes it face AWAY from camera for Text usually? 
+        // Or Text faces +Z.
+        // Actually look_at makes -Z point to target. Text faces +Z.
+        // So we might need to rotate 180 Y.
+        transform.rotate_local_y(std::f32::consts::PI);
+    }
+}
+
 // Import from player module
 use super::player::Player;
 
@@ -273,7 +308,7 @@ impl Plugin for NpcPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (npc_idle_system, npc_patrol_system, npc_wander_system),
+            (npc_idle_system, npc_patrol_system, npc_wander_system, nameplate_billboard_system),
         );
     }
 }

@@ -2,8 +2,11 @@
 //!
 //! Implements Spec 1.5: `gen_set_camera_mode` — Camera Mode Switching
 
+use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use avian3d::prelude::*;
 
 /// Current camera mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -121,34 +124,74 @@ impl Default for MouseSensitivity {
     }
 }
 
-/// System to update camera position based on mode.
-pub fn camera_follow_system(
-    _time: Res<Time>,
-    player_query: Query<&Transform, With<Player>>,
-    mut camera_query: Query<(&mut Transform, &PlayerCamera), Without<Player>>,
+/// System to handle camera input (mouse look).
+pub fn camera_input_system(
+    mut mouse_motion: EventReader<MouseMotion>,
+    mut camera_query: Query<&mut PlayerCamera>,
+    mut player_query: Query<&mut Transform, With<Player>>,
+    sensitivity: Res<MouseSensitivity>,
 ) {
-    let Ok(player_transform) = player_query.single() else {
+    let Ok(mut camera) = camera_query.get_single_mut() else {
+        return;
+    };
+    let Ok(mut player_transform) = player_query.get_single_mut() else {
         return;
     };
 
-    for (mut camera_transform, camera) in camera_query.iter_mut() {
-        let target_position = match camera.mode {
+    for event in mouse_motion.read() {
+        match camera.mode {
+            CameraPov::FirstPerson | CameraPov::ThirdPerson => {
+                // Yaw rotates player
+                player_transform.rotate_y(-event.delta.x * sensitivity.x.to_radians());
+
+                // Pitch rotates camera (clamped)
+                camera.pitch -= event.delta.y * sensitivity.y;
+                camera.pitch = camera.pitch.clamp(-89.0, 89.0);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// System to update camera position based on mode and spring arm.
+pub fn camera_follow_system(
+    time: Res<Time>,
+    spatial_query: SpatialQuery,
+    player_query: Query<(Entity, &Transform), With<Player>>,
+    mut camera_query: Query<(&mut Transform, &mut PlayerCamera), Without<Player>>,
+) {
+    let Ok((player_entity, player_transform)) = player_query.get_single() else {
+        return;
+    };
+
+    for (mut camera_transform, mut camera) in camera_query.iter_mut() {
+        // Calculate desired target position relative to player
+        let mut target_position = match camera.mode {
             CameraPov::FirstPerson => {
-                // Camera at eye height
+                // Camera at eye height (approx 1.6m)
                 player_transform.translation + Vec3::new(0.0, 1.6, 0.0)
             }
             CameraPov::ThirdPerson => {
-                // Camera behind and above player
-                let yaw_rad = camera.yaw.to_radians();
+                // Camera orbits behind player
+                // Player rotation is already applied to player_transform, so we use that for yaw
+                // But wait, the spec says "mouse look: yaw rotates player entity".
+                // If player rotates, the camera should rotate with it (orbit).
+                // So we calculate offset based on camera pitch and player yaw.
+                
+                let player_yaw = player_transform.rotation.to_euler(EulerRot::YXZ).0;
                 let pitch_rad = camera.pitch.to_radians();
-
-                let offset = Vec3::new(
-                    yaw_rad.sin() * camera.distance * pitch_rad.cos(),
+                
+                // Calculate offset in local space then rotate by player yaw
+                let local_offset = Vec3::new(
+                    0.0,
                     -pitch_rad.sin() * camera.distance,
-                    yaw_rad.cos() * camera.distance * pitch_rad.cos(),
+                    pitch_rad.cos() * camera.distance,
                 );
+                
+                let rotation = Quat::from_rotation_y(player_yaw);
+                let world_offset = rotation * local_offset;
 
-                player_transform.translation + offset
+                player_transform.translation + Vec3::new(0.0, 1.5, 0.0) + world_offset
             }
             CameraPov::TopDown => {
                 // Camera above player
@@ -160,8 +203,37 @@ pub fn camera_follow_system(
             }
         };
 
+        // Spring Arm (Collision Avoidance) for Third Person
+        if camera.mode == CameraPov::ThirdPerson {
+            let origin = player_transform.translation + Vec3::new(0.0, 1.5, 0.0);
+            let dir = target_position - origin;
+            let dist = dir.length();
+            
+            if dist > 0.001 {
+                let direction = dir.normalize();
+                
+                // Raycast to check for obstructions
+                // Filter out player entity
+                let filter = SpatialQueryFilter::from_excluded_entities([player_entity]);
+                
+                if let Some(hit) = spatial_query.cast_ray(
+                    origin,
+                    Dir3::new(direction).unwrap(),
+                    dist,
+                    true,
+                    filter
+                ) {
+                    // Hit something, pull camera in
+                    target_position = origin + direction * (hit.time_of_impact - 0.2).max(0.5);
+                }
+            }
+        }
+
         // Smooth transition
         if camera.transition_progress < 1.0 {
+            camera.transition_progress += time.delta_secs() / camera.transition_duration;
+            camera.transition_progress = camera.transition_progress.min(1.0);
+            
             let t = camera.transition_progress;
             let eased = t * t * (3.0 - 2.0 * t); // Smoothstep
 
@@ -174,7 +246,19 @@ pub fn camera_follow_system(
         // Update look direction
         let look_target = match camera.mode {
             CameraPov::Fixed => camera.fixed_look_at.unwrap_or(player_transform.translation),
-            _ => player_transform.translation,
+            CameraPov::ThirdPerson | CameraPov::TopDown => player_transform.translation + Vec3::new(0.0, 1.0, 0.0),
+            CameraPov::FirstPerson => {
+                 // Look forward based on player yaw and camera pitch
+                 let player_yaw = player_transform.rotation.to_euler(EulerRot::YXZ).0;
+                 let pitch_rad = camera.pitch.to_radians();
+                 
+                 let forward = Vec3::new(
+                     player_yaw.sin() * pitch_rad.cos(),
+                     pitch_rad.sin(),
+                     player_yaw.cos() * pitch_rad.cos()
+                 );
+                 camera_transform.translation + forward
+            }
         };
 
         camera_transform.look_at(look_target, Vec3::Y);
@@ -190,6 +274,6 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MouseSensitivity::default())
-            .add_systems(Update, camera_follow_system);
+            .add_systems(Update, (camera_input_system, camera_follow_system));
     }
 }
