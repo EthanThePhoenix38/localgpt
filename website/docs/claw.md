@@ -818,12 +818,13 @@ Git repository activity metrics as of 2026-03-10.
 | Project | Language | Total Commits | Last 90d | Last 30d | Last 7d | First Commit | Last Commit |
 |---------|----------|---------------|----------|----------|---------|--------------|-------------|
 | **OpenClaw** | TypeScript | 17,089 | 16,488 | 8,179 | 1,737 | 2025-11-24 | 2026-03-06 |
-| **LocalGPT** | Rust | 405 | 405 | 325 | 79 | 2026-02-01 | 2026-03-05 |
+| **Agent Zero** | Python | 1,345 | 379 | 51 | 0 | 2024-06-10 | 2026-02-24 |
 | **ZeroClaw** | Rust | 1,762 | 1,762 | 1,762 | 132 | 2026-02-13 | 2026-03-05 |
 | **Moltis** | Rust | 1,472 | 1,472 | 1,153 | 134 | 2026-01-28 | 2026-03-06 |
 | **NullClaw** | Zig | 990 | 990 | 990 | 465 | 2026-02-16 | 2026-03-05 |
 | **Nanobot** | Python | 993 | 993 | 869 | 169 | 2026-02-01 | 2026-03-06 |
 | **PicoClaw** | Go | 903 | 903 | 903 | 202 | 2026-02-09 | 2026-03-06 |
+| **LocalGPT** | Rust | 405 | 405 | 325 | 79 | 2026-02-01 | 2026-03-05 |
 | **TinyClaw** | TypeScript | 340 | 340 | 280 | 65 | 2026-02-10 | 2026-03-09 |
 | **IronClaw** | Rust | 339 | 339 | 296 | 83 | 2026-02-02 | 2026-03-06 |
 | **ZClaw** | C (ESP32) | 210 | 210 | 165 | 28 | 2026-02-06 | 2026-03-08 |
@@ -841,6 +842,7 @@ Git repository activity metrics as of 2026-03-10.
 | **ZeroClaw** | 158 | 158 | 11.2 |
 | **NullClaw** | 49 | 49 | 20.2 |
 | **CoPaw** | 47 | 47 | 3.7 |
+| **Agent Zero** | 38 | 38 | 10.0 |
 | **IronClaw** | 37 | 37 | 9.2 |
 | **TinyClaw** | 18 | 18 | 18.9 |
 | **LocalGPT** | 12 | 13 | 33.8 |
@@ -869,17 +871,19 @@ Git repository activity metrics as of 2026-03-10.
 - **CoPaw** (175) — Recent launch (Feb 27)
 - **ZClaw** (165) — Ultra-minimal ESP32
 - **RosClaw** (80) — OpenClaw robotics plugin
+- **Agent Zero** (51) — Established Python framework (since 2024)
 
 ### Development Patterns
 
 | Pattern | Projects | Notes |
 |---------|----------|-------|
 | **Community-driven** | OpenClaw, Nanobot, PicoClaw, ZeroClaw | 100+ contributors, distributed development |
-| **Small team** | Moltis, MimiClaw, LocalGPT, TinyClaw | &lt;20 contributors, concentrated development |
+| **Small team** | Moltis, MimiClaw, LocalGPT, TinyClaw, Agent Zero | &lt;100 contributors, concentrated development |
 | **Corporate-backed** | OpenClaw, CoPaw | OpenClaw: established; CoPaw: Alibaba/AgentScope |
 | **Solo/small founder** | MimiClaw, NullClaw, ZClaw, RosClaw | &lt;10 contributors, focused vision |
+| **Established (pre-2026)** | Agent Zero | Started June 2024, mature codebase |
 | **Recent launches (Feb 2026)** | NullClaw, PicoClaw, ZeroClaw, CoPaw, MimiClaw, LocalGPT, RosClaw, ZClaw, TinyClaw | New wave of implementations |
-| **Specialized** | RosClaw (robotics), TinyClaw (multi-agent) | Domain-specific extensions of the claw pattern |
+| **Specialized** | RosClaw (robotics), TinyClaw (multi-agent), Agent Zero (hierarchical agents) | Domain-specific extensions of the claw pattern |
 
 ---
 
