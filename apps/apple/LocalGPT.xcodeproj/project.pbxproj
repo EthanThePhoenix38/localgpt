@@ -29,7 +29,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		195A2D6C2F632B7F00109386 /* ARKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ARKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/ARKit.framework; sourceTree = DEVELOPER_DIR; };
 		19DBF5D82F4BE63F00451E35 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/usr/lib/libc++.tbd"; sourceTree = DEVELOPER_DIR; };
+		19DC10742F63AE2B009C6DB5 /* RealityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = RealityKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/RealityKit.framework; sourceTree = DEVELOPER_DIR; };
+		19DC10772F63AE43009C6DB5 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.2.sdk/System/Library/Frameworks/AVFoundation.framework; sourceTree = DEVELOPER_DIR; };
 		19DC6E0C2F4BA39400826CD9 /* LocalGPT.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LocalGPT.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19DC6E192F4BA39500826CD9 /* LocalGPTTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocalGPTTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		19DC6E232F4BA39500826CD9 /* LocalGPTUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LocalGPTUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -106,6 +109,9 @@
 		19EA94662F4BCE0F008DF3ED /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				19DC10772F63AE43009C6DB5 /* AVFoundation.framework */,
+				19DC10742F63AE2B009C6DB5 /* RealityKit.framework */,
+				195A2D6C2F632B7F00109386 /* ARKit.framework */,
 				19DBF5D82F4BE63F00451E35 /* libc++.tbd */,
 			);
 			name = Frameworks;

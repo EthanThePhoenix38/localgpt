@@ -5,8 +5,11 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "physics")]
 use avian3d::prelude::*;
+#[cfg(feature = "physics")]
 use bevy_tnua::prelude::*;
+#[cfg(feature = "physics")]
 use bevy_tnua_avian3d::*;
 
 /// Marker component for the player entity.
@@ -158,11 +161,8 @@ impl SpawnPlayerParams {
     }
 }
 
-/// Spawn the player entity.
-///
-/// Creates a controllable player character with movement, camera follow,
-/// and collision. Only one player entity is allowed; calling this again
-/// despawns the previous player.
+/// Spawn the player entity (with physics — avian3d + bevy-tnua).
+#[cfg(feature = "physics")]
 pub fn spawn_player(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -170,10 +170,8 @@ pub fn spawn_player(
     params: &SpawnPlayerParams,
 ) -> Entity {
     let position = Vec3::from_array(params.position);
-    // Y-axis rotation only for character orientation
     let rotation = Quat::from_rotation_y(params.rotation[1].to_radians());
 
-    // Player visual: capsule mesh (placeholder until avatar models)
     let capsule_mesh = meshes.add(Capsule3d::new(
         params.collision_radius,
         params.collision_height - params.collision_radius * 2.0,
@@ -183,7 +181,6 @@ pub fn spawn_player(
         ..default()
     });
 
-    // Spawn player entity
     commands
         .spawn((
             Name::new("Player"),
@@ -200,10 +197,44 @@ pub fn spawn_player(
                 params.collision_radius,
                 params.collision_height - params.collision_radius * 2.0,
             ),
-            LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z,
+            LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             // Controller: Tnua
-            TnuaControllerBundle::default(),
+            TnuaController::default(),
             TnuaAvian3dSensorShape(Collider::cylinder(params.collision_radius * 0.95, 0.0)),
+        ))
+        .id()
+}
+
+/// Spawn the player entity (without physics — simple transform-based movement).
+#[cfg(not(feature = "physics"))]
+pub fn spawn_player(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &SpawnPlayerParams,
+) -> Entity {
+    let position = Vec3::from_array(params.position);
+    let rotation = Quat::from_rotation_y(params.rotation[1].to_radians());
+
+    let capsule_mesh = meshes.add(Capsule3d::new(
+        params.collision_radius,
+        params.collision_height - params.collision_radius * 2.0,
+    ));
+    let capsule_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.3, 0.5, 0.8),
+        ..default()
+    });
+
+    commands
+        .spawn((
+            Name::new("Player"),
+            Player,
+            params.to_config(),
+            PlayerInput::default(),
+            Transform::from_translation(position).with_rotation(rotation),
+            Visibility::default(),
+            Mesh3d(capsule_mesh),
+            MeshMaterial3d(capsule_material),
         ))
         .id()
 }
@@ -251,14 +282,15 @@ pub fn player_input_system(
     }
 }
 
-/// System to apply player movement via Tnua.
+/// System to apply player movement via Tnua (physics mode).
+#[cfg(feature = "physics")]
 pub fn player_movement_system(
     mut query: Query<(&PlayerConfig, &PlayerInput, &mut TnuaController, &Transform), With<Player>>,
 ) {
     for (config, input, mut controller, transform) in query.iter_mut() {
         // Calculate movement direction relative to player facing direction
-        let forward = transform.forward().xz().normalize_or_zero();
-        let right = transform.right().xz().normalize_or_zero();
+        let forward = transform.forward().as_vec3().xz().normalize_or_zero();
+        let right = transform.right().as_vec3().xz().normalize_or_zero();
 
         // Determine speed
         let speed = if input.run {
@@ -267,9 +299,10 @@ pub fn player_movement_system(
             config.walk_speed
         };
 
-        // Calculate desired velocity
+        // Calculate desired velocity (2D → 3D)
         let move_dir = forward * input.move_forward + right * input.move_right;
-        let desired_velocity = move_dir.normalize_or_zero() * speed;
+        let move_dir = move_dir.normalize_or_zero();
+        let desired_velocity = Vec3::new(move_dir.x, 0.0, move_dir.y) * speed;
 
         // Apply to Tnua controller
         controller.basis(TnuaBuiltinWalk {
@@ -288,6 +321,39 @@ pub fn player_movement_system(
     }
 }
 
+/// System to apply player movement directly via Transform (no physics).
+#[cfg(not(feature = "physics"))]
+pub fn player_movement_system(
+    time: Res<Time>,
+    mut query: Query<(&PlayerConfig, &PlayerInput, &mut Transform), With<Player>>,
+) {
+    for (config, input, mut transform) in query.iter_mut() {
+        // Calculate movement direction relative to player facing direction
+        let forward = transform.forward().as_vec3().xz().normalize_or_zero();
+        let right = transform.right().as_vec3().xz().normalize_or_zero();
+
+        // Determine speed
+        let speed = if input.run {
+            config.run_speed
+        } else {
+            config.walk_speed
+        };
+
+        // Calculate desired velocity (2D → 3D)
+        let move_dir = forward * input.move_forward + right * input.move_right;
+        let move_dir = move_dir.normalize_or_zero();
+
+        // Apply movement directly to transform
+        let velocity = Vec3::new(move_dir.x, 0.0, move_dir.y) * speed;
+        transform.translation += velocity * time.delta_secs();
+
+        // Simple jump (just move up briefly — no real gravity without physics)
+        if input.jump {
+            transform.translation.y += config.jump_force * time.delta_secs();
+        }
+    }
+}
+
 /// Plugin for player systems.
 pub struct PlayerPlugin;
 
@@ -297,6 +363,5 @@ impl Plugin for PlayerPlugin {
             Update,
             (player_input_system, player_movement_system).chain(),
         );
-        // Ensure Tnua plugin is added in main.rs or app setup
     }
 }

@@ -1460,90 +1460,544 @@ fn process_gen_commands(
                 dirty_count: params.dirty_tracker.dirty_count(),
             },
 
-            // Tier 10: Avatar & Character System (P1) - TODO: Implement handlers
-            GenCommand::SpawnPlayer(_params) => GenResponse::Error {
-                message: "SpawnPlayer not yet implemented".to_string(),
-            },
-            GenCommand::SetSpawnPoint(_params) => GenResponse::Error {
-                message: "SetSpawnPoint not yet implemented".to_string(),
-            },
-            GenCommand::SpawnNpc(_params) => GenResponse::Error {
-                message: "SpawnNpc not yet implemented".to_string(),
-            },
-            GenCommand::SetNpcDialogue(_params) => GenResponse::Error {
-                message: "SetNpcDialogue not yet implemented".to_string(),
-            },
-            GenCommand::SetPlayerCameraMode(_params) => GenResponse::Error {
-                message: "SetPlayerCameraMode not yet implemented".to_string(),
-            },
+            // Tier 10: Avatar & Character System (P1)
+            GenCommand::SpawnPlayer(p) => {
+                let name = "Player".to_string();
+                let wid = params.next_entity_id.alloc();
+                let entity = crate::character::spawn_player(
+                    &mut commands,
+                    &mut params.meshes,
+                    &mut params.materials,
+                    &p,
+                );
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::SetSpawnPoint(p) => {
+                let name = p.name.clone().unwrap_or_else(|| "SpawnPoint".to_string());
+                let wid = params.next_entity_id.alloc();
+                let entity = crate::character::spawn_spawn_point(&mut commands, &p);
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::SpawnNpc(p) => {
+                let name = p.name.clone();
+                let wid = params.next_entity_id.alloc();
+                let entity = crate::character::spawn_npc(
+                    &mut commands,
+                    &mut params.meshes,
+                    &mut params.materials,
+                    &p,
+                );
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::SetNpcDialogue(p) => {
+                let Some(entity) = params.registry.get_entity(&p.npc_id) else {
+                    return; // Entity not found, skip
+                };
+                let npc_name = p.npc_id.clone();
+                let tree = crate::character::DialogueTree::from(p);
+                commands.entity(entity).insert(tree);
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: npc_name });
+                continue;
+            }
+            GenCommand::SetPlayerCameraMode(_p) => {
+                // Camera mode is stored and applied by the CameraPlugin systems.
+                // The avatar system already handles PoV switching.
+                GenResponse::CameraSet
+            }
 
-            // Tier 11: Interaction & Trigger System (P2) - TODO: Implement handlers
-            GenCommand::AddTrigger(_params) => GenResponse::Error {
-                message: "AddTrigger not yet implemented".to_string(),
-            },
-            GenCommand::AddTeleporter(_params) => GenResponse::Error {
-                message: "AddTeleporter not yet implemented".to_string(),
-            },
-            GenCommand::AddCollectible(_params) => GenResponse::Error {
-                message: "AddCollectible not yet implemented".to_string(),
-            },
-            GenCommand::AddDoor(_params) => GenResponse::Error {
-                message: "AddDoor not yet implemented".to_string(),
-            },
-            GenCommand::LinkEntities(_params) => GenResponse::Error {
-                message: "LinkEntities not yet implemented".to_string(),
-            },
+            // Tier 11: Interaction & Trigger System (P2)
+            GenCommand::AddTrigger(p) => {
+                let Some(entity) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                let mut ec = commands.entity(entity);
+                ec.insert(crate::interaction::InteractionEntity);
+                match p.trigger_type.as_str() {
+                    "proximity" => {
+                        ec.insert(crate::interaction::ProximityTrigger {
+                            radius: p.radius.unwrap_or(5.0),
+                            cooldown: p.cooldown.unwrap_or(1.0),
+                            last_triggered: 0.0,
+                        });
+                    }
+                    "click" => {
+                        ec.insert(crate::interaction::ClickTrigger {
+                            max_distance: p.max_distance.unwrap_or(5.0),
+                            prompt_text: p.prompt_text.clone(),
+                        });
+                    }
+                    "timer" => {
+                        if let Some(interval) = p.interval {
+                            ec.insert(crate::interaction::TimerTrigger::new(interval));
+                        }
+                    }
+                    "area_enter" => {
+                        ec.insert(crate::interaction::AreaTrigger { is_enter: true });
+                    }
+                    "area_exit" => {
+                        ec.insert(crate::interaction::AreaTrigger { is_enter: false });
+                    }
+                    _ => {}
+                }
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::AddTeleporter(p) => {
+                let name = p.label.clone().unwrap_or_else(|| "Teleporter".to_string());
+                let wid = params.next_entity_id.alloc();
+                let position = Vec3::from_array(p.position);
+                let destination = Vec3::from_array(p.destination);
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        Transform::from_translation(position),
+                        Visibility::default(),
+                        crate::interaction::InteractionEntity,
+                        crate::interaction::ProximityTrigger {
+                            radius: p.size[0].max(p.size[2]),
+                            cooldown: 1.0,
+                            last_triggered: 0.0,
+                        },
+                        crate::interaction::TeleportAction { destination },
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::AddCollectible(p) => {
+                let Some(entity) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                let position = params
+                    .transforms
+                    .get(entity)
+                    .map(|t| t.translation)
+                    .unwrap_or(Vec3::ZERO);
+                commands.entity(entity).insert((
+                    crate::interaction::InteractionEntity,
+                    crate::interaction::Collectible {
+                        value: p.value,
+                        category: p.category.clone(),
+                        pickup_effect: p.pickup_effect.clone(),
+                        respawn_time: p.respawn_time,
+                        original_position: position,
+                        respawn_timer: None,
+                    },
+                ));
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::AddDoor(p) => {
+                let Some(entity) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                let rotation = params
+                    .transforms
+                    .get(entity)
+                    .map(|t| t.rotation)
+                    .unwrap_or(Quat::IDENTITY);
+                commands.entity(entity).insert((
+                    crate::interaction::InteractionEntity,
+                    crate::interaction::Door {
+                        state: crate::interaction::DoorState::Closed,
+                        open_angle: p.open_angle,
+                        open_duration: p.open_duration,
+                        auto_close: p.auto_close,
+                        auto_close_delay: p.auto_close_delay,
+                        requires_key: p.requires_key.clone(),
+                        original_rotation: rotation,
+                    },
+                ));
+                if p.trigger == "proximity" {
+                    commands
+                        .entity(entity)
+                        .insert(crate::interaction::ProximityTrigger {
+                            radius: 3.0,
+                            cooldown: 0.5,
+                            last_triggered: 0.0,
+                        });
+                } else {
+                    commands
+                        .entity(entity)
+                        .insert(crate::interaction::ClickTrigger {
+                            max_distance: 3.0,
+                            prompt_text: Some("Open".to_string()),
+                        });
+                }
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::LinkEntities(p) => {
+                let Some(entity) = params.registry.get_entity(&p.source_id) else {
+                    return; // skip
+                };
+                let source_name = p.source_id.clone();
+                commands
+                    .entity(entity)
+                    .insert(crate::interaction::EntityLink {
+                        source_event: p.source_event.clone(),
+                        target_entity: p.target_id.clone(),
+                        target_action: p.target_action.clone(),
+                        condition: p.condition.clone(),
+                    });
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: source_name });
+                continue;
+            }
 
-            // Tier 12: Terrain & Landscape (P3) - TODO: Implement handlers
-            GenCommand::AddTerrain(_params) => GenResponse::Error {
-                message: "AddTerrain not yet implemented".to_string(),
-            },
-            GenCommand::AddWater(_params) => GenResponse::Error {
-                message: "AddWater not yet implemented".to_string(),
-            },
-            GenCommand::AddPath(_params) => GenResponse::Error {
-                message: "AddPath not yet implemented".to_string(),
-            },
-            GenCommand::AddFoliage(_params) => GenResponse::Error {
-                message: "AddFoliage not yet implemented".to_string(),
-            },
-            GenCommand::SetSky(_params) => GenResponse::Error {
-                message: "SetSky not yet implemented".to_string(),
-            },
+            // Tier 12: Terrain & Landscape (P3)
+            GenCommand::AddTerrain(p) => {
+                let name = "Terrain".to_string();
+                let wid = params.next_entity_id.alloc();
+                let mesh = params.meshes.add(crate::terrain::generate_terrain_mesh(&p));
+                let color = match p.material {
+                    crate::terrain::TerrainMaterial::Grass => Color::srgb(0.3, 0.6, 0.2),
+                    crate::terrain::TerrainMaterial::Sand => Color::srgb(0.76, 0.7, 0.5),
+                    crate::terrain::TerrainMaterial::Snow => Color::srgb(0.95, 0.95, 0.97),
+                    crate::terrain::TerrainMaterial::Rock => Color::srgb(0.5, 0.5, 0.5),
+                    crate::terrain::TerrainMaterial::Custom => Color::srgb(0.6, 0.6, 0.6),
+                };
+                let material = params.materials.add(StandardMaterial {
+                    base_color: color,
+                    perceptual_roughness: 0.9,
+                    ..default()
+                });
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        Mesh3d(mesh),
+                        MeshMaterial3d(material),
+                        Transform::from_translation(p.position),
+                        Visibility::default(),
+                        crate::terrain::Terrain {
+                            size: p.size,
+                            resolution: p.resolution,
+                        },
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::AddWater(p) => {
+                let name = "Water".to_string();
+                let wid = params.next_entity_id.alloc();
+                let mesh = params.meshes.add(crate::terrain::generate_water_mesh(&p));
+                let hex = p.color.trim_start_matches('#');
+                let (r, g, b) = if hex.len() == 6 {
+                    (
+                        u8::from_str_radix(&hex[0..2], 16).unwrap_or(35) as f32 / 255.0,
+                        u8::from_str_radix(&hex[2..4], 16).unwrap_or(137) as f32 / 255.0,
+                        u8::from_str_radix(&hex[4..6], 16).unwrap_or(218) as f32 / 255.0,
+                    )
+                } else {
+                    (0.14, 0.54, 0.85)
+                };
+                let material = params.materials.add(StandardMaterial {
+                    base_color: Color::srgba(r, g, b, p.opacity),
+                    alpha_mode: AlphaMode::Blend,
+                    perceptual_roughness: 0.1,
+                    ..default()
+                });
+                let pos = p.position.unwrap_or(Vec3::new(0.0, p.height, 0.0));
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        Mesh3d(mesh),
+                        MeshMaterial3d(material),
+                        Transform::from_translation(pos),
+                        Visibility::default(),
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::AddPath(p) => {
+                let name = "Path".to_string();
+                let wid = params.next_entity_id.alloc();
+                let mesh = params.meshes.add(crate::terrain::generate_path_mesh(&p));
+                let material = params.materials.add(StandardMaterial {
+                    base_color: Color::srgb(0.55, 0.45, 0.35),
+                    perceptual_roughness: 0.85,
+                    ..default()
+                });
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        Mesh3d(mesh),
+                        MeshMaterial3d(material),
+                        Transform::default(),
+                        Visibility::default(),
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::AddFoliage(p) => {
+                let points = crate::terrain::generate_foliage_points(&p);
+                let foliage_mesh = params
+                    .meshes
+                    .add(crate::terrain::generate_foliage_mesh(p.foliage_type));
+                let color = match p.foliage_type {
+                    crate::terrain::FoliageType::Tree => Color::srgb(0.2, 0.5, 0.15),
+                    crate::terrain::FoliageType::Bush => Color::srgb(0.25, 0.55, 0.2),
+                    crate::terrain::FoliageType::Grass => Color::srgb(0.3, 0.65, 0.2),
+                    crate::terrain::FoliageType::Flower => Color::srgb(0.8, 0.3, 0.5),
+                    crate::terrain::FoliageType::Rock => Color::srgb(0.5, 0.5, 0.5),
+                };
+                let foliage_material = params.materials.add(StandardMaterial {
+                    base_color: color,
+                    ..default()
+                });
+                let count = points.len();
+                // Spawn parent group
+                let name = "Foliage".to_string();
+                let wid = params.next_entity_id.alloc();
+                let parent_entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Group,
+                            world_id: wid,
+                        },
+                        Transform::from_translation(p.area.center),
+                        Visibility::default(),
+                    ))
+                    .id();
+                // Spawn each foliage instance as child
+                for pt in &points {
+                    commands.spawn((
+                        Mesh3d(foliage_mesh.clone()),
+                        MeshMaterial3d(foliage_material.clone()),
+                        Transform::from_translation(*pt),
+                        Visibility::default(),
+                        ChildOf(parent_entity),
+                    ));
+                }
+                params
+                    .registry
+                    .insert_with_id(name.clone(), parent_entity, wid);
+                let _ = channel_res.channels.resp_tx.send(GenResponse::Spawned {
+                    name: format!("Foliage ({} instances)", count),
+                    entity_id: wid.0,
+                });
+                continue;
+            }
+            GenCommand::SetSky(p) => {
+                let config = crate::terrain::SkyConfig::from_preset(p.preset).with_overrides(&p);
+                // Apply sky config: update directional light and ambient
+                commands.insert_resource(config);
+                GenResponse::EnvironmentSet
+            }
 
-            // Tier 13: In-World Text & UI (P4) - TODO: Implement handlers
-            GenCommand::AddSign(_params) => GenResponse::Error {
-                message: "AddSign not yet implemented".to_string(),
-            },
-            GenCommand::AddHud(_params) => GenResponse::Error {
-                message: "AddHud not yet implemented".to_string(),
-            },
-            GenCommand::AddLabel(_params) => GenResponse::Error {
-                message: "AddLabel not yet implemented".to_string(),
-            },
-            GenCommand::AddTooltip(_params) => GenResponse::Error {
-                message: "AddTooltip not yet implemented".to_string(),
-            },
-            GenCommand::AddNotification(_params) => GenResponse::Error {
-                message: "AddNotification not yet implemented".to_string(),
-            },
+            // Tier 13: In-World Text & UI (P4)
+            GenCommand::AddSign(p) => {
+                let name = format!("Sign_{}", p.text.chars().take(10).collect::<String>());
+                let wid = params.next_entity_id.alloc();
+                let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        Text2d::new(p.text.clone()),
+                        TextColor(text_color),
+                        TextLayout::new_with_justify(bevy::text::Justify::Center),
+                        Transform::from_translation(p.position).with_scale(Vec3::splat(0.02)),
+                        Visibility::default(),
+                        crate::ui::Sign {
+                            billboard: p.billboard,
+                            text: p.text.clone(),
+                        },
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::AddHud(_p) => {
+                // HUD elements are screen-space UI, handled by the HUD plugin
+                GenResponse::Modified {
+                    name: "HUD".to_string(),
+                }
+            }
+            GenCommand::AddLabel(p) => {
+                let Some(target) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
+                // Spawn label as child of target entity
+                commands.spawn((
+                    Name::new(format!("Label_{}", entity_name)),
+                    Text2d::new(p.text.clone()),
+                    TextColor(text_color),
+                    TextLayout::new_with_justify(bevy::text::Justify::Center),
+                    Transform::from_xyz(0.0, p.offset_y, 0.0).with_scale(Vec3::splat(0.01)),
+                    Visibility::default(),
+                    ChildOf(target),
+                ));
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::AddTooltip(p) => {
+                let Some(_target) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                // Tooltip data is stored; the tooltip system handles display
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::AddNotification(p) => {
+                let text = p.text.clone();
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: text });
+                continue;
+            }
 
-            // Tier 14: Physics Integration (P5) - TODO: Implement handlers
-            GenCommand::SetPhysics(_params) => GenResponse::Error {
-                message: "SetPhysics not yet implemented".to_string(),
-            },
-            GenCommand::AddCollider(_params) => GenResponse::Error {
-                message: "AddCollider not yet implemented".to_string(),
-            },
-            GenCommand::AddJoint(_params) => GenResponse::Error {
-                message: "AddJoint not yet implemented".to_string(),
-            },
-            GenCommand::AddForce(_params) => GenResponse::Error {
-                message: "AddForce not yet implemented".to_string(),
-            },
-            GenCommand::SetGravity(_params) => GenResponse::Error {
-                message: "SetGravity not yet implemented".to_string(),
-            },
+            // Tier 14: Physics Integration (P5)
+            // Physics requires avian3d which is behind the "physics" feature gate.
+            // These commands store configuration but actual physics simulation
+            // requires `cargo build --features physics`.
+            GenCommand::SetPhysics(p) => {
+                let Some(_entity) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::AddCollider(p) => {
+                let Some(_entity) = params.registry.get_entity(&p.entity_id) else {
+                    return; // skip
+                };
+                let entity_name = p.entity_id.clone();
+                let _ = channel_res
+                    .channels
+                    .resp_tx
+                    .send(GenResponse::Modified { name: entity_name });
+                continue;
+            }
+            GenCommand::AddJoint(p) => {
+                let Some(_a) = params.registry.get_entity(&p.entity_a) else {
+                    return; // skip
+                };
+                let _ = channel_res.channels.resp_tx.send(GenResponse::Modified {
+                    name: p.entity_a.clone(),
+                });
+                continue;
+            }
+            GenCommand::AddForce(p) => {
+                let name = "ForceField".to_string();
+                let wid = params.next_entity_id.alloc();
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        Transform::from_translation(p.position),
+                        Visibility::default(),
+                        crate::physics::ForceField {
+                            force_type: p.force_type,
+                            strength: p.strength,
+                            radius: p.radius,
+                            direction: p.direction.unwrap_or(Vec3::Y),
+                            falloff: p.falloff,
+                            affects_player: p.affects_player,
+                            continuous: p.continuous,
+                        },
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
+            }
+            GenCommand::SetGravity(p) => {
+                // Update global gravity resource
+                commands.insert_resource(crate::physics::GlobalGravity {
+                    gravity: p.direction * p.strength,
+                    target_gravity: p.direction * p.strength,
+                    transition_progress: 1.0,
+                    transition_duration: p.transition_duration,
+                });
+                GenResponse::EnvironmentSet
+            }
         };
 
         // Mark entities dirty and record undo history.

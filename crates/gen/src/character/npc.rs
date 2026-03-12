@@ -152,10 +152,11 @@ pub fn spawn_npc(
         Name::new("Nameplate"),
         Text2d::new(params.name.clone()),
         TextColor(Color::WHITE),
-        TextLayout::new_with_justify(JustifyText::Center),
+        TextLayout::new_with_justify(Justify::Center),
         Transform::from_xyz(0.0, 1.1, 0.0).with_scale(Vec3::splat(0.01)), // Scale down text
         NpcNameplate,
-    )).set_parent(npc_entity);
+        ChildOf(npc_entity),
+    ));
 
     npc_entity
 }
@@ -284,13 +285,13 @@ pub fn nameplate_billboard_system(
     camera_query: Query<&GlobalTransform, With<Camera3d>>,
     mut nameplate_query: Query<&mut Transform, With<NpcNameplate>>,
 ) {
-    let Ok(camera_transform) = camera_query.get_single() else {
+    let Ok(camera_transform) = camera_query.single() else {
         return;
     };
 
     for mut transform in nameplate_query.iter_mut() {
         transform.look_at(camera_transform.translation(), Vec3::Y);
-        // Flip it because look_at makes it face AWAY from camera for Text usually? 
+        // Flip it because look_at makes it face AWAY from camera for Text usually?
         // Or Text faces +Z.
         // Actually look_at makes -Z point to target. Text faces +Z.
         // So we might need to rotate 180 Y.
@@ -308,7 +309,12 @@ impl Plugin for NpcPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (npc_idle_system, npc_patrol_system, npc_wander_system, nameplate_billboard_system),
+            (
+                npc_idle_system,
+                npc_patrol_system,
+                npc_wander_system,
+                nameplate_billboard_system,
+            ),
         );
     }
 }

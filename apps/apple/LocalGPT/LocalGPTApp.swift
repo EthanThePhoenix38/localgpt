@@ -19,6 +19,11 @@ struct LocalGPTApp: App {
                         Label("Chat", systemImage: "message.fill")
                     }
 
+                WorldChatView()
+                    .tabItem {
+                        Label("World", systemImage: "cube.transparent")
+                    }
+
                 WorkspaceEditorView()
                     .tabItem {
                         Label("Workspace", systemImage: "doc.text.fill")
@@ -26,5 +31,37 @@ struct LocalGPTApp: App {
             }
             .tint(.teal)
         }
+
+        #if os(visionOS)
+        // Vision Pro immersive world space
+        ImmersiveSpace(id: "world") {
+            WorldImmersiveView()
+        }
+        #endif
     }
 }
+
+#if os(visionOS)
+/// Immersive space view for Vision Pro
+struct WorldImmersiveView: View {
+    @StateObject private var viewModel = WorldViewModel()
+
+    var body: some View {
+        RealityView { content in
+            // Add root entity
+            content.add(viewModel.rootEntity)
+
+            // Add default lighting
+            let light = DirectionalLight()
+            light.light.intensity = 2000
+            light.position = [5, 10, 5]
+            viewModel.rootEntity.addChild(light)
+        } update: { content in
+            // Updates handled through viewModel
+        }
+        .onAppear {
+            // Configure for immersive mode
+        }
+    }
+}
+#endif

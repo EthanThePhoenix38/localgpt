@@ -3,5 +3,8 @@
 //! This module contains tool implementations that bridge the agent
 //! to Bevy scene manipulation.
 
+pub mod avatar_tools;
+pub mod interaction_tools;
+
 // Re-export character tools from crate root module
 pub use crate::character_tools::create_avatar_tools;

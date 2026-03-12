@@ -815,7 +815,9 @@ async fn run_agent_loop(
 
     // Create safe tools + gen tools + CLI tools
     let mut tools = create_safe_tools(&config, Some(memory.clone()))?;
-    tools.extend(gen3d::tools::create_gen_tools(bridge));
+    tools.extend(gen3d::tools::create_gen_tools(bridge.clone()));
+    tools.extend(mcp::avatar_tools::create_character_tools(bridge.clone()));
+    tools.extend(mcp::interaction_tools::create_interaction_tools(bridge));
     tools.extend(localgpt_cli_tools::create_cli_tools(&config)?);
     tools.extend(vec![create_spawn_agent_tool(
         config.clone(),

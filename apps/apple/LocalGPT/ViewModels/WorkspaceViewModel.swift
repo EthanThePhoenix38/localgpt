@@ -1,5 +1,5 @@
 import Foundation
-import LocalGPTWrapper
+import Combine
 
 /// Represents an editable workspace file for the UI.
 struct WorkspaceFileItem: Identifiable {
@@ -44,63 +44,75 @@ class WorkspaceViewModel: ObservableObject {
     @Published var lastError: String?
     @Published var showSaveSuccess = false
 
-    private var client: LocalGptClient?
+    private let workspaceURL: URL
+
+    // Default workspace files
+    private let defaultFiles: [(name: String, content: String, sensitive: Bool)] = [
+        ("MEMORY.md", "# Memory\n\nThis file stores long-term knowledge.\n", false),
+        ("SOUL.md", "# Soul\n\nYou are a helpful AI assistant.\n", false),
+        ("HEARTBEAT.md", "# Heartbeat\n\nTasks for autonomous operation.\n", false),
+        ("LocalGPT.md", "# Security Policy\n\nThis file is security-sensitive.\n", true)
+    ]
 
     init() {
-        setupClient()
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        workspaceURL = docs.appendingPathComponent("LocalGPT/workspace", isDirectory: true)
+        loadFiles()
     }
 
-    private func setupClient() {
+    func loadFiles() {
+        isLoading = true
+
+        // Create workspace directory if needed
+        if !FileManager.default.fileExists(atPath: workspaceURL.path) {
+            try? FileManager.default.createDirectory(at: workspaceURL, withIntermediateDirectories: true)
+        }
+
+        var loadedFiles: [WorkspaceFileItem] = []
+
+        for (name, defaultContent, sensitive) in defaultFiles {
+            let fileURL = workspaceURL.appendingPathComponent(name)
+            let content: String
+
+            if FileManager.default.fileExists(atPath: fileURL.path),
+               let existingContent = try? String(contentsOf: fileURL, encoding: .utf8) {
+                content = existingContent
+            } else {
+                // Create file with default content
+                try? defaultContent.write(to: fileURL, atomically: true, encoding: .utf8)
+                content = defaultContent
+            }
+
+            loadedFiles.append(WorkspaceFileItem(
+                id: name,
+                name: name,
+                content: content,
+                isSecuritySensitive: sensitive
+            ))
+        }
+
+        files = loadedFiles
+        isLoading = false
+    }
+
+    func saveFile(name: String, content: String) {
+        let fileURL = workspaceURL.appendingPathComponent(name)
+
         do {
-            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let dataDir = docs.appendingPathComponent("LocalGPT", isDirectory: true).path
-            self.client = try LocalGptClient(dataDir: dataDir)
-            loadFiles()
+            try content.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            // Update the local file list
+            if let index = files.firstIndex(where: { $0.name == name }) {
+                files[index].content = content
+            }
+            showSaveSuccess = true
         } catch {
             handleError(error)
         }
     }
 
-    func loadFiles() {
-        guard let client = client else { return }
-        isLoading = true
-
-        let workspaceFiles = client.listWorkspaceFiles()
-        files = workspaceFiles.map { file in
-            WorkspaceFileItem(
-                id: file.name,
-                name: file.name,
-                content: file.content,
-                isSecuritySensitive: file.isSecuritySensitive
-            )
-        }
-
-        isLoading = false
-    }
-
-    func saveFile(name: String, content: String) {
-        guard let client = client else { return }
-
-        Task.detached(priority: .userInitiated) { [weak self] in
-            do {
-                try client.setWorkspaceFile(filename: name, content: content)
-                await MainActor.run {
-                    // Update the local file list
-                    if let index = self?.files.firstIndex(where: { $0.name == name }) {
-                        self?.files[index].content = content
-                    }
-                    self?.showSaveSuccess = true
-                }
-            } catch {
-                await MainActor.run {
-                    self?.handleError(error)
-                }
-            }
-        }
-    }
-
     func isSecuritySensitive(filename: String) -> Bool {
-        client?.isWorkspaceFileSecuritySensitive(filename: filename) ?? false
+        filename == "LocalGPT.md"
     }
 
     private func handleError(_ error: Error) {

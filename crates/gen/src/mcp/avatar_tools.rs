@@ -1,13 +1,13 @@
 //! MCP tool handlers for P1: Avatar & Character System.
 
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{Value, json};
+use std::sync::Arc;
 
+use crate::character::*;
 use crate::gen3d::GenBridge;
 use crate::gen3d::commands::*;
-use crate::avatar::*;
 use localgpt_core::agent::ToolSchema;
 use localgpt_core::agent::tools::Tool;
 
@@ -96,20 +96,33 @@ impl Tool for GenSpawnPlayerTool {
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
         let params = SpawnPlayerParams {
-            position: args["position"].as_array().map(|a| {
-                [a[0].as_f64().unwrap_or(0.0) as f32,
-                 a[1].as_f64().unwrap_or(1.0) as f32,
-                 a[2].as_f64().unwrap_or(0.0) as f32]
-            }).unwrap_or([0.0, 1.0, 0.0]),
-            rotation: args["rotation"].as_array().map(|a| {
-                [a[0].as_f64().unwrap_or(0.0) as f32,
-                 a[1].as_f64().unwrap_or(0.0) as f32,
-                 a[2].as_f64().unwrap_or(0.0) as f32]
-            }).unwrap_or([0.0, 0.0, 0.0]),
+            position: args["position"]
+                .as_array()
+                .map(|a| {
+                    [
+                        a[0].as_f64().unwrap_or(0.0) as f32,
+                        a[1].as_f64().unwrap_or(1.0) as f32,
+                        a[2].as_f64().unwrap_or(0.0) as f32,
+                    ]
+                })
+                .unwrap_or([0.0, 1.0, 0.0]),
+            rotation: args["rotation"]
+                .as_array()
+                .map(|a| {
+                    [
+                        a[0].as_f64().unwrap_or(0.0) as f32,
+                        a[1].as_f64().unwrap_or(0.0) as f32,
+                        a[2].as_f64().unwrap_or(0.0) as f32,
+                    ]
+                })
+                .unwrap_or([0.0, 0.0, 0.0]),
             walk_speed: args["walk_speed"].as_f64().unwrap_or(5.0) as f32,
             run_speed: args["run_speed"].as_f64().unwrap_or(10.0) as f32,
             jump_force: args["jump_force"].as_f64().unwrap_or(8.0) as f32,
-            camera_mode: args["camera_mode"].as_str().unwrap_or("third_person").to_string(),
+            camera_mode: args["camera_mode"]
+                .as_str()
+                .unwrap_or("third_person")
+                .to_string(),
             camera_distance: args["camera_distance"].as_f64().unwrap_or(5.0) as f32,
             collision_radius: args["collision_radius"].as_f64().unwrap_or(0.3) as f32,
             collision_height: args["collision_height"].as_f64().unwrap_or(1.8) as f32,
@@ -119,9 +132,10 @@ impl Tool for GenSpawnPlayerTool {
         let response = self.bridge.send(cmd).await?;
 
         match response {
-            GenResponse::Spawned { name, entity_id } => {
-                Ok(format!("Spawned player '{}' (entity_id: {})", name, entity_id))
-            }
+            GenResponse::Spawned { name, entity_id } => Ok(format!(
+                "Spawned player '{}' (entity_id: {})",
+                name, entity_id
+            )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             _ => Ok("Player spawned successfully".to_string()),
         }
@@ -185,16 +199,26 @@ impl Tool for GenSetSpawnPointTool {
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
         let params = SpawnPointParams {
-            position: args["position"].as_array().map(|a| {
-                [a[0].as_f64().unwrap_or(0.0) as f32,
-                 a[1].as_f64().unwrap_or(1.0) as f32,
-                 a[2].as_f64().unwrap_or(0.0) as f32]
-            }).ok_or_else(|| anyhow::anyhow!("position is required"))?,
-            rotation: args["rotation"].as_array().map(|a| {
-                [a[0].as_f64().unwrap_or(0.0) as f32,
-                 a[1].as_f64().unwrap_or(0.0) as f32,
-                 a[2].as_f64().unwrap_or(0.0) as f32]
-            }).unwrap_or([0.0, 0.0, 0.0]),
+            position: args["position"]
+                .as_array()
+                .map(|a| {
+                    [
+                        a[0].as_f64().unwrap_or(0.0) as f32,
+                        a[1].as_f64().unwrap_or(1.0) as f32,
+                        a[2].as_f64().unwrap_or(0.0) as f32,
+                    ]
+                })
+                .ok_or_else(|| anyhow::anyhow!("position is required"))?,
+            rotation: args["rotation"]
+                .as_array()
+                .map(|a| {
+                    [
+                        a[0].as_f64().unwrap_or(0.0) as f32,
+                        a[1].as_f64().unwrap_or(0.0) as f32,
+                        a[2].as_f64().unwrap_or(0.0) as f32,
+                    ]
+                })
+                .unwrap_or([0.0, 0.0, 0.0]),
             name: args["name"].as_str().map(|s| s.to_string()),
             is_default: args["is_default"].as_bool().unwrap_or(true),
         };
@@ -203,9 +227,7 @@ impl Tool for GenSetSpawnPointTool {
         let response = self.bridge.send(cmd).await?;
 
         match response {
-            GenResponse::Spawned { name, .. } => {
-                Ok(format!("Created spawn point '{}'", name))
-            }
+            GenResponse::Spawned { name, .. } => Ok(format!("Created spawn point '{}'", name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             _ => Ok("Spawn point created successfully".to_string()),
         }
@@ -236,7 +258,8 @@ impl Tool for GenAddNpcTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "gen_add_npc".to_string(),
-            description: "Create a non-player character with optional patrol or wander behavior.".to_string(),
+            description: "Create a non-player character with optional patrol or wander behavior."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -286,33 +309,46 @@ impl Tool for GenAddNpcTool {
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
 
-        let position = args["position"].as_array().map(|a| {
-            [a[0].as_f64().unwrap_or(0.0) as f32,
-             a[1].as_f64().unwrap_or(0.0) as f32,
-             a[2].as_f64().unwrap_or(0.0) as f32]
-        }).ok_or_else(|| anyhow::anyhow!("position is required"))?;
+        let position = args["position"]
+            .as_array()
+            .map(|a| {
+                [
+                    a[0].as_f64().unwrap_or(0.0) as f32,
+                    a[1].as_f64().unwrap_or(0.0) as f32,
+                    a[2].as_f64().unwrap_or(0.0) as f32,
+                ]
+            })
+            .ok_or_else(|| anyhow::anyhow!("position is required"))?;
 
-        let name = args["name"].as_str()
+        let name = args["name"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("name is required"))?
             .to_string();
 
         let patrol_points: Vec<[f32; 3]> = args["patrol_points"]
             .as_array()
             .map(|arr| {
-                arr.iter().filter_map(|p| {
-                    p.as_array().map(|a| {
-                        [a[0].as_f64().unwrap_or(0.0) as f32,
-                         a[1].as_f64().unwrap_or(0.0) as f32,
-                         a[2].as_f64().unwrap_or(0.0) as f32]
+                arr.iter()
+                    .filter_map(|p| {
+                        p.as_array().map(|a| {
+                            [
+                                a[0].as_f64().unwrap_or(0.0) as f32,
+                                a[1].as_f64().unwrap_or(0.0) as f32,
+                                a[2].as_f64().unwrap_or(0.0) as f32,
+                            ]
+                        })
                     })
-                }).collect()
+                    .collect()
             })
             .unwrap_or_default();
 
         let params = SpawnNpcParams {
             position,
             name,
-            model: args["model"].as_str().unwrap_or("default_humanoid").to_string(),
+            model: args["model"]
+                .as_str()
+                .unwrap_or("default_humanoid")
+                .to_string(),
             behavior: args["behavior"].as_str().unwrap_or("idle").to_string(),
             patrol_points,
             patrol_speed: args["patrol_speed"].as_f64().unwrap_or(3.0) as f32,
@@ -410,7 +446,8 @@ impl Tool for GenSetNpcDialogueTool {
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
 
-        let npc_id = args["npc_id"].as_str()
+        let npc_id = args["npc_id"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("npc_id is required"))?
             .to_string();
 
@@ -423,19 +460,27 @@ impl Tool for GenSetNpcDialogueTool {
                     id: n["id"].as_str()?.to_string(),
                     text: n["text"].as_str()?.to_string(),
                     speaker: n["speaker"].as_str().map(|s| s.to_string()),
-                    choices: n["choices"].as_array().map(|arr| {
-                        arr.iter().filter_map(|c| {
-                            Some(DialogueChoiceDef {
-                                text: c["text"].as_str()?.to_string(),
-                                next_node_id: c["next_node_id"].as_str().map(|s| s.to_string()),
-                            })
-                        }).collect()
-                    }).unwrap_or_default(),
+                    choices: n["choices"]
+                        .as_array()
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|c| {
+                                    Some(DialogueChoiceDef {
+                                        text: c["text"].as_str()?.to_string(),
+                                        next_node_id: c["next_node_id"]
+                                            .as_str()
+                                            .map(|s| s.to_string()),
+                                    })
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                 })
             })
             .collect();
 
-        let start_node = args["start_node"].as_str()
+        let start_node = args["start_node"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("start_node is required"))?
             .to_string();
 
@@ -451,9 +496,7 @@ impl Tool for GenSetNpcDialogueTool {
         let response = self.bridge.send(cmd).await?;
 
         match response {
-            GenResponse::Modified { name } => {
-                Ok(format!("Set dialogue for NPC '{}'", name))
-            }
+            GenResponse::Modified { name } => Ok(format!("Set dialogue for NPC '{}'", name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             _ => Ok("Dialogue set successfully".to_string()),
         }
@@ -484,7 +527,8 @@ impl Tool for GenSetCameraModeTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "gen_set_camera_mode".to_string(),
-            description: "Switch or configure the player camera mode with smooth transitions.".to_string(),
+            description: "Switch or configure the player camera mode with smooth transitions."
+                .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -533,7 +577,8 @@ impl Tool for GenSetCameraModeTool {
         let args: Value = serde_json::from_str(arguments)?;
 
         let params = SetCameraModeParams {
-            mode: args["mode"].as_str()
+            mode: args["mode"]
+                .as_str()
                 .ok_or_else(|| anyhow::anyhow!("mode is required"))?
                 .to_string(),
             distance: args["distance"].as_f64().unwrap_or(5.0) as f32,
@@ -541,32 +586,35 @@ impl Tool for GenSetCameraModeTool {
             fov: args["fov"].as_f64().unwrap_or(60.0) as f32,
             transition_duration: args["transition_duration"].as_f64().unwrap_or(0.5) as f32,
             fixed_position: args["fixed_position"].as_array().map(|a| {
-                [a[0].as_f64().unwrap_or(0.0) as f32,
-                 a[1].as_f64().unwrap_or(0.0) as f32,
-                 a[2].as_f64().unwrap_or(0.0) as f32]
+                [
+                    a[0].as_f64().unwrap_or(0.0) as f32,
+                    a[1].as_f64().unwrap_or(0.0) as f32,
+                    a[2].as_f64().unwrap_or(0.0) as f32,
+                ]
             }),
             fixed_look_at: args["fixed_look_at"].as_array().map(|a| {
-                [a[0].as_f64().unwrap_or(0.0) as f32,
-                 a[1].as_f64().unwrap_or(0.0) as f32,
-                 a[2].as_f64().unwrap_or(0.0) as f32]
+                [
+                    a[0].as_f64().unwrap_or(0.0) as f32,
+                    a[1].as_f64().unwrap_or(0.0) as f32,
+                    a[2].as_f64().unwrap_or(0.0) as f32,
+                ]
             }),
         };
 
+        let mode_str = params.mode.clone();
         let cmd = GenCommand::SetPlayerCameraMode(params);
         let response = self.bridge.send(cmd).await?;
 
         match response {
-            GenResponse::CameraSet => {
-                Ok(format!("Camera mode set to '{}'", params.mode))
-            }
+            GenResponse::CameraSet => Ok(format!("Camera mode set to '{}'", mode_str)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             _ => Ok("Camera mode changed successfully".to_string()),
         }
     }
 }
 
-/// Create all P1 avatar tools.
-pub fn create_avatar_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
+/// Create all P1 character tools (player, spawn points, NPCs, dialogue, camera).
+pub fn create_character_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
     vec![
         Box::new(GenSpawnPlayerTool::new(bridge.clone())),
         Box::new(GenSetSpawnPointTool::new(bridge.clone())),

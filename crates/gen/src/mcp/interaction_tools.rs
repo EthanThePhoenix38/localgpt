@@ -1,13 +1,13 @@
 //! MCP tool handlers for P2: Interaction & Trigger System.
 
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 use crate::gen3d::GenBridge;
 use crate::gen3d::commands::*;
-use crate::interaction::*;
+use crate::interaction;
 use localgpt_core::agent::ToolSchema;
 use localgpt_core::agent::tools::Tool;
 
@@ -53,32 +53,11 @@ impl Tool for GenAddTriggerTool {
                         "enum": ["animate", "teleport", "play_sound", "show_text", "toggle_state", "spawn", "destroy", "add_score", "enable", "disable"],
                         "description": "Action to perform"
                     },
-                    "trigger_params": {
-                        "type": "object",
-                        "properties": {
-                            "radius": { "type": "number", "default": 3.0 },
-                            "cooldown": { "type": "number", "default": 1.0 },
-                            "interval": { "type": "number" },
-                            "max_distance": { "type": "number", "default": 5.0 },
-                            "prompt_text": { "type": "string" }
-                        }
-                    },
-                    "action_params": {
-                        "type": "object",
-                        "properties": {
-                            "property": { "type": "string" },
-                            "to": { "type": "array", "items": { "type": "number" } },
-                            "duration": { "type": "number", "default": 1.0 },
-                            "easing": { "type": "string", "default": "ease_in_out" },
-                            "destination": { "type": "array", "items": { "type": "number" } },
-                            "sound": { "type": "string" },
-                            "text": { "type": "string" },
-                            "state_key": { "type": "string" },
-                            "value": { "type": "string" },
-                            "amount": { "type": "integer" }
-                        }
-                    },
-                    "once": { "type": "boolean", "default": false }
+                    "radius": { "type": "number", "default": 3.0, "description": "Trigger radius" },
+                    "cooldown": { "type": "number", "default": 1.0, "description": "Cooldown between triggers" },
+                    "interval": { "type": "number", "description": "Timer interval (timer trigger only)" },
+                    "max_distance": { "type": "number", "default": 5.0, "description": "Max click distance" },
+                    "once": { "type": "boolean", "default": false, "description": "Fire only once" }
                 },
                 "required": ["entity_id", "trigger_type", "action"]
             }),
@@ -87,15 +66,36 @@ impl Tool for GenAddTriggerTool {
 
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
-        let params = AddTriggerParams::from_json(args)?;
+
+        let entity_id = args["entity_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("entity_id is required"))?
+            .to_string();
+
+        let params = interaction::AddTriggerParams {
+            entity_id: entity_id.clone(),
+            trigger_type: args["trigger_type"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("trigger_type is required"))?
+                .to_string(),
+            action: args["action"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("action is required"))?
+                .to_string(),
+            radius: args["radius"].as_f64().map(|v| v as f32),
+            cooldown: args["cooldown"].as_f64().map(|v| v as f32),
+            interval: args["interval"].as_f64().map(|v| v as f32),
+            max_distance: args["max_distance"].as_f64().map(|v| v as f32),
+            prompt_text: args["prompt_text"].as_str().map(|s| s.to_string()),
+            once: args["once"].as_bool().unwrap_or(false),
+        };
+
         let cmd = GenCommand::AddTrigger(params);
         let response = self.bridge.send(cmd).await?;
         match response {
-            GenResponse::TriggerAdded { entity } => {
-                Ok(format!("Trigger added to entity '{}'", entity))
-            }
+            GenResponse::Modified { name } => Ok(format!("Trigger added to entity '{}'", name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
-            _ => Ok("Trigger added successfully".to_string()),
+            _ => Ok(format!("Trigger added to entity '{}'", entity_id)),
         }
     }
 }
@@ -124,7 +124,9 @@ impl Tool for GenAddTeleporterTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "gen_add_teleporter".to_string(),
-            description: "Create a portal that teleports the player to a destination when they step into it.".to_string(),
+            description:
+                "Create a portal that teleports the player to a destination when they step into it."
+                    .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -166,13 +168,46 @@ impl Tool for GenAddTeleporterTool {
 
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
-        let params = AddTeleporterParams::from_json(args)?;
+
+        let position = args["position"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("position is required"))?;
+        let destination = args["destination"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("destination is required"))?;
+
+        let size = args["size"]
+            .as_array()
+            .map(|a| {
+                [
+                    a[0].as_f64().unwrap_or(2.0) as f32,
+                    a[1].as_f64().unwrap_or(3.0) as f32,
+                    a[2].as_f64().unwrap_or(2.0) as f32,
+                ]
+            })
+            .unwrap_or([2.0, 3.0, 2.0]);
+
+        let params = interaction::TeleporterParams {
+            position: [
+                position[0].as_f64().unwrap_or(0.0) as f32,
+                position[1].as_f64().unwrap_or(0.0) as f32,
+                position[2].as_f64().unwrap_or(0.0) as f32,
+            ],
+            destination: [
+                destination[0].as_f64().unwrap_or(0.0) as f32,
+                destination[1].as_f64().unwrap_or(0.0) as f32,
+                destination[2].as_f64().unwrap_or(0.0) as f32,
+            ],
+            size,
+            effect: args["effect"].as_str().unwrap_or("fade").to_string(),
+            sound: args["sound"].as_str().map(|s| s.to_string()),
+            label: args["label"].as_str().map(|s| s.to_string()),
+        };
+
         let cmd = GenCommand::AddTeleporter(params);
         let response = self.bridge.send(cmd).await?;
         match response {
-            GenResponse::Spawned { name, .. } => {
-                Ok(format!("Teleporter '{}' created at destination {:?}", name, params.destination))
-            }
+            GenResponse::Spawned { name, .. } => Ok(format!("Teleporter '{}' created", name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             _ => Ok("Teleporter created successfully".to_string()),
         }
@@ -243,15 +278,30 @@ impl Tool for GenAddCollectibleTool {
 
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
-        let params = AddCollectibleParams::from_json(args)?;
+
+        let entity_id = args["entity_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("entity_id is required"))?
+            .to_string();
+
+        let params = interaction::CollectibleParams {
+            entity_id: entity_id.clone(),
+            value: args["value"].as_i64().unwrap_or(1) as i32,
+            category: args["category"].as_str().unwrap_or("points").to_string(),
+            pickup_sound: args["pickup_sound"].as_str().map(|s| s.to_string()),
+            pickup_effect: args["pickup_effect"]
+                .as_str()
+                .unwrap_or("sparkle")
+                .to_string(),
+            respawn_time: args["respawn_time"].as_f64().map(|v| v as f32),
+        };
+
         let cmd = GenCommand::AddCollectible(params);
         let response = self.bridge.send(cmd).await?;
         match response {
-            GenResponse::Modified { name } => {
-                Ok(format!("Entity '{}' is now collectible (value: {})", name, params.value))
-            }
+            GenResponse::Modified { name } => Ok(format!("Entity '{}' is now collectible", name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
-            _ => Ok("Collectible added successfully".to_string()),
+            _ => Ok(format!("Entity '{}' is now collectible", entity_id)),
         }
     }
 }
@@ -314,14 +364,6 @@ impl Tool for GenAddDoorTool {
                         "default": 3.0,
                         "description": "Seconds before auto-close"
                     },
-                    "sound_open": {
-                        "type": "string",
-                        "description": "Opening sound"
-                    },
-                    "sound_close": {
-                        "type": "string",
-                        "description": "Closing sound"
-                    },
                     "requires_key": {
                         "type": "string",
                         "description": "Required key item name"
@@ -334,15 +376,30 @@ impl Tool for GenAddDoorTool {
 
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
-        let params = AddDoorParams::from_json(args)?;
+
+        let entity_id = args["entity_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("entity_id is required"))?
+            .to_string();
+
+        let params = interaction::DoorParams {
+            entity_id: entity_id.clone(),
+            trigger: args["trigger"].as_str().unwrap_or("proximity").to_string(),
+            open_angle: args["open_angle"].as_f64().unwrap_or(90.0) as f32,
+            open_duration: args["open_duration"].as_f64().unwrap_or(1.5) as f32,
+            auto_close: args["auto_close"].as_bool().unwrap_or(true),
+            auto_close_delay: args["auto_close_delay"].as_f64().unwrap_or(3.0) as f32,
+            sound_open: args["sound_open"].as_str().map(|s| s.to_string()),
+            sound_close: args["sound_close"].as_str().map(|s| s.to_string()),
+            requires_key: args["requires_key"].as_str().map(|s| s.to_string()),
+        };
+
         let cmd = GenCommand::AddDoor(params);
         let response = self.bridge.send(cmd).await?;
         match response {
-            GenResponse::Modified { name } => {
-                Ok(format!("Door behavior added to '{}'", name))
-            }
+            GenResponse::Modified { name } => Ok(format!("Door behavior added to '{}'", name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
-            _ => Ok("Door added successfully".to_string()),
+            _ => Ok(format!("Door behavior added to '{}'", entity_id)),
         }
     }
 }
@@ -389,7 +446,7 @@ impl Tool for GenLinkEntitiesTool {
                     },
                     "target_action": {
                         "type": "string",
-                        "description": "Action: perform: 'toggle_state:is_open', 'play_animation:open', 'enable', 'disable', 'destroy'"
+                        "description": "Action to perform: 'toggle_state:is_open', 'play_animation:open', 'enable', 'disable', 'destroy'"
                     },
                     "condition": {
                         "type": "string",
@@ -403,15 +460,36 @@ impl Tool for GenLinkEntitiesTool {
 
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
-        let params = LinkEntitiesParams::from_json(args)?;
+
+        let source_id = args["source_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("source_id is required"))?
+            .to_string();
+        let target_id = args["target_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("target_id is required"))?
+            .to_string();
+
+        let params = interaction::LinkEntitiesParams {
+            source_id: source_id.clone(),
+            source_event: args["source_event"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("source_event is required"))?
+                .to_string(),
+            target_id: target_id.clone(),
+            target_action: args["target_action"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("target_action is required"))?
+                .to_string(),
+            condition: args["condition"].as_str().map(|s| s.to_string()),
+        };
+
         let cmd = GenCommand::LinkEntities(params);
         let response = self.bridge.send(cmd).await?;
         match response {
-            GenResponse::EntitiesLinked { source, target } => {
-                Ok(format!("Linked '{}' -> '{}' (event: {})", source, target, params.source_event))
-            }
+            GenResponse::Modified { name } => Ok(format!("Linked '{}' -> '{}'", source_id, name)),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
-            _ => Ok("Entities linked successfully".to_string()),
+            _ => Ok(format!("Linked '{}' -> '{}'", source_id, target_id)),
         }
     }
 }

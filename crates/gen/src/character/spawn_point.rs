@@ -102,90 +102,100 @@ pub fn get_default_spawn_position(query: Query<&Transform, With<SpawnPoint>>) ->
 
 /// System to enforce single default spawn point.
 /// When a new default spawn point is added (or changed), unset others.
-/// Note: This is a bit tricky with just queries.
-/// We'll just ensure that if multiple are default, we pick one, or we can't easily "fix" it reactively without events.
-/// But for now, we'll rely on the tool usage or a reactive system.
-/// A better approach for the tool is to handle it logic-side, but here we can do a check.
-pub fn enforce_single_default_system(
-    mut query: Query<(Entity, &mut SpawnPoint), Changed<SpawnPoint>>,
-    mut all_query: Query<(Entity, &mut SpawnPoint), Without<Changed<SpawnPoint>>>,
-) {
-    for (changed_entity, spawn_point) in query.iter_mut() {
-        if spawn_point.is_default {
-            // Unset is_default for all other spawn points
-            for (entity, mut other_sp) in all_query.iter_mut() {
-                if entity != changed_entity && other_sp.is_default {
-                    other_sp.is_default = false;
-                }
+/// Collects changed default entity first, then iterates all spawn points to unset others.
+pub fn enforce_single_default_system(mut query: Query<(Entity, &mut SpawnPoint)>) {
+    // Find entity that was most recently set as default (heuristic: first one found)
+    let mut default_entity: Option<Entity> = None;
+    for (entity, sp) in query.iter() {
+        if sp.is_default {
+            if default_entity.is_some() {
+                // Multiple defaults found — we'll fix this below
+                break;
+            }
+            default_entity = Some(entity);
+        }
+    }
+
+    // If we have a default entity, ensure no others are also default
+    if let Some(keep_entity) = default_entity {
+        for (entity, mut sp) in query.iter_mut() {
+            if entity != keep_entity && sp.is_default {
+                sp.is_default = false;
             }
         }
     }
 }
 
 /// System to visualize spawn points in debug mode (gizmos).
-pub fn debug_spawn_point_system(
-    query: Query<(&Transform, &SpawnPoint)>,
-    mut gizmos: Gizmos,
-) {
+pub fn debug_spawn_point_system(query: Query<(&Transform, &SpawnPoint)>, mut gizmos: Gizmos) {
     for (transform, sp) in query.iter() {
-        let color = if sp.is_default { Color::GREEN } else { Color::YELLOW };
-        
+        let color = if sp.is_default {
+            Color::srgb(0.0, 1.0, 0.0)
+        } else {
+            Color::srgb(1.0, 1.0, 0.0)
+        };
+
+        // Rotation to orient circle in the XZ plane (normal pointing up along Y)
+        let flat_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::Y);
+
         // Cylinder base
         gizmos.circle(
-            transform.translation,
-            Dir3::Y,
+            Isometry3d::new(transform.translation, flat_rotation),
             1.0, // radius
             color,
         );
-        
+
         // Cylinder top
         gizmos.circle(
-            transform.translation + Vec3::new(0.0, 2.0, 0.0),
-            Dir3::Y,
+            Isometry3d::new(
+                transform.translation + Vec3::new(0.0, 2.0, 0.0),
+                flat_rotation,
+            ),
             1.0, // radius
             color,
         );
-        
+
         // Vertical lines
         gizmos.line(
             transform.translation + Vec3::new(1.0, 0.0, 0.0),
             transform.translation + Vec3::new(1.0, 2.0, 0.0),
             color,
         );
-         gizmos.line(
+        gizmos.line(
             transform.translation + Vec3::new(-1.0, 0.0, 0.0),
             transform.translation + Vec3::new(-1.0, 2.0, 0.0),
             color,
         );
-         gizmos.line(
+        gizmos.line(
             transform.translation + Vec3::new(0.0, 0.0, 1.0),
             transform.translation + Vec3::new(0.0, 2.0, 1.0),
             color,
         );
-         gizmos.line(
+        gizmos.line(
             transform.translation + Vec3::new(0.0, 0.0, -1.0),
             transform.translation + Vec3::new(0.0, 2.0, -1.0),
             color,
         );
-        
+
         // Forward arrow
-        let forward = transform.forward().xz().normalize_or_zero();
+        let forward = transform.forward().as_vec3().xz().normalize_or_zero();
         gizmos.arrow(
             transform.translation + Vec3::new(0.0, 1.0, 0.0),
-            transform.translation + Vec3::new(0.0, 1.0, 0.0) + Vec3::new(forward.x, 0.0, forward.y) * 1.5,
+            transform.translation
+                + Vec3::new(0.0, 1.0, 0.0)
+                + Vec3::new(forward.x, 0.0, forward.y) * 1.5,
             color,
         );
     }
 }
 
-
 /// System to respawn the player when below the kill plane.
 pub fn respawn_player_system(
     kill_plane: Res<KillPlane>,
-    mut player_query: Query<(&mut Transform, &mut PlayerVelocity), With<Player>>,
+    mut player_query: Query<&mut Transform, With<Player>>,
     spawn_query: Query<(&Transform, &SpawnPoint), (With<SpawnPoint>, Without<Player>)>,
 ) {
-    for (mut transform, mut velocity) in player_query.iter_mut() {
+    for mut transform in player_query.iter_mut() {
         if transform.translation.y < kill_plane.y_level {
             // Find default spawn point or use fallback
             let spawn_pos = spawn_query
@@ -197,23 +207,25 @@ pub fn respawn_player_system(
 
             // Teleport player
             transform.translation = spawn_pos;
-            // velocity.linear = Vec3::ZERO; // Avian/Tnua handles velocity differently
-            // We need to reset velocity on the RigidBody or Controller? 
-            // For now just moving transform might be enough if physics syncs, 
-            // but ideally we should reset LinearVelocity component if using Avian.
         }
     }
 }
 
 // Import from player module
-use super::player::{Player, PlayerVelocity};
+use super::player::Player;
 
 /// Plugin for spawn point systems.
 pub struct SpawnPointPlugin;
 
 impl Plugin for SpawnPointPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(KillPlane::default())
-            .add_systems(Update, (respawn_player_system, enforce_single_default_system, debug_spawn_point_system));
+        app.insert_resource(KillPlane::default()).add_systems(
+            Update,
+            (
+                respawn_player_system,
+                enforce_single_default_system,
+                debug_spawn_point_system,
+            ),
+        );
     }
 }
