@@ -721,3 +721,42 @@ fn emitter_sound_type_name(sound: &EmitterSound) -> String {
         EmitterSound::Custom { .. } => "custom".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_emitter_sound_type_name() {
+        assert_eq!(
+            emitter_sound_type_name(&EmitterSound::Water { turbulence: 0.5 }),
+            "water"
+        );
+        assert_eq!(
+            emitter_sound_type_name(&EmitterSound::Fire {
+                intensity: 0.5,
+                crackle: 0.3
+            }),
+            "fire"
+        );
+        assert_eq!(
+            emitter_sound_type_name(&EmitterSound::Hum {
+                frequency: 120.0,
+                warmth: 0.5
+            }),
+            "hum"
+        );
+        assert_eq!(
+            emitter_sound_type_name(&EmitterSound::Wind { pitch: 400.0 }),
+            "wind"
+        );
+        assert_eq!(
+            emitter_sound_type_name(&EmitterSound::Custom {
+                waveform: WaveformType::Sine,
+                filter_cutoff: 1000.0,
+                filter_type: FilterType::Lowpass,
+            }),
+            "custom"
+        );
+    }
+}

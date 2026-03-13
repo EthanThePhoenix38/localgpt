@@ -19,9 +19,10 @@ pub struct Npc {
 pub struct NpcNameplate;
 
 /// NPC behavior state machine.
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Default)]
 pub enum NpcBehavior {
     /// Stand still, face nearby player.
+    #[default]
     Idle,
     /// Move through patrol points in sequence.
     Patrol {
@@ -38,12 +39,6 @@ pub enum NpcBehavior {
         speed: f32,
         wait_timer: f32,
     },
-}
-
-impl Default for NpcBehavior {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// Parameters for spawning an NPC.
@@ -301,6 +296,27 @@ pub fn nameplate_billboard_system(
 
 // Import from player module
 use super::player::Player;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spawn_npc_params_default() {
+        let params = SpawnNpcParams::default();
+        assert_eq!(params.name, "NPC");
+        assert_eq!(params.model, "default_humanoid");
+        assert_eq!(params.behavior, "idle");
+        assert_eq!(params.patrol_speed, 3.0);
+        assert!(params.patrol_points.is_empty());
+        assert!(params.dialogue_id.is_none());
+    }
+
+    #[test]
+    fn test_npc_behavior_default() {
+        assert!(matches!(NpcBehavior::default(), NpcBehavior::Idle));
+    }
+}
 
 /// Plugin for NPC systems.
 pub struct NpcPlugin;

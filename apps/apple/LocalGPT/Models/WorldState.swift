@@ -1,5 +1,4 @@
 import Foundation
-import RealityKit
 
 /// Complete world state for save/load
 struct WorldState: Codable {
@@ -79,10 +78,6 @@ enum AmbienceType: String, Codable, CaseIterable {
     case night
     case city
 }
-
-// MARK: - SIMD3 Codable Extensions
-// Note: SIMD3<Scalar> already conforms to Codable in Swift standard library
-// No additional extension needed
 
 // MARK: - World Persistence
 

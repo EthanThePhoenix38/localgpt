@@ -10,7 +10,7 @@ struct MessageBubble: View {
             Text(message.text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(message.isUser ? Color.teal : Color(.systemGray5))
+                .background(message.isUser ? Color.teal : Color.secondary.opacity(0.2))
                 .foregroundColor(message.isUser ? .white : .primary)
                 .cornerRadius(18)
                 .textSelection(.enabled)

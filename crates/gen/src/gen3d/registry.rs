@@ -177,6 +177,124 @@ impl NameRegistry {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_entity(bits: u64) -> Entity {
+        Entity::from_bits(bits)
+    }
+
+    #[test]
+    fn test_next_entity_id_starts_at_1() {
+        let mut alloc = NextEntityId::default();
+        let id = alloc.alloc();
+        assert_eq!(id.0, 1);
+        let id2 = alloc.alloc();
+        assert_eq!(id2.0, 2);
+    }
+
+    #[test]
+    fn test_next_entity_id_ensure_at_least() {
+        let mut alloc = NextEntityId::default();
+        alloc.ensure_at_least(100);
+        let id = alloc.alloc();
+        assert_eq!(id.0, 100);
+
+        // Should not go backwards
+        alloc.ensure_at_least(50);
+        let id2 = alloc.alloc();
+        assert_eq!(id2.0, 101);
+    }
+
+    #[test]
+    fn test_registry_insert_and_lookup() {
+        let mut reg = NameRegistry::default();
+        let entity = dummy_entity(1);
+        reg.insert("box".to_string(), entity);
+
+        assert_eq!(reg.get_entity("box"), Some(entity));
+        assert_eq!(reg.get_name(entity), Some("box"));
+        assert!(reg.contains_name("box"));
+        assert!(!reg.contains_name("sphere"));
+        assert_eq!(reg.len(), 1);
+    }
+
+    #[test]
+    fn test_registry_insert_with_id() {
+        let mut reg = NameRegistry::default();
+        let entity = dummy_entity(1);
+        let wid = wt::EntityId(42);
+        reg.insert_with_id("sphere".to_string(), entity, wid);
+
+        assert_eq!(reg.get_entity("sphere"), Some(entity));
+        assert_eq!(reg.get_entity_by_id(&wid), Some(entity));
+        assert_eq!(reg.get_id(entity), Some(wid));
+    }
+
+    #[test]
+    fn test_registry_remove_by_name() {
+        let mut reg = NameRegistry::default();
+        let entity = dummy_entity(1);
+        let wid = wt::EntityId(1);
+        reg.insert_with_id("cube".to_string(), entity, wid);
+
+        let removed = reg.remove_by_name("cube");
+        assert_eq!(removed, Some(entity));
+        assert!(reg.get_entity("cube").is_none());
+        assert!(reg.get_entity_by_id(&wid).is_none());
+        assert!(reg.is_empty());
+    }
+
+    #[test]
+    fn test_registry_remove_by_entity() {
+        let mut reg = NameRegistry::default();
+        let entity = dummy_entity(2);
+        let wid = wt::EntityId(5);
+        reg.insert_with_id("cone".to_string(), entity, wid);
+
+        let removed_name = reg.remove_by_entity(entity);
+        assert_eq!(removed_name, Some("cone".to_string()));
+        assert!(reg.get_entity("cone").is_none());
+        assert!(reg.get_entity_by_id(&wid).is_none());
+    }
+
+    #[test]
+    fn test_gen_entity_type_as_str() {
+        assert_eq!(GenEntityType::Primitive.as_str(), "primitive");
+        assert_eq!(GenEntityType::Light.as_str(), "light");
+        assert_eq!(GenEntityType::AudioEmitter.as_str(), "audio_emitter");
+    }
+
+    #[test]
+    fn test_dirty_tracker() {
+        let mut tracker = DirtyTracker::default();
+        assert!(!tracker.has_changes());
+        assert_eq!(tracker.dirty_count(), 0);
+
+        let id = wt::EntityId(1);
+        tracker.mark_dirty(id);
+        assert!(tracker.has_changes());
+        assert!(tracker.is_dirty(&id));
+        assert_eq!(tracker.dirty_count(), 1);
+
+        tracker.clear();
+        assert!(!tracker.has_changes());
+        assert!(!tracker.is_dirty(&id));
+    }
+
+    #[test]
+    fn test_dirty_tracker_world_meta() {
+        let mut tracker = DirtyTracker::default();
+        tracker.world_meta_dirty = true;
+        assert!(tracker.has_changes());
+
+        tracker.clear();
+        assert!(!tracker.has_changes());
+        assert!(!tracker.world_meta_dirty);
+    }
+}
+
 /// Tracks which entities have been modified since the last save.
 ///
 /// Enables incremental saves for large worlds — only dirty entities

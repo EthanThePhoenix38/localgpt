@@ -443,6 +443,10 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 0.3.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SystemConfiguration,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = app.localgpt;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -491,6 +495,10 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 0.3.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SystemConfiguration,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = app.localgpt;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

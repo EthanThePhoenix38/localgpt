@@ -214,3 +214,39 @@ impl Plugin for TooltipPlugin {
 
 // Import marker for player (from character module)
 use crate::character::Player;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tooltip_params_default() {
+        let params = TooltipParams::default();
+        assert_eq!(params.trigger, TooltipTrigger::Proximity);
+        assert_eq!(params.style, TooltipStyle::Floating);
+        assert_eq!(params.range, 3.0);
+        assert_eq!(params.color, "#ffffff");
+        assert!(params.duration.is_none());
+    }
+
+    #[test]
+    fn test_tooltip_trigger_variants() {
+        assert_eq!(TooltipTrigger::default(), TooltipTrigger::Proximity);
+        let look = TooltipTrigger::LookAt;
+        assert_ne!(look, TooltipTrigger::Proximity);
+    }
+
+    #[test]
+    fn test_tooltip_style_variants() {
+        assert_eq!(TooltipStyle::default(), TooltipStyle::Floating);
+        let _center = TooltipStyle::ScreenCenter;
+        let _bottom = TooltipStyle::ScreenBottom;
+    }
+
+    #[test]
+    fn test_active_tooltips_default() {
+        let active = ActiveTooltips::default();
+        assert!(active.active_center.is_none());
+        assert!(active.active_bottom.is_none());
+    }
+}

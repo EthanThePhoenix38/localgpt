@@ -44,7 +44,20 @@ fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<Box<d
     tools.extend(create_memory_write_tools(workspace));
 
     // Gen tools: all scene manipulation tools
-    tools.extend(crate::gen3d::tools::create_gen_tools(bridge));
+    tools.extend(crate::gen3d::tools::create_gen_tools(bridge.clone()));
+
+    // P1/P2/P3/P4/P5 tools: character + interaction + terrain + UI + physics
+    tools.extend(crate::mcp::avatar_tools::create_character_tools(
+        bridge.clone(),
+    ));
+    tools.extend(crate::mcp::interaction_tools::create_interaction_tools(
+        bridge.clone(),
+    ));
+    tools.extend(crate::mcp::terrain_tools::create_terrain_tools(
+        bridge.clone(),
+    ));
+    tools.extend(crate::mcp::ui_tools::create_ui_tools(bridge.clone()));
+    tools.extend(crate::mcp::physics_tools::create_physics_tools(bridge));
 
     Ok(tools)
 }

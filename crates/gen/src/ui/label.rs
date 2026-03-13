@@ -126,6 +126,21 @@ pub fn label_follow_system(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_label_params_default() {
+        let params = LabelParams::default();
+        assert_eq!(params.color, "#ffffff");
+        assert_eq!(params.background_color, "#00000088");
+        assert_eq!(params.offset_y, 0.5);
+        assert_eq!(params.font_size, 16.0);
+        assert_eq!(params.visible_distance, 15.0);
+    }
+}
+
 /// Plugin for label systems.
 pub struct LabelPlugin;
 

@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import Foundation
 import AVFoundation
 import Combine
@@ -185,3 +186,4 @@ extension WorldAudioService {
         return nil
     }
 }
+#endif

@@ -261,6 +261,85 @@ pub fn typewriter_system(time: Res<Time>, mut dialogue_state: ResMut<DialogueSta
 use super::npc::Npc;
 use super::player::Player;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dialogue_tree_from_params() {
+        let params = SetDialogueParams {
+            npc_id: "merchant".to_string(),
+            nodes: vec![
+                DialogueNodeDef {
+                    id: "start".to_string(),
+                    text: "Hello!".to_string(),
+                    speaker: None,
+                    choices: vec![
+                        DialogueChoiceDef {
+                            text: "Buy".to_string(),
+                            next_node_id: Some("shop".to_string()),
+                        },
+                        DialogueChoiceDef {
+                            text: "Goodbye".to_string(),
+                            next_node_id: None,
+                        },
+                    ],
+                },
+                DialogueNodeDef {
+                    id: "shop".to_string(),
+                    text: "What would you like?".to_string(),
+                    speaker: Some("Merchant".to_string()),
+                    choices: vec![],
+                },
+            ],
+            start_node: "start".to_string(),
+            trigger: "proximity".to_string(),
+            trigger_radius: 5.0,
+        };
+
+        let tree = DialogueTree::from(params);
+        assert_eq!(tree.start_node, "start");
+        assert_eq!(tree.trigger, DialogueTrigger::Proximity);
+        assert_eq!(tree.trigger_radius, 5.0);
+        assert_eq!(tree.nodes.len(), 2);
+
+        let start = tree.get_start_node().unwrap();
+        assert_eq!(start.text, "Hello!");
+        assert_eq!(start.choices.len(), 2);
+        assert_eq!(start.choices[0].text, "Buy");
+        assert_eq!(start.choices[0].next_node_id, Some("shop".to_string()));
+
+        let shop = tree.get_node("shop").unwrap();
+        assert_eq!(shop.speaker, Some("Merchant".to_string()));
+    }
+
+    #[test]
+    fn test_dialogue_trigger_default() {
+        assert_eq!(DialogueTrigger::default(), DialogueTrigger::Click);
+    }
+
+    #[test]
+    fn test_dialogue_state_default() {
+        let state = DialogueState::default();
+        assert!(state.active_npc.is_none());
+        assert!(state.current_node.is_none());
+        assert!(!state.is_typing);
+    }
+
+    #[test]
+    fn test_dialogue_trigger_parse() {
+        // Click is default for unknown strings
+        let tree = DialogueTree::from(SetDialogueParams {
+            npc_id: "npc".to_string(),
+            nodes: vec![],
+            start_node: "start".to_string(),
+            trigger: "unknown".to_string(),
+            trigger_radius: 3.0,
+        });
+        assert_eq!(tree.trigger, DialogueTrigger::Click);
+    }
+}
+
 /// Plugin for dialogue systems.
 pub struct DialoguePlugin;
 

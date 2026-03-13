@@ -121,18 +121,24 @@ impl Default for ForceField {
 use crate::character::Player;
 
 /// System to apply force fields.
+///
+/// Without the `physics` feature (avian3d), forces are applied directly as
+/// translation offsets scaled by delta time. With avian3d, this would use
+/// `ExternalForce` / `ExternalImpulse` components instead.
 pub fn force_field_system(
-    _time: Res<Time>,
+    time: Res<Time>,
     force_fields: Query<(Entity, &Transform, &ForceField)>,
-    mut body_query: Query<(Entity, &Transform), Without<ForceField>>,
+    mut body_query: Query<(Entity, &mut Transform), Without<ForceField>>,
     player_query: Query<Entity, With<Player>>,
 ) {
+    let dt = time.delta_secs();
+
     for (_field_entity, field_transform, field) in force_fields.iter() {
         if !field.continuous {
             continue;
         }
 
-        for (body_entity, body_transform) in body_query.iter_mut() {
+        for (body_entity, mut body_transform) in body_query.iter_mut() {
             // Skip player if not affecting player
             if !field.affects_player && player_query.contains(body_entity) {
                 continue;
@@ -168,18 +174,14 @@ pub fn force_field_system(
                     Vec3::new(-to_field.z, 0.0, to_field.x).normalize_or_zero()
                 }
                 ForceType::Impulse => {
-                    // One-time impulse in deterministic direction based on entity id
-                    // Use entity's bits as seed for deterministic pseudo-random direction
-                    let idx = body_entity.to_bits();
-                    let seed = (idx.wrapping_mul(2654435761) as f32) / 4294967295.0;
-                    Vec3::new((seed - 0.5) * 2.0, 0.5, ((seed * 1.618) % 1.0 - 0.5) * 2.0)
-                        .normalize_or_zero()
+                    // One-time impulse direction (handled outside continuous check)
+                    continue;
                 }
             };
 
-            // Apply force (would use Avian's ExternalForce in real implementation)
-            let _force = force_direction * force_magnitude;
-            // In real implementation: external_force.force = force;
+            // Apply force as translation offset (simple integration without physics engine)
+            let force = force_direction * force_magnitude;
+            body_transform.translation += force * dt;
         }
     }
 }
@@ -206,5 +208,30 @@ mod tests {
             ..default()
         };
         assert_eq!(params.force_type, ForceType::Vortex);
+    }
+
+    #[test]
+    fn test_force_params_default() {
+        let params = ForceParams::default();
+        assert_eq!(params.force_type, ForceType::Directional);
+        assert!((params.strength - 10.0).abs() < f32::EPSILON);
+        assert!((params.radius - 5.0).abs() < f32::EPSILON);
+        assert!(params.direction.is_none());
+        assert!(params.affects_player);
+        assert!(params.continuous);
+    }
+
+    #[test]
+    fn test_force_field_default() {
+        let field = ForceField::default();
+        assert_eq!(field.force_type, ForceType::Directional);
+        assert_eq!(field.direction, Vec3::Z);
+        assert!(field.affects_player);
+        assert!(field.continuous);
+    }
+
+    #[test]
+    fn test_falloff_type_default_is_none() {
+        assert!(matches!(FalloffType::default(), FalloffType::None));
     }
 }

@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import SwiftUI
 import RealityKit
 
@@ -158,3 +159,4 @@ struct WorldChatView: View {
 #Preview {
     WorldChatView()
 }
+#endif

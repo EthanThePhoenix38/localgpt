@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import Foundation
 import RealityKit
 import Combine
@@ -742,3 +743,4 @@ class WorldViewModel: ObservableObject {
         updateTimer?.invalidate()
     }
 }
+#endif

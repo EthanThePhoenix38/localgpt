@@ -5,9 +5,6 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-// Import player from character module
-use crate::character::Player;
-
 /// Gravity presets.
 pub const GRAVITY_EARTH: f32 = 9.81;
 pub const GRAVITY_MOON: f32 = 1.62;
@@ -119,23 +116,46 @@ pub fn gravity_transition_system(time: Res<Time>, mut global: ResMut<GlobalGravi
     }
 }
 
-/// System to apply gravity zones.
+/// System to apply gravity zones to entities within their radius.
+///
+/// Adds/updates `GravityOverride` components on entities inside zones
+/// and removes them when entities leave.
 pub fn gravity_zone_system(
-    player_query: Query<&Transform, With<Player>>,
+    mut commands: Commands,
     zone_query: Query<&GravityZone>,
-    _body_query: Query<(Entity, &Transform, Option<&mut GravityOverride>)>,
-    _global: Res<GlobalGravity>,
+    mut body_query: Query<(Entity, &Transform, Option<&GravityOverride>)>,
+    global: Res<GlobalGravity>,
 ) {
-    let Ok(player_transform) = player_query.single() else {
-        return;
-    };
+    for (entity, transform, existing_override) in body_query.iter_mut() {
+        let mut in_zone = false;
+        let mut zone_gravity = Vec3::ZERO;
 
-    for zone in zone_query.iter() {
-        let distance = player_transform.translation.distance(zone.center);
+        for zone in zone_query.iter() {
+            let distance = transform.translation.distance(zone.center);
+            if distance <= zone.radius {
+                in_zone = true;
+                zone_gravity = zone.gravity;
+                break;
+            }
+        }
 
-        if distance <= zone.radius {
-            // Player is in zone - apply zone gravity
-            // Would add GravityOverride component to player
+        if in_zone {
+            // Entity is in a gravity zone — apply override
+            let global_mag = global.gravity.length();
+            let strength_scale = if global_mag > 0.001 {
+                zone_gravity.length() / global_mag
+            } else {
+                1.0
+            };
+            let direction = zone_gravity.normalize_or_zero();
+
+            commands.entity(entity).insert(GravityOverride {
+                direction,
+                strength_scale,
+            });
+        } else if existing_override.is_some() {
+            // Entity left all zones — remove override
+            commands.entity(entity).remove::<GravityOverride>();
         }
     }
 }
@@ -168,5 +188,33 @@ mod tests {
     fn test_global_gravity_default() {
         let gravity = GlobalGravity::default();
         assert!((gravity.gravity.y - (-GRAVITY_EARTH)).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_gravity_params_default() {
+        let params = GravityParams::default();
+        assert!(params.entity_id.is_none());
+        assert_eq!(params.direction, Vec3::new(0.0, -1.0, 0.0));
+        assert!((params.strength - 9.81).abs() < 0.01);
+        assert!(params.zone_position.is_none());
+        assert!(params.zone_radius.is_none());
+        assert!((params.transition_duration - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_gravity_presets() {
+        assert!((GRAVITY_EARTH - 9.81).abs() < 0.01);
+        assert!((GRAVITY_MOON - 1.62).abs() < 0.01);
+        assert!((GRAVITY_MARS - 3.72).abs() < 0.01);
+        assert!((GRAVITY_JUPITER - 24.79).abs() < 0.01);
+        assert!((GRAVITY_ZERO).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_global_gravity_transition_starts_complete() {
+        let gravity = GlobalGravity::default();
+        // Transition progress starts at 1.0 (complete)
+        assert!((gravity.transition_progress - 1.0).abs() < f32::EPSILON);
+        assert!((gravity.transition_duration).abs() < f32::EPSILON);
     }
 }

@@ -200,3 +200,42 @@ impl Plugin for HudPlugin {
             .add_systems(Update, (hud_timer_system, hud_sync_system));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hud_timer_format() {
+        let timer = HudTimer {
+            value: 125.0,
+            is_countdown: true,
+            running: true,
+        };
+        assert_eq!(timer.formatted(), "02:05");
+    }
+
+    #[test]
+    fn test_hud_timer_zero() {
+        let timer = HudTimer {
+            value: 0.0,
+            is_countdown: true,
+            running: false,
+        };
+        assert_eq!(timer.formatted(), "00:00");
+    }
+
+    #[test]
+    fn test_hud_health_default() {
+        let health = HudHealth::default();
+        assert_eq!(health.current, 100.0);
+        assert_eq!(health.max, 100.0);
+    }
+
+    #[test]
+    fn test_hud_params_default() {
+        let params = HudParams::default();
+        assert_eq!(params.font_size, 18.0);
+        assert_eq!(params.initial_value, "0");
+    }
+}

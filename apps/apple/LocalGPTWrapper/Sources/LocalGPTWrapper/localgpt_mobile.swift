@@ -567,6 +567,11 @@ public protocol LocalGptClientProtocol: AnyObject, Sendable {
     func getHeartbeat() throws  -> String
     
     /**
+     * Get the LocalGPT.md content (security policy / standing instructions).
+     */
+    func getLocalgptMd() throws  -> String
+    
+    /**
      * Get the MEMORY.md content.
      */
     func getMemory() throws  -> String
@@ -582,15 +587,44 @@ public protocol LocalGptClientProtocol: AnyObject, Sendable {
     func getSoul() throws  -> String
     
     /**
+     * Read an arbitrary workspace file by name.
+     *
+     * Only the known editable files (MEMORY.md, SOUL.md, HEARTBEAT.md,
+     * LocalGPT.md) are allowed. Returns `MobileError::Memory` for
+     * unknown file names to prevent path-traversal.
+     */
+    func getWorkspaceFile(filename: String) throws  -> String
+    
+    /**
      * Check if this is a brand new workspace (first run).
      * Mobile apps can use this to display a custom welcome message.
      */
     func isBrandNew()  -> Bool
     
     /**
+     * Check whether a workspace file is security-sensitive.
+     *
+     * Security-sensitive files (like LocalGPT.md) affect the agent's
+     * security policy and require user confirmation before editing.
+     * The mobile UI should display a warning dialog before allowing
+     * edits to these files.
+     */
+    func isWorkspaceFileSecuritySensitive(filename: String)  -> Bool
+    
+    /**
      * List available provider names.
      */
     func listProviders()  -> [String]
+    
+    /**
+     * List the editable workspace files with their current content.
+     *
+     * Returns `WorkspaceFile` entries for MEMORY.md, SOUL.md,
+     * HEARTBEAT.md, and LocalGPT.md. Files that do not exist yet are
+     * returned with an empty `content` string. Security-sensitive files
+     * (like LocalGPT.md) are flagged with `is_security_sensitive = true`.
+     */
+    func listWorkspaceFiles()  -> [WorkspaceFile]
     
     /**
      * Read a memory file by name (e.g. "MEMORY.md").
@@ -618,6 +652,20 @@ public protocol LocalGptClientProtocol: AnyObject, Sendable {
     func setHeartbeat(content: String) throws 
     
     /**
+     * Write new LocalGPT.md content and re-sign the policy.
+     *
+     * The policy file is HMAC-signed with a device-local key so that the
+     * agent cannot tamper with it. After writing, this method automatically
+     * re-signs the file and updates `.localgpt_manifest.json`.
+     */
+    func setLocalgptMd(content: String) throws 
+    
+    /**
+     * Write new MEMORY.md content.
+     */
+    func setMemory(content: String) throws 
+    
+    /**
      * Switch to a different model.
      */
     func setModel(model: String) throws 
@@ -626,6 +674,16 @@ public protocol LocalGptClientProtocol: AnyObject, Sendable {
      * Write new SOUL.md content.
      */
     func setSoul(content: String) throws 
+    
+    /**
+     * Write an arbitrary workspace file by name.
+     *
+     * Only the known editable files (MEMORY.md, SOUL.md, HEARTBEAT.md,
+     * LocalGPT.md) are allowed. For LocalGPT.md the policy is
+     * automatically re-signed. The caller (mobile UI) must confirm
+     * security-sensitive file edits before calling this method.
+     */
+    func setWorkspaceFile(filename: String, content: String) throws 
     
 }
 /**
@@ -758,6 +816,17 @@ open func getHeartbeat()throws  -> String  {
 }
     
     /**
+     * Get the LocalGPT.md content (security policy / standing instructions).
+     */
+open func getLocalgptMd()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
+    uniffi_localgpt_mobile_fn_method_localgptclient_get_localgpt_md(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
      * Get the MEMORY.md content.
      */
 open func getMemory()throws  -> String  {
@@ -791,6 +860,22 @@ open func getSoul()throws  -> String  {
 }
     
     /**
+     * Read an arbitrary workspace file by name.
+     *
+     * Only the known editable files (MEMORY.md, SOUL.md, HEARTBEAT.md,
+     * LocalGPT.md) are allowed. Returns `MobileError::Memory` for
+     * unknown file names to prevent path-traversal.
+     */
+open func getWorkspaceFile(filename: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMobileError_lift) {
+    uniffi_localgpt_mobile_fn_method_localgptclient_get_workspace_file(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(filename),$0
+    )
+})
+}
+    
+    /**
      * Check if this is a brand new workspace (first run).
      * Mobile apps can use this to display a custom welcome message.
      */
@@ -803,11 +888,44 @@ open func isBrandNew() -> Bool  {
 }
     
     /**
+     * Check whether a workspace file is security-sensitive.
+     *
+     * Security-sensitive files (like LocalGPT.md) affect the agent's
+     * security policy and require user confirmation before editing.
+     * The mobile UI should display a warning dialog before allowing
+     * edits to these files.
+     */
+open func isWorkspaceFileSecuritySensitive(filename: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_localgpt_mobile_fn_method_localgptclient_is_workspace_file_security_sensitive(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(filename),$0
+    )
+})
+}
+    
+    /**
      * List available provider names.
      */
 open func listProviders() -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_localgpt_mobile_fn_method_localgptclient_list_providers(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * List the editable workspace files with their current content.
+     *
+     * Returns `WorkspaceFile` entries for MEMORY.md, SOUL.md,
+     * HEARTBEAT.md, and LocalGPT.md. Files that do not exist yet are
+     * returned with an empty `content` string. Security-sensitive files
+     * (like LocalGPT.md) are flagged with `is_security_sensitive = true`.
+     */
+open func listWorkspaceFiles() -> [WorkspaceFile]  {
+    return try!  FfiConverterSequenceTypeWorkspaceFile.lift(try! rustCall() {
+    uniffi_localgpt_mobile_fn_method_localgptclient_list_workspace_files(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -871,6 +989,32 @@ open func setHeartbeat(content: String)throws   {try rustCallWithError(FfiConver
 }
     
     /**
+     * Write new LocalGPT.md content and re-sign the policy.
+     *
+     * The policy file is HMAC-signed with a device-local key so that the
+     * agent cannot tamper with it. After writing, this method automatically
+     * re-signs the file and updates `.localgpt_manifest.json`.
+     */
+open func setLocalgptMd(content: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
+    uniffi_localgpt_mobile_fn_method_localgptclient_set_localgpt_md(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(content),$0
+    )
+}
+}
+    
+    /**
+     * Write new MEMORY.md content.
+     */
+open func setMemory(content: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
+    uniffi_localgpt_mobile_fn_method_localgptclient_set_memory(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(content),$0
+    )
+}
+}
+    
+    /**
      * Switch to a different model.
      */
 open func setModel(model: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
@@ -887,6 +1031,23 @@ open func setModel(model: String)throws   {try rustCallWithError(FfiConverterTyp
 open func setSoul(content: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
     uniffi_localgpt_mobile_fn_method_localgptclient_set_soul(
             self.uniffiCloneHandle(),
+        FfiConverterString.lower(content),$0
+    )
+}
+}
+    
+    /**
+     * Write an arbitrary workspace file by name.
+     *
+     * Only the known editable files (MEMORY.md, SOUL.md, HEARTBEAT.md,
+     * LocalGPT.md) are allowed. For LocalGPT.md the policy is
+     * automatically re-signed. The caller (mobile UI) must confirm
+     * security-sensitive file edits before calling this method.
+     */
+open func setWorkspaceFile(filename: String, content: String)throws   {try rustCallWithError(FfiConverterTypeMobileError_lift) {
+    uniffi_localgpt_mobile_fn_method_localgptclient_set_workspace_file(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(filename),
         FfiConverterString.lower(content),$0
     )
 }
@@ -1062,6 +1223,85 @@ public func FfiConverterTypeSessionStatus_lower(_ value: SessionStatus) -> RustB
 }
 
 
+/**
+ * A workspace file entry for the editor.
+ */
+public struct WorkspaceFile: Equatable, Hashable {
+    /**
+     * File name (e.g. "MEMORY.md").
+     */
+    public var name: String
+    /**
+     * File content, or empty string if the file does not yet exist.
+     */
+    public var content: String
+    /**
+     * Whether this file is security-sensitive and requires confirmation before editing.
+     */
+    public var isSecuritySensitive: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * File name (e.g. "MEMORY.md").
+         */name: String, 
+        /**
+         * File content, or empty string if the file does not yet exist.
+         */content: String, 
+        /**
+         * Whether this file is security-sensitive and requires confirmation before editing.
+         */isSecuritySensitive: Bool) {
+        self.name = name
+        self.content = content
+        self.isSecuritySensitive = isSecuritySensitive
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WorkspaceFile: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWorkspaceFile: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WorkspaceFile {
+        return
+            try WorkspaceFile(
+                name: FfiConverterString.read(from: &buf), 
+                content: FfiConverterString.read(from: &buf), 
+                isSecuritySensitive: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WorkspaceFile, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.content, into: &buf)
+        FfiConverterBool.write(value.isSecuritySensitive, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceFile_lift(_ buf: RustBuffer) throws -> WorkspaceFile {
+    return try FfiConverterTypeWorkspaceFile.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceFile_lower(_ value: WorkspaceFile) -> RustBuffer {
+    return FfiConverterTypeWorkspaceFile.lower(value)
+}
+
+
 public enum MobileError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
     
@@ -1214,6 +1454,31 @@ fileprivate struct FfiConverterSequenceTypeSearchResult: FfiConverterRustBuffer 
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeWorkspaceFile: FfiConverterRustBuffer {
+    typealias SwiftType = [WorkspaceFile]
+
+    public static func write(_ value: [WorkspaceFile], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeWorkspaceFile.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [WorkspaceFile] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [WorkspaceFile]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeWorkspaceFile.read(from: &buf))
+        }
+        return seq
+    }
+}
 /**
  * Get the first-run welcome message text.
  * Mobile apps can display this when `is_brand_new()` returns true.
@@ -1258,6 +1523,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_get_heartbeat() != 30611) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_get_localgpt_md() != 28767) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_get_memory() != 44993) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -1267,10 +1535,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_get_soul() != 1522) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_get_workspace_file() != 25833) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_is_brand_new() != 50749) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_is_workspace_file_security_sensitive() != 5821) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_list_providers() != 61507) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_list_workspace_files() != 40376) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_memory_get() != 5686) {
@@ -1288,10 +1565,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_set_heartbeat() != 47503) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_set_localgpt_md() != 52483) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_set_memory() != 23855) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_set_model() != 47445) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_localgpt_mobile_checksum_method_localgptclient_set_soul() != 13659) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_localgpt_mobile_checksum_method_localgptclient_set_workspace_file() != 6608) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_localgpt_mobile_checksum_constructor_localgptclient_new() != 46122) {

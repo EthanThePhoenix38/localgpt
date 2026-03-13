@@ -354,6 +354,58 @@ pub fn player_movement_system(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spawn_player_params_default() {
+        let params = SpawnPlayerParams::default();
+        assert_eq!(params.position, [0.0, 1.0, 0.0]);
+        assert_eq!(params.walk_speed, 5.0);
+        assert_eq!(params.run_speed, 10.0);
+        assert_eq!(params.jump_force, 8.0);
+        assert_eq!(params.camera_mode, "third_person");
+        assert_eq!(params.camera_distance, 5.0);
+    }
+
+    #[test]
+    fn test_camera_mode_enum() {
+        let params = SpawnPlayerParams {
+            camera_mode: "first_person".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(params.camera_mode_enum(), CameraMode::FirstPerson);
+
+        let params2 = SpawnPlayerParams {
+            camera_mode: "firstperson".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(params2.camera_mode_enum(), CameraMode::FirstPerson);
+
+        let params3 = SpawnPlayerParams::default();
+        assert_eq!(params3.camera_mode_enum(), CameraMode::ThirdPerson);
+    }
+
+    #[test]
+    fn test_player_config_from_params() {
+        let params = SpawnPlayerParams {
+            walk_speed: 7.0,
+            run_speed: 14.0,
+            jump_force: 10.0,
+            camera_mode: "first_person".to_string(),
+            camera_distance: 3.0,
+            ..Default::default()
+        };
+        let config = params.to_config();
+        assert_eq!(config.walk_speed, 7.0);
+        assert_eq!(config.run_speed, 14.0);
+        assert_eq!(config.jump_force, 10.0);
+        assert_eq!(config.camera_mode, CameraMode::FirstPerson);
+        assert_eq!(config.camera_distance, 3.0);
+    }
+}
+
 /// Plugin for player systems.
 pub struct PlayerPlugin;
 

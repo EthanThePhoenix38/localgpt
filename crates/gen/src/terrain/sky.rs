@@ -189,10 +189,12 @@ impl SkyConfig {
         if let Some(int) = params.sun_intensity {
             self.sun_intensity = int;
         }
-        if let Some(color) = &params.ambient_color {
-            if let Some(rgb) = parse_hex_color_to_rgb(color) {
-                self.ambient_color = rgb;
-            }
+        if let Some(rgb) = params
+            .ambient_color
+            .as_deref()
+            .and_then(parse_hex_color_to_rgb)
+        {
+            self.ambient_color = rgb;
         }
         if let Some(int) = params.ambient_intensity {
             self.ambient_intensity = int;

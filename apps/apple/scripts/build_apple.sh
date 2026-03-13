@@ -16,12 +16,16 @@ LIB_NAME="lib$CRATE_NAME.a"
 # Targets (Apple Silicon Host)
 DEVICE_TARGET="aarch64-apple-ios"
 SIM_TARGET="aarch64-apple-ios-sim"
+MACOS_TARGET="aarch64-apple-darwin"
 
 echo "Building for iOS Device ($DEVICE_TARGET)..."
 cargo build -p localgpt-mobile-ffi --lib --target $DEVICE_TARGET $RELEASE_MODE
 
 echo "Building for iOS Simulator ($SIM_TARGET)..."
 cargo build -p localgpt-mobile-ffi --lib --target $SIM_TARGET $RELEASE_MODE
+
+echo "Building for macOS ($MACOS_TARGET)..."
+cargo build -p localgpt-mobile-ffi --lib --target $MACOS_TARGET $RELEASE_MODE
 
 # Output directories
 mkdir -p "$IOS_WRAPPER_DIR/Sources/LocalGPTWrapper/include"
@@ -58,6 +62,8 @@ xcodebuild -create-xcframework \
     -library "$TARGET_DIR/$DEVICE_TARGET/release/$LIB_NAME" \
     -headers "$IOS_WRAPPER_DIR/Sources/LocalGPTWrapper/include" \
     -library "$TARGET_DIR/$SIM_TARGET/release/$LIB_NAME" \
+    -headers "$IOS_WRAPPER_DIR/Sources/LocalGPTWrapper/include" \
+    -library "$TARGET_DIR/$MACOS_TARGET/release/$LIB_NAME" \
     -headers "$IOS_WRAPPER_DIR/Sources/LocalGPTWrapper/include" \
     -output "$IOS_WRAPPER_DIR/LocalGPTCore.xcframework"
 

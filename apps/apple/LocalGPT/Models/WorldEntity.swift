@@ -1,5 +1,4 @@
 import Foundation
-import RealityKit
 import SwiftUI
 
 /// Shape types for primitives
@@ -90,8 +89,11 @@ struct ColorData: Codable {
 
     init(from color: Color) {
         // SwiftUI Color to RGB components
-        // Note: This is a simplified conversion
+        #if os(iOS) || os(visionOS)
         let uiColor = UIColor(color)
+        #else
+        let uiColor = NSColor(color)
+        #endif
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
@@ -103,12 +105,22 @@ struct ColorData: Codable {
         self.a = Float(alpha)
     }
 
+    #if os(iOS) || os(visionOS)
     func toUIColor() -> UIColor {
         UIColor(red: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: CGFloat(a))
     }
+    #else
+    func toNSColor() -> NSColor {
+        NSColor(red: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: CGFloat(a))
+    }
+    #endif
 
     func toColor() -> Color {
+        #if os(iOS) || os(visionOS)
         Color(uiColor: toUIColor())
+        #else
+        Color(nsColor: toNSColor())
+        #endif
     }
 }
 

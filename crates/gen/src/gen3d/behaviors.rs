@@ -503,3 +503,163 @@ fn behavior_description(def: &BehaviorDef) -> String {
 // ---------------------------------------------------------------------------
 // Serialization helpers (for world save/load)
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_behavior_state_next_id() {
+        let mut state = BehaviorState::default();
+        assert!(!state.paused);
+        assert_eq!(state.next_id(), "b1");
+        assert_eq!(state.next_id(), "b2");
+        assert_eq!(state.next_id(), "b3");
+    }
+
+    #[test]
+    fn test_behavior_type_name() {
+        assert_eq!(
+            behavior_type_name(&BehaviorDef::Spin {
+                axis: [0.0, 1.0, 0.0],
+                speed: 90.0
+            }),
+            "spin"
+        );
+        assert_eq!(
+            behavior_type_name(&BehaviorDef::Bob {
+                axis: [0.0, 1.0, 0.0],
+                amplitude: 0.5,
+                frequency: 1.0,
+                phase: 0.0
+            }),
+            "bob"
+        );
+        assert_eq!(
+            behavior_type_name(&BehaviorDef::LookAt {
+                target: "player".to_string()
+            }),
+            "look_at"
+        );
+        assert_eq!(
+            behavior_type_name(&BehaviorDef::Bounce {
+                height: 3.0,
+                gravity: 9.8,
+                damping: 0.7,
+                surface_y: 0.0
+            }),
+            "bounce"
+        );
+    }
+
+    #[test]
+    fn test_behavior_description_orbit() {
+        let desc = behavior_description(&BehaviorDef::Orbit {
+            center: Some("Sun".to_string()),
+            center_point: None,
+            radius: 5.0,
+            speed: 36.0,
+            axis: [0.0, 1.0, 0.0],
+            phase: 0.0,
+            tilt: 0.0,
+        });
+        assert!(desc.contains("'Sun'"));
+        assert!(desc.contains("5.0"));
+    }
+
+    #[test]
+    fn test_behavior_description_path_follow() {
+        let desc = behavior_description(&BehaviorDef::PathFollow {
+            waypoints: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+            speed: 2.0,
+            mode: PathMode::PingPong,
+            orient_to_path: false,
+        });
+        assert!(desc.contains("3 waypoints"));
+        assert!(desc.contains("PingPong"));
+    }
+
+    #[test]
+    fn test_behavior_to_summary() {
+        let instance = BehaviorInstance {
+            id: "b1".to_string(),
+            def: BehaviorDef::Pulse {
+                min_scale: 0.9,
+                max_scale: 1.1,
+                frequency: 0.5,
+            },
+            base_position: Vec3::ZERO,
+            base_scale: Vec3::ONE,
+        };
+        let summary = behavior_to_summary(&instance);
+        assert_eq!(summary.id, "b1");
+        assert_eq!(summary.behavior_type, "pulse");
+        assert!(summary.description.contains("0.90"));
+        assert!(summary.description.contains("1.10"));
+    }
+
+    #[test]
+    fn test_apply_spin_behavior() {
+        let def = BehaviorDef::Spin {
+            axis: [0.0, 1.0, 0.0],
+            speed: 90.0,
+        };
+        let instance = BehaviorInstance {
+            id: "s1".to_string(),
+            def: def.clone(),
+            base_position: Vec3::ZERO,
+            base_scale: Vec3::ONE,
+        };
+        let centers = HashMap::new();
+        let mut transform = Transform::IDENTITY;
+
+        // After 1 second at 90 deg/s, rotation should be ~90 degrees around Y
+        apply_behavior(&def, &instance, 1.0, &centers, &mut transform);
+        let (_, angle) = transform.rotation.to_axis_angle();
+        assert!((angle - std::f32::consts::FRAC_PI_2).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_apply_bob_behavior() {
+        let def = BehaviorDef::Bob {
+            axis: [0.0, 1.0, 0.0],
+            amplitude: 1.0,
+            frequency: 1.0,
+            phase: 0.0,
+        };
+        let instance = BehaviorInstance {
+            id: "bob1".to_string(),
+            def: def.clone(),
+            base_position: Vec3::new(0.0, 5.0, 0.0),
+            base_scale: Vec3::ONE,
+        };
+        let centers = HashMap::new();
+        let mut transform = Transform::from_translation(Vec3::new(0.0, 5.0, 0.0));
+
+        // At t=0.25 (quarter period at 1Hz), sin(2π * 1.0 * 0.25) = sin(π/2) = 1.0
+        apply_behavior(&def, &instance, 0.25, &centers, &mut transform);
+        assert!((transform.translation.y - 6.0).abs() < 0.01); // base 5.0 + amplitude 1.0
+    }
+
+    #[test]
+    fn test_apply_bounce_settled() {
+        let def = BehaviorDef::Bounce {
+            height: 3.0,
+            gravity: 9.8,
+            damping: 0.5,
+            surface_y: 0.0,
+        };
+        let instance = BehaviorInstance {
+            id: "bounce1".to_string(),
+            def: def.clone(),
+            base_position: Vec3::ZERO,
+            base_scale: Vec3::ONE,
+        };
+        let centers = HashMap::new();
+        let mut transform = Transform::IDENTITY;
+
+        // After a very long time, should be settled at surface_y
+        apply_behavior(&def, &instance, 100.0, &centers, &mut transform);
+        assert_eq!(transform.translation.y, 0.0);
+    }
+}

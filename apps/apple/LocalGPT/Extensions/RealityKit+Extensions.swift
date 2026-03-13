@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import RealityKit
 import ARKit
 import SwiftUI
@@ -204,3 +205,4 @@ extension SIMD3 where Scalar == Float {
         self.init(Float(red), Float(green), Float(blue))
     }
 }
+#endif

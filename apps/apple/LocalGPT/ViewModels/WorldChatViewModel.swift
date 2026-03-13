@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import Foundation
 import Combine
 import LocalGPTWrapper
@@ -354,3 +355,4 @@ class WorldChatViewModel: ObservableObject {
         self.showError = true
     }
 }
+#endif

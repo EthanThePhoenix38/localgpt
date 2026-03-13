@@ -98,6 +98,28 @@ pub struct PhysicsBody {
 #[derive(Component, Default)]
 pub struct RotationLocked;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_physics_params_default() {
+        let params = PhysicsParams::default();
+        assert_eq!(params.restitution, 0.3);
+        assert_eq!(params.friction, 0.5);
+        assert_eq!(params.gravity_scale, 1.0);
+        assert_eq!(params.linear_damping, 0.1);
+        assert_eq!(params.angular_damping, 0.1);
+        assert!(!params.lock_rotation);
+        assert!(params.mass.is_none());
+    }
+
+    #[test]
+    fn test_body_type_default() {
+        assert!(matches!(BodyType::default(), BodyType::Dynamic));
+    }
+}
+
 /// Plugin for physics body systems.
 pub struct PhysicsBodyPlugin;
 

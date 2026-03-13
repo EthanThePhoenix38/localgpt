@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import Foundation
 
 /// Tool definitions for world generation LLM integration.
@@ -609,3 +610,4 @@ extension WorldToolService {
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }
+#endif

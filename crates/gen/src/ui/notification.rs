@@ -227,6 +227,36 @@ pub fn get_notification_icon_text(icon: NotificationIcon) -> &'static str {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_notification_params_default() {
+        let params = NotificationParams::default();
+        assert_eq!(params.style, NotificationStyle::Toast);
+        assert_eq!(params.position, NotificationPosition::Top);
+        assert_eq!(params.duration, 3.0);
+        assert_eq!(params.color, "#ffffff");
+        assert_eq!(params.icon, NotificationIcon::None);
+        assert!(params.sound.is_none());
+    }
+
+    #[test]
+    fn test_notification_icon_text() {
+        assert_eq!(get_notification_icon_text(NotificationIcon::None), "");
+        assert_eq!(get_notification_icon_text(NotificationIcon::Star), "★");
+        assert_eq!(get_notification_icon_text(NotificationIcon::Coin), "●");
+        assert_eq!(get_notification_icon_text(NotificationIcon::Warning), "⚠");
+    }
+
+    #[test]
+    fn test_notification_queue_default() {
+        let queue = NotificationQueue::default();
+        assert!(queue.notifications.is_empty());
+    }
+}
+
 /// Plugin for notification systems.
 pub struct NotificationPlugin;
 

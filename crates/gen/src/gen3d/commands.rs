@@ -944,3 +944,140 @@ fn default_intensity() -> f32 {
 fn default_true() -> bool {
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spawn_primitive_serde_defaults() {
+        let json = r#"{"name": "Box1", "shape": "Cuboid"}"#;
+        let cmd: SpawnPrimitiveCmd = serde_json::from_str(json).unwrap();
+        assert_eq!(cmd.name, "Box1");
+        assert_eq!(cmd.position, [0.0, 0.0, 0.0]);
+        assert_eq!(cmd.scale, [1.0, 1.0, 1.0]);
+        assert_eq!(cmd.color, [0.8, 0.8, 0.8, 1.0]);
+        assert_eq!(cmd.roughness, 0.5);
+        assert_eq!(cmd.metallic, 0.0);
+    }
+
+    #[test]
+    fn test_camera_cmd_serde_defaults() {
+        let json = r#"{}"#;
+        let cmd: CameraCmd = serde_json::from_str(json).unwrap();
+        assert_eq!(cmd.position, [5.0, 5.0, 5.0]);
+        assert_eq!(cmd.look_at, [0.0, 0.0, 0.0]);
+        assert_eq!(cmd.fov_degrees, 45.0);
+    }
+
+    #[test]
+    fn test_set_light_cmd_serde_defaults() {
+        let json = r#"{"name": "Sun"}"#;
+        let cmd: SetLightCmd = serde_json::from_str(json).unwrap();
+        assert!(matches!(cmd.light_type, LightType::Directional));
+        assert_eq!(cmd.intensity, 1000.0);
+        assert!(cmd.shadows);
+    }
+
+    #[test]
+    fn test_behavior_def_orbit_serde() {
+        let json = r#"{"type": "orbit", "radius": 3.0, "speed": 45.0}"#;
+        let def: BehaviorDef = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(def, BehaviorDef::Orbit { radius, speed, .. } if radius == 3.0 && speed == 45.0)
+        );
+    }
+
+    #[test]
+    fn test_behavior_def_spin_serde() {
+        let json = r#"{"type": "spin"}"#;
+        let def: BehaviorDef = serde_json::from_str(json).unwrap();
+        assert!(matches!(def, BehaviorDef::Spin { speed, .. } if speed == 90.0));
+    }
+
+    #[test]
+    fn test_behavior_def_bob_serde() {
+        let json = r#"{"type": "bob", "amplitude": 1.0}"#;
+        let def: BehaviorDef = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(def, BehaviorDef::Bob { amplitude, frequency, .. } if amplitude == 1.0 && frequency == 0.5)
+        );
+    }
+
+    #[test]
+    fn test_behavior_def_path_follow_serde() {
+        let json = r#"{"type": "path_follow", "waypoints": [[0,0,0],[1,0,0]]}"#;
+        let def: BehaviorDef = serde_json::from_str(json).unwrap();
+        match &def {
+            BehaviorDef::PathFollow {
+                waypoints,
+                speed,
+                mode,
+                ..
+            } => {
+                assert_eq!(waypoints.len(), 2);
+                assert_eq!(*speed, 2.0);
+                assert_eq!(*mode, PathMode::Loop);
+            }
+            other => unreachable!("Expected PathFollow, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_ambient_sound_serde() {
+        let json = r#"{"type": "wind", "speed": 5.0, "gustiness": 0.3}"#;
+        let sound: AmbientSound = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(sound, AmbientSound::Wind { speed, gustiness } if speed == 5.0 && gustiness == 0.3)
+        );
+    }
+
+    #[test]
+    fn test_emitter_sound_fire_serde() {
+        let json = r#"{"type": "fire", "intensity": 0.8, "crackle": 0.5}"#;
+        let sound: EmitterSound = serde_json::from_str(json).unwrap();
+        assert!(
+            matches!(sound, EmitterSound::Fire { intensity, crackle } if intensity == 0.8 && crackle == 0.5)
+        );
+    }
+
+    #[test]
+    fn test_avatar_def_defaults() {
+        let def = AvatarDef::default();
+        assert_eq!(def.spawn_position, [0.0, 0.0, 5.0]);
+        assert_eq!(def.pov, PointOfView::ThirdPerson);
+        assert_eq!(def.movement_speed, 5.0);
+        assert_eq!(def.height, 1.8);
+        assert!(def.model_entity.is_none());
+    }
+
+    #[test]
+    fn test_tour_def_serde() {
+        let json = r#"{
+            "name": "grand_tour",
+            "waypoints": [
+                {"position": [0,0,0], "look_at": [1,0,0], "pause_duration": 2.0}
+            ],
+            "mode": "fly",
+            "autostart": true
+        }"#;
+        let tour: TourDef = serde_json::from_str(json).unwrap();
+        assert_eq!(tour.name, "grand_tour");
+        assert_eq!(tour.mode, TourMode::Fly);
+        assert!(tour.autostart);
+        assert_eq!(tour.speed, 3.0); // default
+        assert_eq!(tour.waypoints.len(), 1);
+        assert_eq!(tour.waypoints[0].pause_duration, 2.0);
+    }
+
+    #[test]
+    fn test_modify_entity_cmd_serde() {
+        let json = r#"{"name": "Box1", "position": [1.0, 2.0, 3.0], "visible": false}"#;
+        let cmd: ModifyEntityCmd = serde_json::from_str(json).unwrap();
+        assert_eq!(cmd.name, "Box1");
+        assert_eq!(cmd.position, Some([1.0, 2.0, 3.0]));
+        assert_eq!(cmd.visible, Some(false));
+        assert!(cmd.color.is_none());
+        assert!(cmd.scale.is_none());
+    }
+}

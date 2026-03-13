@@ -60,11 +60,19 @@ struct WorkspaceEditorView: View {
             }
             .navigationTitle("Workspace")
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { viewModel.loadFiles() }) {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button(action: { viewModel.loadFiles() }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+                #endif
             }
             .alert("Error", isPresented: $viewModel.showError) {
                 Button("OK", role: .cancel) { }

@@ -95,4 +95,19 @@ mod tests {
         };
         assert!(params.is_trigger);
     }
+
+    #[test]
+    fn test_collider_params_default() {
+        let params = ColliderParams::default();
+        assert!(matches!(params.shape, ColliderShape::Box));
+        assert!(!params.is_trigger);
+        assert!(params.visible_in_debug);
+        assert!(params.size.is_none());
+        assert_eq!(params.offset, Vec3::ZERO);
+    }
+
+    #[test]
+    fn test_collider_shape_default_is_box() {
+        assert!(matches!(ColliderShape::default(), ColliderShape::Box));
+    }
 }

@@ -305,6 +305,114 @@ pub fn infer_emitter_from_name(name: &str) -> Option<(EmitterSound, f32)> {
     None
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_infer_waterfall() {
+        let result = infer_emitter_from_name("waterfall_01");
+        assert!(result.is_some());
+        let (sound, radius) = result.unwrap();
+        assert!(matches!(sound, EmitterSound::Water { turbulence } if turbulence > 0.7));
+        assert_eq!(radius, 15.0);
+    }
+
+    #[test]
+    fn test_infer_campfire() {
+        let result = infer_emitter_from_name("my_campfire");
+        assert!(result.is_some());
+        let (sound, _) = result.unwrap();
+        assert!(matches!(sound, EmitterSound::Fire { .. }));
+    }
+
+    #[test]
+    fn test_infer_generator() {
+        let result = infer_emitter_from_name("generator");
+        assert!(result.is_some());
+        let (sound, _) = result.unwrap();
+        assert!(matches!(sound, EmitterSound::Hum { .. }));
+    }
+
+    #[test]
+    fn test_infer_unknown() {
+        assert!(infer_emitter_from_name("box").is_none());
+        assert!(infer_emitter_from_name("sphere").is_none());
+    }
+
+    #[test]
+    fn test_infer_case_insensitive() {
+        assert!(infer_emitter_from_name("WATERFALL").is_some());
+        assert!(infer_emitter_from_name("Campfire").is_some());
+    }
+
+    #[test]
+    fn test_build_ambient_graph_all_variants() {
+        // Verify all ambient graph builders construct without panicking
+        let _wind = build_ambient_graph(&AmbientSound::Wind {
+            speed: 0.5,
+            gustiness: 0.3,
+        });
+        let _rain = build_ambient_graph(&AmbientSound::Rain { intensity: 0.5 });
+        let _forest = build_ambient_graph(&AmbientSound::Forest {
+            bird_density: 0.5,
+            wind: 0.3,
+        });
+        let _ocean = build_ambient_graph(&AmbientSound::Ocean { wave_size: 0.5 });
+        let _cave = build_ambient_graph(&AmbientSound::Cave {
+            drip_rate: 0.3,
+            resonance: 0.5,
+        });
+        let _stream = build_ambient_graph(&AmbientSound::Stream { flow_rate: 0.5 });
+        let _silence = build_ambient_graph(&AmbientSound::Silence);
+    }
+
+    #[test]
+    fn test_build_emitter_graph_all_variants() {
+        // Verify all emitter graph builders construct without panicking
+        let _water = build_emitter_graph(&EmitterSound::Water { turbulence: 0.5 });
+        let _fire = build_emitter_graph(&EmitterSound::Fire {
+            intensity: 0.5,
+            crackle: 0.3,
+        });
+        let _hum = build_emitter_graph(&EmitterSound::Hum {
+            frequency: 120.0,
+            warmth: 0.5,
+        });
+        let _wind = build_emitter_graph(&EmitterSound::Wind { pitch: 400.0 });
+        let _custom = build_emitter_graph(&EmitterSound::Custom {
+            waveform: WaveformType::Sine,
+            filter_cutoff: 1000.0,
+            filter_type: FilterType::Lowpass,
+        });
+    }
+
+    #[test]
+    fn test_build_custom_all_waveforms() {
+        for waveform in [
+            WaveformType::Sine,
+            WaveformType::Saw,
+            WaveformType::Square,
+            WaveformType::WhiteNoise,
+            WaveformType::PinkNoise,
+            WaveformType::BrownNoise,
+        ] {
+            let _graph = build_custom(waveform, 1000.0, FilterType::Lowpass);
+        }
+    }
+
+    #[test]
+    fn test_build_custom_all_filters() {
+        for filter in [
+            FilterType::Lowpass,
+            FilterType::Highpass,
+            FilterType::Bandpass,
+        ] {
+            let _graph = build_custom(WaveformType::WhiteNoise, 1000.0, filter);
+        }
+    }
+}
+
 const AUDIO_INFERENCE_RULES: &[(&[&str], EmitterSound, f32)] = &[
     (
         &["waterfall", "fountain"],

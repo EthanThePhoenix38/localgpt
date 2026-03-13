@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import SwiftUI
 import RealityKit
 import ARKit
@@ -406,3 +407,4 @@ struct LoadWorldSheet: View {
 #Preview {
     WorldView()
 }
+#endif

@@ -42,7 +42,7 @@ struct ChatView: View {
                 HStack(spacing: 12) {
                     TextField("Ask LocalGPT...", text: $inputText, axis: .vertical)
                         .padding(10)
-                        .background(Color(.systemGray6))
+                        .background(Color.secondary.opacity(0.1))
                         .cornerRadius(20)
                         .lineLimit(1...5)
 
@@ -54,12 +54,14 @@ struct ChatView: View {
                     .disabled(inputText.isEmpty || viewModel.isThinking)
                 }
                 .padding()
-                .background(Color(.systemBackground))
+                .background(Color.primary.opacity(0.001))
             }
             .navigationTitle("LocalGPT")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button(action: viewModel.resetSession) {
                         Image(systemName: "trash")
                     }

@@ -309,6 +309,54 @@ fn apply_camera_transform(
 // Import from sibling module
 use super::player::Player;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_player_camera_default() {
+        let cam = PlayerCamera::default();
+        assert_eq!(cam.mode, CameraPov::ThirdPerson);
+        assert_eq!(cam.distance, 5.0);
+        assert_eq!(cam.pitch, -20.0);
+        assert_eq!(cam.fov, 60.0);
+        assert!(cam.fixed_position.is_none());
+    }
+
+    #[test]
+    fn test_set_camera_mode_params_enum() {
+        let params = SetCameraModeParams {
+            mode: "first_person".to_string(),
+            distance: 5.0,
+            pitch: -20.0,
+            fov: 60.0,
+            transition_duration: 0.5,
+            fixed_position: None,
+            fixed_look_at: None,
+        };
+        assert_eq!(params.mode_enum(), CameraPov::FirstPerson);
+
+        let params2 = SetCameraModeParams {
+            mode: "top_down".to_string(),
+            ..params.clone()
+        };
+        assert_eq!(params2.mode_enum(), CameraPov::TopDown);
+
+        let params3 = SetCameraModeParams {
+            mode: "fixed".to_string(),
+            ..params
+        };
+        assert_eq!(params3.mode_enum(), CameraPov::Fixed);
+    }
+
+    #[test]
+    fn test_mouse_sensitivity_default() {
+        let sens = MouseSensitivity::default();
+        assert_eq!(sens.x, 0.1);
+        assert_eq!(sens.y, 0.1);
+    }
+}
+
 /// Plugin for camera systems.
 pub struct CameraPlugin;
 

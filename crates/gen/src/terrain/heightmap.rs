@@ -107,7 +107,7 @@ pub struct Terrain {
 pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
     let resolution = params.resolution;
     let size = params.size;
-    let seed = params.seed.unwrap_or_else(|| rand::random::<u32>());
+    let seed = params.seed.unwrap_or_else(rand::random::<u32>);
 
     // Create vertex buffers
     let vertex_count = (resolution + 1) * (resolution + 1);
@@ -182,8 +182,9 @@ fn generate_heightmap(params: &TerrainParams, seed: u32) -> Vec<f32> {
         return heights;
     }
 
-    // Create noise generator based on type
-    let fbm: Fbm<Perlin> = Fbm::new(seed).set_octaves(params.noise_octaves);
+    // Create noise generators with FBm octaves for both types
+    let fbm_perlin: Fbm<Perlin> = Fbm::new(seed).set_octaves(params.noise_octaves);
+    let fbm_simplex: Fbm<SuperSimplex> = Fbm::new(seed).set_octaves(params.noise_octaves);
 
     let half_res = resolution as f32 / 2.0;
 
@@ -193,11 +194,8 @@ fn generate_heightmap(params: &TerrainParams, seed: u32) -> Vec<f32> {
             let nz = (z as f32 - half_res) * params.noise_frequency;
 
             let noise_value = match params.noise_type {
-                NoiseType::Perlin => fbm.get([nx as f64, nz as f64]),
-                NoiseType::Simplex => {
-                    let simplex = SuperSimplex::new(seed);
-                    simplex.get([nx as f64, nz as f64])
-                }
+                NoiseType::Perlin => fbm_perlin.get([nx as f64, nz as f64]),
+                NoiseType::Simplex => fbm_simplex.get([nx as f64, nz as f64]),
                 NoiseType::Flat => 0.0,
             };
 

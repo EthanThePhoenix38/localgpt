@@ -31,7 +31,7 @@ struct FileEditorView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
-            .background(Color(.systemGray6))
+            .background(Color.secondary.opacity(0.1))
 
             // Text editor
             TextEditor(text: $editedContent)
@@ -42,8 +42,11 @@ struct FileEditorView: View {
                 }
         }
         .navigationTitle(file.name)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
+            #if os(iOS)
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Save") {
                     if file.isSecuritySensitive {
@@ -55,6 +58,19 @@ struct FileEditorView: View {
                 .disabled(!hasChanges)
                 .fontWeight(.semibold)
             }
+            #else
+            ToolbarItem(placement: .automatic) {
+                Button("Save") {
+                    if file.isSecuritySensitive {
+                        showSecurityConfirmation = true
+                    } else {
+                        saveFile()
+                    }
+                }
+                .disabled(!hasChanges)
+                .fontWeight(.semibold)
+            }
+            #endif
         }
         .onAppear {
             editedContent = file.content

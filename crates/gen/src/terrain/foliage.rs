@@ -112,7 +112,7 @@ pub struct Foliage {
 
 /// Generate placement points using Poisson disk sampling.
 pub fn generate_foliage_points(params: &FoliageParams) -> Vec<Vec3> {
-    let seed = params.seed.unwrap_or_else(|| rand::random::<u64>());
+    let seed = params.seed.unwrap_or_else(rand::random::<u64>);
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     // Calculate minimum distance based on density
@@ -288,7 +288,7 @@ fn generate_bush_mesh() -> Mesh {
     let phi = (1.0 + 5.0f32.sqrt()) / 2.0;
     let scale = 0.6;
 
-    let positions: Vec<[f32; 3]> = vec![
+    let base_verts: [[f32; 3]; 12] = [
         [-1.0, phi, 0.0],
         [1.0, phi, 0.0],
         [-1.0, -phi, 0.0],
@@ -301,10 +301,11 @@ fn generate_bush_mesh() -> Mesh {
         [phi, 0.0, 1.0],
         [-phi, 0.0, -1.0],
         [-phi, 0.0, 1.0],
-    ]
-    .iter()
-    .map(|v| [v[0] * scale * 0.8, v[1] * scale * 0.5, v[2] * scale * 0.8])
-    .collect();
+    ];
+    let positions: Vec<[f32; 3]> = base_verts
+        .iter()
+        .map(|v| [v[0] * scale * 0.8, v[1] * scale * 0.5, v[2] * scale * 0.8])
+        .collect();
 
     let normals = positions.clone();
     let uvs: Vec<[f32; 2]> = (0..12).map(|_| [0.5, 0.5]).collect();
@@ -436,7 +437,7 @@ fn generate_rock_mesh() -> Mesh {
     let phi = (1.0 + 5.0f32.sqrt()) / 2.0;
     let scale = 0.4;
 
-    let positions: Vec<[f32; 3]> = vec![
+    let base_verts: [[f32; 3]; 12] = [
         [-1.0, phi, 0.0],
         [1.0, phi, 0.0],
         [-1.0, -phi, 0.0],
@@ -449,10 +450,11 @@ fn generate_rock_mesh() -> Mesh {
         [phi, 0.0, 1.0],
         [-phi, 0.0, -1.0],
         [-phi, 0.0, 1.0],
-    ]
-    .iter()
-    .map(|v| [v[0] * scale, v[1] * scale * 0.6, v[2] * scale])
-    .collect();
+    ];
+    let positions: Vec<[f32; 3]> = base_verts
+        .iter()
+        .map(|v| [v[0] * scale, v[1] * scale * 0.6, v[2] * scale])
+        .collect();
 
     let normals = positions.clone();
     let uvs: Vec<[f32; 2]> = (0..12).map(|_| [0.5, 0.5]).collect();

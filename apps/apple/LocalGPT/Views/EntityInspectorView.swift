@@ -1,3 +1,4 @@
+#if os(iOS) || os(visionOS)
 import SwiftUI
 
 /// Entity inspector view for editing entity properties
@@ -286,3 +287,4 @@ extension UIColor {
 #Preview {
     EntityInspectorView(viewModel: WorldViewModel(), entityId: "test_cube")
 }
+#endif

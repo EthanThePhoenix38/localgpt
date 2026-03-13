@@ -214,6 +214,25 @@ pub fn respawn_player_system(
 // Import from player module
 use super::player::Player;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spawn_point_params_default() {
+        let params = SpawnPointParams::default();
+        assert_eq!(params.position, [0.0, 1.0, 0.0]);
+        assert!(params.is_default);
+        assert!(params.name.is_none());
+    }
+
+    #[test]
+    fn test_kill_plane_default() {
+        let kp = KillPlane::default();
+        assert_eq!(kp.y_level, -50.0);
+    }
+}
+
 /// Plugin for spawn point systems.
 pub struct SpawnPointPlugin;
 

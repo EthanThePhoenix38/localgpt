@@ -72,6 +72,7 @@ class AppleFoundationModelsService: ObservableObject {
 
     /// Send a message with world generation context.
     /// Returns the response text with any tool calls processed.
+    #if os(iOS) || os(visionOS)
     func chatWithWorldTools(
         message: String,
         worldViewModel: WorldViewModel
@@ -156,4 +157,5 @@ class AppleFoundationModelsService: ObservableObject {
 
         return result
     }
+    #endif
 }

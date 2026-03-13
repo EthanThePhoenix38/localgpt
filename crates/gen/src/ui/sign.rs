@@ -126,3 +126,40 @@ impl Plugin for SignPlugin {
         app.add_systems(Update, sign_billboard_system);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_sign_color_rgb() {
+        let color = parse_sign_color("#ff0000");
+        assert!(color.is_some());
+    }
+
+    #[test]
+    fn test_parse_sign_color_rgba() {
+        let color = parse_sign_color("#ff000080");
+        assert!(color.is_some());
+    }
+
+    #[test]
+    fn test_parse_sign_color_invalid() {
+        assert!(parse_sign_color("invalid").is_none());
+        assert!(parse_sign_color("#abc").is_none());
+    }
+
+    #[test]
+    fn test_parse_sign_color_no_hash() {
+        let color = parse_sign_color("00ff00");
+        assert!(color.is_some());
+    }
+
+    #[test]
+    fn test_sign_params_default() {
+        let params = SignParams::default();
+        assert!(params.billboard);
+        assert_eq!(params.font_size, 24.0);
+        assert_eq!(params.color, "#ffffff");
+    }
+}

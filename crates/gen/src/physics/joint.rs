@@ -109,4 +109,36 @@ mod tests {
         };
         assert_eq!(params.joint_type, JointType::Revolute);
     }
+
+    #[test]
+    fn test_joint_params_default() {
+        let params = JointParams::default();
+        assert_eq!(params.joint_type, JointType::Fixed);
+        assert_eq!(params.axis, Vec3::Y);
+        assert_eq!(params.anchor_a, Vec3::ZERO);
+        assert_eq!(params.anchor_b, Vec3::ZERO);
+        assert!(params.limits.is_none());
+        assert!(params.stiffness.is_none());
+        assert!(params.damping.is_none());
+    }
+
+    #[test]
+    fn test_joint_type_default_is_fixed() {
+        assert_eq!(JointType::default(), JointType::Fixed);
+    }
+
+    #[test]
+    fn test_joint_params_spring() {
+        let params = JointParams {
+            entity_a: "spring_a".to_string(),
+            entity_b: "spring_b".to_string(),
+            joint_type: JointType::Spring,
+            stiffness: Some(100.0),
+            damping: Some(5.0),
+            ..default()
+        };
+        assert_eq!(params.joint_type, JointType::Spring);
+        assert_eq!(params.stiffness, Some(100.0));
+        assert_eq!(params.damping, Some(5.0));
+    }
 }

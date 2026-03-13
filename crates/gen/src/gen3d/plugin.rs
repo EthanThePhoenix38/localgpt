@@ -268,7 +268,27 @@ pub fn setup_gen_app(
             Update,
             avatar::handle_pov_toggle.run_if(avatar::in_attached_mode),
         )
-        .add_systems(Update, avatar::handle_camera_mode_toggle);
+        .add_systems(Update, avatar::handle_camera_mode_toggle)
+        // P1: Character plugins
+        .add_plugins(crate::character::PlayerPlugin)
+        .add_plugins(crate::character::NpcPlugin)
+        .add_plugins(crate::character::CameraPlugin)
+        .add_plugins(crate::character::DialoguePlugin)
+        .add_plugins(crate::character::SpawnPointPlugin)
+        // P2: Interaction plugin
+        .add_plugins(crate::interaction::InteractionPlugin)
+        // P3: Terrain & landscape plugins
+        .add_plugins(crate::terrain::SkyPlugin)
+        .add_plugins(crate::terrain::WaterPlugin)
+        // P4: UI plugins
+        .add_plugins(crate::ui::SignPlugin)
+        .add_plugins(crate::ui::HudPlugin)
+        .add_plugins(crate::ui::LabelPlugin)
+        .add_plugins(crate::ui::TooltipPlugin)
+        .add_plugins(crate::ui::NotificationPlugin)
+        // P5: Physics plugins
+        .add_plugins(crate::physics::ForceFieldPlugin)
+        .add_plugins(crate::physics::GravityPlugin);
 }
 
 /// Default scene: ground plane, camera, directional light, ambient light.
@@ -418,6 +438,7 @@ struct GenCommandParams<'w, 's> {
     current_world: ResMut<'w, CurrentWorld>,
     camera_mode: ResMut<'w, avatar::CameraMode>,
     avatar_movement_config: ResMut<'w, avatar::AvatarMovementConfig>,
+    pov_state: ResMut<'w, avatar::PovState>,
     avatar_entities: Query<'w, 's, Entity, With<AvatarEntity>>,
 }
 
@@ -1514,9 +1535,24 @@ fn process_gen_commands(
                     .send(GenResponse::Modified { name: npc_name });
                 continue;
             }
-            GenCommand::SetPlayerCameraMode(_p) => {
-                // Camera mode is stored and applied by the CameraPlugin systems.
-                // The avatar system already handles PoV switching.
+            GenCommand::SetPlayerCameraMode(p) => {
+                // Apply camera mode via avatar system resources
+                let pov = match p.mode.to_lowercase().as_str() {
+                    "first_person" | "firstperson" => {
+                        *params.camera_mode = avatar::CameraMode::Attached;
+                        super::commands::PointOfView::FirstPerson
+                    }
+                    "third_person" | "thirdperson" => {
+                        *params.camera_mode = avatar::CameraMode::Attached;
+                        super::commands::PointOfView::ThirdPerson
+                    }
+                    _ => {
+                        *params.camera_mode = avatar::CameraMode::Attached;
+                        super::commands::PointOfView::ThirdPerson
+                    }
+                };
+                params.pov_state.pov = pov;
+                params.avatar_movement_config.eye_height = p.distance.max(1.0);
                 GenResponse::CameraSet
             }
 
@@ -1528,6 +1564,7 @@ fn process_gen_commands(
                 let entity_name = p.entity_id.clone();
                 let mut ec = commands.entity(entity);
                 ec.insert(crate::interaction::InteractionEntity);
+                // Insert trigger component
                 match p.trigger_type.as_str() {
                     "proximity" => {
                         ec.insert(crate::interaction::ProximityTrigger {
@@ -1554,6 +1591,71 @@ fn process_gen_commands(
                         ec.insert(crate::interaction::AreaTrigger { is_enter: false });
                     }
                     _ => {}
+                }
+                // Insert action component
+                match p.action.as_str() {
+                    "animate" => {
+                        ec.insert(crate::interaction::AnimateAction {
+                            property: p
+                                .state_key
+                                .clone()
+                                .unwrap_or_else(|| "position".to_string()),
+                            to: p.destination.map(|d| d.to_vec()).unwrap_or_default(),
+                            duration: p.cooldown.unwrap_or(1.0),
+                            progress: 0.0,
+                        });
+                    }
+                    "teleport" => {
+                        if let Some(dest) = p.destination {
+                            ec.insert(crate::interaction::TeleportAction {
+                                destination: Vec3::from_array(dest),
+                            });
+                        }
+                    }
+                    "play_sound" => {
+                        ec.insert(crate::interaction::PlaySoundAction {
+                            sound: p.text.clone().unwrap_or_else(|| "default".to_string()),
+                        });
+                    }
+                    "show_text" => {
+                        if let Some(text) = &p.text {
+                            ec.insert(crate::interaction::ShowTextAction {
+                                text: text.clone(),
+                                duration: None,
+                            });
+                        }
+                    }
+                    "toggle_state" => {
+                        ec.insert(crate::interaction::ToggleStateAction {
+                            state_key: p.state_key.clone().unwrap_or_else(|| "active".to_string()),
+                            value: p.text.clone(),
+                        });
+                    }
+                    "spawn" => {
+                        ec.insert(crate::interaction::SpawnAction {
+                            template: p.text.clone().unwrap_or_default(),
+                        });
+                    }
+                    "destroy" => {
+                        ec.insert(crate::interaction::DestroyAction);
+                    }
+                    "add_score" => {
+                        ec.insert(crate::interaction::AddScoreAction {
+                            amount: p.amount.unwrap_or(1),
+                            category: p.category.clone().unwrap_or_else(|| "points".to_string()),
+                        });
+                    }
+                    "enable" => {
+                        ec.insert(crate::interaction::EnableAction);
+                    }
+                    "disable" => {
+                        ec.insert(crate::interaction::DisableAction);
+                    }
+                    _ => {}
+                }
+                // Mark as once-trigger if requested
+                if p.once {
+                    ec.insert(crate::interaction::OnceTrigger);
                 }
                 let _ = channel_res
                     .channels
@@ -1851,6 +1953,19 @@ fn process_gen_commands(
                 let name = format!("Sign_{}", p.text.chars().take(10).collect::<String>());
                 let wid = params.next_entity_id.alloc();
                 let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
+                // Scale based on font_size (24 is default → 0.02 scale)
+                let scale = p.font_size / 1200.0;
+                let mut transform =
+                    Transform::from_translation(p.position).with_scale(Vec3::splat(scale));
+                // Apply rotation when not billboard
+                if !p.billboard && p.rotation != Vec3::ZERO {
+                    transform.rotation = Quat::from_euler(
+                        EulerRot::YXZ,
+                        p.rotation.y.to_radians(),
+                        p.rotation.x.to_radians(),
+                        p.rotation.z.to_radians(),
+                    );
+                }
                 let entity = commands
                     .spawn((
                         Name::new(name.clone()),
@@ -1861,7 +1976,7 @@ fn process_gen_commands(
                         Text2d::new(p.text.clone()),
                         TextColor(text_color),
                         TextLayout::new_with_justify(bevy::text::Justify::Center),
-                        Transform::from_translation(p.position).with_scale(Vec3::splat(0.02)),
+                        transform,
                         Visibility::default(),
                         crate::ui::Sign {
                             billboard: p.billboard,
@@ -1875,10 +1990,42 @@ fn process_gen_commands(
                     entity_id: wid.0,
                 }
             }
-            GenCommand::AddHud(_p) => {
-                // HUD elements are screen-space UI, handled by the HUD plugin
-                GenResponse::Modified {
-                    name: "HUD".to_string(),
+            GenCommand::AddHud(p) => {
+                let name =
+                    p.id.clone()
+                        .unwrap_or_else(|| format!("HUD_{:?}", p.element_type));
+                let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
+                let display_text = if let Some(ref label) = p.label {
+                    format!("{}: {}", label, p.initial_value)
+                } else {
+                    p.initial_value.clone()
+                };
+                let wid = params.next_entity_id.alloc();
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        crate::ui::HudElement {
+                            element_type: p.element_type,
+                            id: p.id.clone(),
+                            value: p.initial_value.clone(),
+                            label: p.label.clone(),
+                        },
+                        Text::new(display_text),
+                        TextColor(text_color),
+                        TextFont {
+                            font_size: p.font_size,
+                            ..default()
+                        },
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
                 }
             }
             GenCommand::AddLabel(p) => {
@@ -1890,6 +2037,13 @@ fn process_gen_commands(
                 // Spawn label as child of target entity
                 commands.spawn((
                     Name::new(format!("Label_{}", entity_name)),
+                    crate::ui::EntityLabel {
+                        text: p.text.clone(),
+                        offset_y: p.offset_y,
+                        visible_distance: p.visible_distance,
+                        current_alpha: 1.0,
+                        parent_entity: target,
+                    },
                     Text2d::new(p.text.clone()),
                     TextColor(text_color),
                     TextLayout::new_with_justify(bevy::text::Justify::Center),
@@ -1904,11 +2058,22 @@ fn process_gen_commands(
                 continue;
             }
             GenCommand::AddTooltip(p) => {
-                let Some(_target) = params.registry.get_entity(&p.entity_id) else {
+                let Some(target) = params.registry.get_entity(&p.entity_id) else {
                     return; // skip
                 };
                 let entity_name = p.entity_id.clone();
-                // Tooltip data is stored; the tooltip system handles display
+                let duration_secs = p.duration.unwrap_or(3.0);
+                commands.entity(target).insert(crate::ui::Tooltip {
+                    entity: target,
+                    text: p.text.clone(),
+                    trigger: p.trigger,
+                    range: p.range,
+                    style: p.style,
+                    visible: false,
+                    fade_alpha: 0.0,
+                    display_timer: Timer::from_seconds(duration_secs, TimerMode::Once),
+                    cooldown_timer: Timer::from_seconds(1.0, TimerMode::Once),
+                });
                 let _ = channel_res
                     .channels
                     .resp_tx
@@ -1917,6 +2082,19 @@ fn process_gen_commands(
             }
             GenCommand::AddNotification(p) => {
                 let text = p.text.clone();
+                commands.spawn((
+                    Name::new("Notification"),
+                    crate::ui::Notification {
+                        text: p.text.clone(),
+                        style: p.style,
+                        position: p.position,
+                        phase: crate::ui::NotificationPhase::EnterIn,
+                        elapsed: 0.0,
+                        duration: p.duration,
+                        stack_offset: 0.0,
+                        alpha: 0.0,
+                    },
+                ));
                 let _ = channel_res
                     .channels
                     .resp_tx
@@ -1929,10 +2107,23 @@ fn process_gen_commands(
             // These commands store configuration but actual physics simulation
             // requires `cargo build --features physics`.
             GenCommand::SetPhysics(p) => {
-                let Some(_entity) = params.registry.get_entity(&p.entity_id) else {
+                let Some(entity) = params.registry.get_entity(&p.entity_id) else {
                     return; // skip
                 };
                 let entity_name = p.entity_id.clone();
+                let mass = p.mass.unwrap_or(1.0);
+                commands.entity(entity).insert(crate::physics::PhysicsBody {
+                    body_type: p.body_type,
+                    mass,
+                    restitution: p.restitution,
+                    friction: p.friction,
+                    gravity_scale: p.gravity_scale,
+                });
+                if p.lock_rotation {
+                    commands
+                        .entity(entity)
+                        .insert(crate::physics::RotationLocked);
+                }
                 let _ = channel_res
                     .channels
                     .resp_tx
@@ -1940,10 +2131,22 @@ fn process_gen_commands(
                 continue;
             }
             GenCommand::AddCollider(p) => {
-                let Some(_entity) = params.registry.get_entity(&p.entity_id) else {
+                let Some(entity) = params.registry.get_entity(&p.entity_id) else {
                     return; // skip
                 };
                 let entity_name = p.entity_id.clone();
+                commands
+                    .entity(entity)
+                    .insert(crate::physics::ColliderConfig {
+                        shape: p.shape,
+                        is_trigger: p.is_trigger,
+                        visible_in_debug: p.visible_in_debug,
+                    });
+                if p.is_trigger {
+                    commands
+                        .entity(entity)
+                        .insert(crate::physics::SensorCollider);
+                }
                 let _ = channel_res
                     .channels
                     .resp_tx
@@ -1951,13 +2154,36 @@ fn process_gen_commands(
                 continue;
             }
             GenCommand::AddJoint(p) => {
-                let Some(_a) = params.registry.get_entity(&p.entity_a) else {
+                let Some(entity_a) = params.registry.get_entity(&p.entity_a) else {
                     return; // skip
                 };
-                let _ = channel_res.channels.resp_tx.send(GenResponse::Modified {
-                    name: p.entity_a.clone(),
-                });
-                continue;
+                let Some(entity_b) = params.registry.get_entity(&p.entity_b) else {
+                    return; // skip
+                };
+                let name = format!("Joint_{}_{}", p.entity_a, p.entity_b);
+                let wid = params.next_entity_id.alloc();
+                let entity = commands
+                    .spawn((
+                        Name::new(name.clone()),
+                        GenEntity {
+                            entity_type: GenEntityType::Primitive,
+                            world_id: wid,
+                        },
+                        crate::physics::JointConfig {
+                            joint_type: p.joint_type,
+                            entity_a,
+                            entity_b,
+                            anchor_a: p.anchor_a,
+                            anchor_b: p.anchor_b,
+                            axis: p.axis,
+                        },
+                    ))
+                    .id();
+                params.registry.insert_with_id(name.clone(), entity, wid);
+                GenResponse::Spawned {
+                    name,
+                    entity_id: wid.0,
+                }
             }
             GenCommand::AddForce(p) => {
                 let name = "ForceField".to_string();
@@ -1989,14 +2215,60 @@ fn process_gen_commands(
                 }
             }
             GenCommand::SetGravity(p) => {
-                // Update global gravity resource
-                commands.insert_resource(crate::physics::GlobalGravity {
-                    gravity: p.direction * p.strength,
-                    target_gravity: p.direction * p.strength,
-                    transition_progress: 1.0,
-                    transition_duration: p.transition_duration,
-                });
-                GenResponse::EnvironmentSet
+                if let Some(zone_pos) = p.zone_position {
+                    // Spawn a gravity zone entity
+                    let radius = p.zone_radius.unwrap_or(10.0);
+                    let name = "GravityZone".to_string();
+                    let wid = params.next_entity_id.alloc();
+                    let entity = commands
+                        .spawn((
+                            Name::new(name.clone()),
+                            GenEntity {
+                                entity_type: GenEntityType::Primitive,
+                                world_id: wid,
+                            },
+                            Transform::from_translation(zone_pos),
+                            Visibility::default(),
+                            crate::physics::GravityZone {
+                                center: zone_pos,
+                                radius,
+                                gravity: p.direction * p.strength,
+                                transition_duration: p.transition_duration,
+                            },
+                        ))
+                        .id();
+                    params.registry.insert_with_id(name.clone(), entity, wid);
+                    GenResponse::Spawned {
+                        name,
+                        entity_id: wid.0,
+                    }
+                } else if let Some(ref entity_id) = p.entity_id {
+                    // Per-entity gravity override
+                    let Some(entity) = params.registry.get_entity(entity_id) else {
+                        return; // skip
+                    };
+                    let entity_name = entity_id.clone();
+                    commands
+                        .entity(entity)
+                        .insert(crate::physics::GravityOverride {
+                            direction: p.direction,
+                            strength_scale: p.strength / crate::physics::GRAVITY_EARTH,
+                        });
+                    let _ = channel_res
+                        .channels
+                        .resp_tx
+                        .send(GenResponse::Modified { name: entity_name });
+                    continue;
+                } else {
+                    // Update global gravity resource
+                    commands.insert_resource(crate::physics::GlobalGravity {
+                        gravity: p.direction * p.strength,
+                        target_gravity: p.direction * p.strength,
+                        transition_progress: 1.0,
+                        transition_duration: p.transition_duration,
+                    });
+                    GenResponse::EnvironmentSet
+                }
             }
         };
 
@@ -2076,13 +2348,13 @@ fn process_pending_screenshots(
             // User specified a path
             let mut paths = vec![explicit_path.clone()];
             // Also save to skill folder if requested and skill exists
-            if screenshot_req.save_to_skill {
-                if let Some(skill_folder) = current_skill.screenshots_folder() {
-                    let filename = explicit_path
-                        .file_name()
-                        .unwrap_or(std::ffi::OsStr::new("screenshot.png"));
-                    paths.push(skill_folder.join(filename));
-                }
+            if screenshot_req.save_to_skill
+                && let Some(skill_folder) = current_skill.screenshots_folder()
+            {
+                let filename = explicit_path
+                    .file_name()
+                    .unwrap_or(std::ffi::OsStr::new("screenshot.png"));
+                paths.push(skill_folder.join(filename));
             }
             paths
         } else if screenshot_req.save_to_skill {

@@ -121,6 +121,34 @@ pub struct AddScoreAction {
     pub category: String,
 }
 
+/// Action to play a sound.
+#[derive(Component, Clone)]
+pub struct PlaySoundAction {
+    pub sound: String,
+}
+
+/// Action to spawn an entity.
+#[derive(Component, Clone)]
+pub struct SpawnAction {
+    pub template: String,
+}
+
+/// Action to destroy the entity.
+#[derive(Component, Clone)]
+pub struct DestroyAction;
+
+/// Action to enable the entity.
+#[derive(Component, Clone)]
+pub struct EnableAction;
+
+/// Action to disable the entity.
+#[derive(Component, Clone)]
+pub struct DisableAction;
+
+/// Marker for triggers that should fire only once.
+#[derive(Component, Clone)]
+pub struct OnceTrigger;
+
 // ---------------------------------------------------------------------------
 // Entity linking
 // ---------------------------------------------------------------------------
@@ -144,16 +172,16 @@ pub struct ScoreBoard {
     pub scores: HashMap<String, i32>,
 }
 
-/// Event fired when score changes.
-#[derive(Event, Clone, Debug)]
+/// Message fired when score changes.
+#[derive(Clone, Debug)]
 pub struct ScoreChanged {
     pub category: String,
     pub new_value: i32,
     pub delta: i32,
 }
 
-/// Event fired when a trigger fires.
-#[derive(Event, Clone, Debug)]
+/// Message fired when a trigger fires.
+#[derive(Clone, Debug)]
 pub struct TriggerFired {
     pub entity: Entity,
     pub trigger_type: String,
@@ -187,6 +215,22 @@ pub struct AddTriggerParams {
     pub prompt_text: Option<String>,
     #[serde(default)]
     pub once: bool,
+    // Action-specific parameters
+    /// Teleport destination [x, y, z].
+    #[serde(default)]
+    pub destination: Option<[f32; 3]>,
+    /// Text for show_text action.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Score amount for add_score action.
+    #[serde(default)]
+    pub amount: Option<i32>,
+    /// State key for toggle_state action.
+    #[serde(default)]
+    pub state_key: Option<String>,
+    /// Score category for add_score action.
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 /// Parameters for teleporter.
@@ -360,6 +404,10 @@ impl PlayerInventory {
     pub fn has_key(&self, key: &str) -> bool {
         self.items.contains(&key.to_string())
     }
+
+    pub fn add_item(&mut self, item: String) {
+        self.items.push(item);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -373,8 +421,63 @@ impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ScoreBoard::default())
             .insert_resource(PlayerInventory::default());
-        // TODO: Add events when systems are implemented
-        // .add_event::<TriggerFired>()
-        // .add_event::<ScoreChanged>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scoreboard() {
+        let mut board = ScoreBoard::default();
+        assert!(board.scores.is_empty());
+        board.scores.insert("points".to_string(), 10);
+        assert_eq!(board.scores["points"], 10);
+    }
+
+    #[test]
+    fn test_player_inventory() {
+        let mut inv = PlayerInventory::default();
+        assert!(!inv.has_key("gold_key"));
+        inv.add_item("gold_key".to_string());
+        assert!(inv.has_key("gold_key"));
+    }
+
+    #[test]
+    fn test_door_params_defaults() {
+        let params = DoorParams::default();
+        assert_eq!(params.open_angle, 90.0);
+        assert!(params.auto_close);
+        assert_eq!(params.auto_close_delay, 3.0);
+        assert!(params.requires_key.is_none());
+    }
+
+    #[test]
+    fn test_timer_trigger() {
+        let trigger = TimerTrigger::new(2.0);
+        assert_eq!(trigger.interval, 2.0);
+    }
+
+    #[test]
+    fn test_add_trigger_params_action_fields() {
+        let params = AddTriggerParams {
+            entity_id: "box".to_string(),
+            trigger_type: "proximity".to_string(),
+            action: "add_score".to_string(),
+            radius: Some(5.0),
+            cooldown: None,
+            interval: None,
+            max_distance: None,
+            prompt_text: None,
+            once: false,
+            destination: None,
+            text: None,
+            amount: Some(10),
+            state_key: None,
+            category: Some("coins".to_string()),
+        };
+        assert_eq!(params.amount, Some(10));
+        assert_eq!(params.category.as_deref(), Some("coins"));
     }
 }

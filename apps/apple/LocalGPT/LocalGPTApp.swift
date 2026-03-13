@@ -19,10 +19,18 @@ struct LocalGPTApp: App {
                         Label("Chat", systemImage: "message.fill")
                     }
 
+                #if os(iOS) || os(visionOS)
                 WorldChatView()
                     .tabItem {
                         Label("World", systemImage: "cube.transparent")
                     }
+                #elseif os(macOS)
+                // macOS uses SceneKit for 3D world generation
+                WorldChatViewMac()
+                    .tabItem {
+                        Label("World", systemImage: "cube.transparent")
+                    }
+                #endif
 
                 WorkspaceEditorView()
                     .tabItem {

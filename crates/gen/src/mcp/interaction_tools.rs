@@ -57,7 +57,16 @@ impl Tool for GenAddTriggerTool {
                     "cooldown": { "type": "number", "default": 1.0, "description": "Cooldown between triggers" },
                     "interval": { "type": "number", "description": "Timer interval (timer trigger only)" },
                     "max_distance": { "type": "number", "default": 5.0, "description": "Max click distance" },
-                    "once": { "type": "boolean", "default": false, "description": "Fire only once" }
+                    "once": { "type": "boolean", "default": false, "description": "Fire only once" },
+                    "destination": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "description": "Teleport destination [x, y, z] (teleport action)"
+                    },
+                    "text": { "type": "string", "description": "Text content (show_text action)" },
+                    "amount": { "type": "integer", "default": 1, "description": "Score amount (add_score action)" },
+                    "state_key": { "type": "string", "description": "State key (toggle_state action)" },
+                    "category": { "type": "string", "default": "points", "description": "Score category (add_score action)" }
                 },
                 "required": ["entity_id", "trigger_type", "action"]
             }),
@@ -88,6 +97,17 @@ impl Tool for GenAddTriggerTool {
             max_distance: args["max_distance"].as_f64().map(|v| v as f32),
             prompt_text: args["prompt_text"].as_str().map(|s| s.to_string()),
             once: args["once"].as_bool().unwrap_or(false),
+            destination: args["destination"].as_array().map(|a| {
+                [
+                    a[0].as_f64().unwrap_or(0.0) as f32,
+                    a[1].as_f64().unwrap_or(0.0) as f32,
+                    a[2].as_f64().unwrap_or(0.0) as f32,
+                ]
+            }),
+            text: args["text"].as_str().map(|s| s.to_string()),
+            amount: args["amount"].as_i64().map(|v| v as i32),
+            state_key: args["state_key"].as_str().map(|s| s.to_string()),
+            category: args["category"].as_str().map(|s| s.to_string()),
         };
 
         let cmd = GenCommand::AddTrigger(params);
