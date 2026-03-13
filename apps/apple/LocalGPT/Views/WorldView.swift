@@ -176,7 +176,7 @@ struct RealityKitView: UIViewRepresentable {
         }
 
         @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
-            guard let viewModel = viewModel else { return }
+            guard viewModel != nil else { return }
 
             switch gesture.state {
             case .changed:
@@ -190,7 +190,7 @@ struct RealityKitView: UIViewRepresentable {
         }
 
         @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
-            guard let viewModel = viewModel else { return }
+            guard viewModel != nil else { return }
 
             let translation = gesture.translation(in: gesture.view)
 
@@ -207,7 +207,7 @@ struct RealityKitView: UIViewRepresentable {
         }
 
         @objc func handleRotation(_ gesture: UIRotationGestureRecognizer) {
-            guard let viewModel = viewModel else { return }
+            guard viewModel != nil else { return }
 
             switch gesture.state {
             case .changed:

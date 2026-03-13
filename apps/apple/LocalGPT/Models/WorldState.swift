@@ -81,23 +81,8 @@ enum AmbienceType: String, Codable, CaseIterable {
 }
 
 // MARK: - SIMD3 Codable Extensions
-
-extension SIMD3: Codable where Scalar: Codable {
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.unkeyedContainer()
-        try container.encode(x)
-        try container.encode(y)
-        try container.encode(z)
-    }
-
-    public init(from decoder: Decoder) throws {
-        var container = try decoder.unkeyedContainer()
-        let x = try container.decode(Scalar.self)
-        let y = try container.decode(Scalar.self)
-        let z = try container.decode(Scalar.self)
-        self.init(x, y, z)
-    }
-}
+// Note: SIMD3<Scalar> already conforms to Codable in Swift standard library
+// No additional extension needed
 
 // MARK: - World Persistence
 

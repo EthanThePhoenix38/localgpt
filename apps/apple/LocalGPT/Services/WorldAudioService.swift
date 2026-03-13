@@ -165,11 +165,10 @@ class WorldAudioService: ObservableObject {
         }
     }
 
-    nonisolated deinit {
-        Task { @MainActor in
-            stopAll()
-            audioEngine?.stop()
-        }
+    /// Call before deallocation to properly clean up audio resources
+    func shutdown() {
+        stopAll()
+        audioEngine?.stop()
     }
 }
 

@@ -147,7 +147,7 @@ class WorldChatViewModel: ObservableObject {
             return handleAmbienceCommand(args)
 
         case "clear":
-            worldViewModel?.clearScene()
+            _ = worldViewModel?.clearScene()
             return "Scene cleared"
 
         case "info", "list":

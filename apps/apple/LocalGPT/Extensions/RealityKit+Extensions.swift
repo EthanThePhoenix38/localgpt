@@ -35,7 +35,7 @@ extension MeshResource {
         let half = baseSize / 2
         let h = height / 2
 
-        var vertices: [SIMD3<Float>] = [
+        let vertices: [SIMD3<Float>] = [
             // Base vertices
             [-half, -h, -half],
             [half, -h, -half],
@@ -45,7 +45,7 @@ extension MeshResource {
             [0, h, 0]
         ]
 
-        var indices: [UInt32] = [
+        let indices: [UInt32] = [
             // Base (2 triangles)
             0, 2, 1,
             0, 3, 2,

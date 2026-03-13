@@ -55,8 +55,8 @@ class WorldViewModel: ObservableObject {
     private func startBehaviorUpdateLoop() {
         // Run behavior updates at 60fps
         updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateBehaviors()
+            Task { @MainActor [weak self] in
+                self?.updateBehaviorsInternal()
             }
         }
     }
@@ -94,12 +94,9 @@ class WorldViewModel: ObservableObject {
     }
 
     private func setupCamera() {
-        guard let arView = arView else { return }
+        guard arView != nil else { return }
 
         let camera = PerspectiveCamera()
-        // fieldOfView is accessed via camera component
-        var cameraComponent = PerspectiveCameraComponent()
-        // Note: fieldOfView is set via near/far clipping in RealityKit
         camera.position = worldState.camera.position
         camera.look(at: worldState.camera.lookAt, from: worldState.camera.position, relativeTo: nil)
         cameraEntity = camera
@@ -522,7 +519,7 @@ class WorldViewModel: ObservableObject {
 
     // MARK: - Behavior Update Loop
 
-    private func updateBehaviors() {
+    private func updateBehaviorsInternal() {
         let time = Float(Date().timeIntervalSinceReferenceDate)
 
         for (entityId, behaviors) in activeBehaviors {
@@ -658,7 +655,7 @@ class WorldViewModel: ObservableObject {
     /// Save current world state
     func saveWorld(name: String) -> String {
         do {
-            try worldState.save(name: name)
+            _ = try worldState.save(name: name)
             return "World '\(name)' saved successfully"
         } catch {
             handleError("Failed to save world: \(error.localizedDescription)")
@@ -672,7 +669,7 @@ class WorldViewModel: ObservableObject {
             let loadedState = try WorldState.load(name: name)
 
             if clearCurrent {
-                clearScene()
+                _ = clearScene()
             }
 
             worldState = loadedState
@@ -701,13 +698,13 @@ class WorldViewModel: ObservableObject {
             }
 
             // Restore camera
-            setCamera(
+            _ = setCamera(
                 position: [loadedState.camera.position.x, loadedState.camera.position.y, loadedState.camera.position.z],
                 lookAt: [loadedState.camera.lookAt.x, loadedState.camera.lookAt.y, loadedState.camera.lookAt.z]
             )
 
             // Restore ambience
-            setAmbience(loadedState.ambience.type, volume: loadedState.ambience.volume)
+            _ = setAmbience(loadedState.ambience.type, volume: loadedState.ambience.volume)
 
             return "World '\(name)' loaded successfully with \(loadedState.entities.count) entities"
         } catch {
