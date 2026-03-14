@@ -6,7 +6,7 @@
 [![Downloads](https://img.shields.io/crates/d/localgpt.svg)](https://crates.io/crates/localgpt)
 [![Docs](https://docs.rs/localgpt/badge.svg)](https://docs.rs/localgpt/latest/localgpt)
 [![CI](https://github.com/localgpt-app/localgpt/workflows/CI/badge.svg)](https://github.com/localgpt-app/localgpt/actions)
-[![Discord](https://img.shields.io/discord/691052431525675048.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/yMQ8tfxG)
+[![Discord](https://img.shields.io/discord/691052431525675048.svg?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/spKRr6mRyp)
 
 Build explorable 3D worlds with natural language — geometry, materials, lighting, audio, and behaviors. Open source, runs locally.
 
@@ -73,7 +73,7 @@ Add to your `.mcp.json`:
 
 Full docs: [`website/docs/gen/index.md`](website/docs/gen/index.md) | [MCP Server](website/docs/gen/mcp-server.md)
 
-Built something cool? Share on [Discord](https://discord.gg/yMQ8tfxG) or [YouTube](https://www.youtube.com/@localgpt-gen)!
+Built something cool? Share on [Discord](https://discord.gg/spKRr6mRyp) or [YouTube](https://www.youtube.com/@localgpt-gen)!
 
 ---
 

@@ -84,7 +84,7 @@ const config: Config = {
           'aria-label': 'YouTube Gen Gallery',
         },
         {
-          href: 'https://discord.gg/yMQ8tfxG',
+          href: 'https://discord.gg/spKRr6mRyp',
           position: 'right',
           className: 'header-discord-link',
           'aria-label': 'Discord',
@@ -161,7 +161,7 @@ const config: Config = {
             },
             {
               label: 'Discord',
-              href: 'https://discord.gg/yMQ8tfxG',
+              href: 'https://discord.gg/spKRr6mRyp',
             },
             {
               label: 'X (Twitter)',

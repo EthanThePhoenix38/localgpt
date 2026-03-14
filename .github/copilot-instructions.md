@@ -228,7 +228,7 @@ Before submitting a PR:
 
 - Repository: https://github.com/localgpt-app/localgpt
 - Website: https://localgpt.app
-- Discord: https://discord.gg/yMQ8tfxG
+- Discord: https://discord.gg/spKRr6mRyp
 - License: Apache-2.0
 
 ## Notes for AI Assistants
