@@ -692,58 +692,47 @@ pub fn list_sessions_for_agent(agent_id: &str) -> Result<Vec<SessionInfo>> {
                     let mut preview = String::new();
                     let mut end_preview = String::new();
 
-                    for line in lines {
-                        if let Ok(l) = line {
-                            message_count += 1;
-                            if let Ok(entry) = serde_json::from_str::<serde_json::Value>(&l) {
-                                if entry["type"].as_str() == Some("message") {
-                                    if let Some(msg_obj) = entry.get("message") {
-                                        let role = msg_obj["role"].as_str().unwrap_or("");
-                                        if role == "user" || role == "assistant" {
-                                            let content = if let Some(arr) =
-                                                msg_obj["content"].as_array()
-                                            {
-                                                arr.iter()
-                                                    .filter_map(|item| {
-                                                        if item["type"].as_str() == Some("text") {
-                                                            item["text"]
-                                                                .as_str()
-                                                                .map(|s| s.to_string())
-                                                        } else {
-                                                            None
-                                                        }
-                                                    })
-                                                    .collect::<Vec<_>>()
-                                                    .join("")
-                                            } else if let Some(s) = msg_obj["content"].as_str() {
-                                                s.to_string()
+                    for line in lines.map_while(Result::ok) {
+                        message_count += 1;
+                        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(&line)
+                            && entry["type"].as_str() == Some("message")
+                            && let Some(msg_obj) = entry.get("message")
+                        {
+                            let role = msg_obj["role"].as_str().unwrap_or("");
+                            if role == "user" || role == "assistant" {
+                                let content = if let Some(arr) = msg_obj["content"].as_array() {
+                                    arr.iter()
+                                        .filter_map(|item| {
+                                            if item["type"].as_str() == Some("text") {
+                                                item["text"].as_str().map(|s| s.to_string())
                                             } else {
-                                                String::new()
-                                            };
-
-                                            let clean_text =
-                                                content.replace('\n', " ").trim().to_string();
-                                            if !clean_text.is_empty() {
-                                                let formatted = if clean_text.chars().count() > 60 {
-                                                    format!(
-                                                        "{}...",
-                                                        clean_text
-                                                            .chars()
-                                                            .take(57)
-                                                            .collect::<String>()
-                                                    )
-                                                } else {
-                                                    clean_text
-                                                };
-
-                                                if preview.is_empty() {
-                                                    preview = formatted.clone();
-                                                }
-                                                // Always update end_preview so it holds the last one
-                                                end_preview = formatted;
+                                                None
                                             }
-                                        }
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("")
+                                } else if let Some(s) = msg_obj["content"].as_str() {
+                                    s.to_string()
+                                } else {
+                                    String::new()
+                                };
+
+                                let clean_text = content.replace('\n', " ").trim().to_string();
+                                if !clean_text.is_empty() {
+                                    let formatted = if clean_text.chars().count() > 60 {
+                                        format!(
+                                            "{}...",
+                                            clean_text.chars().take(57).collect::<String>()
+                                        )
+                                    } else {
+                                        clean_text
+                                    };
+
+                                    if preview.is_empty() {
+                                        preview = formatted.clone();
                                     }
+                                    // Always update end_preview so it holds the last one
+                                    end_preview = formatted;
                                 }
                             }
                         }
