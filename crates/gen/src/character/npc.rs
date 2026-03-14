@@ -159,7 +159,7 @@ pub fn spawn_npc(
 /// System for NPC idle behavior - face nearby player.
 pub fn npc_idle_system(
     player_query: Query<&Transform, With<Player>>,
-    mut npc_query: Query<(&mut Transform, &NpcBehavior), With<Npc>>,
+    mut npc_query: Query<(&mut Transform, &NpcBehavior), (With<Npc>, Without<Player>)>,
 ) {
     let Ok(player_transform) = player_query.single() else {
         return;

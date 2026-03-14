@@ -175,7 +175,7 @@ pub fn avatar_scroll_speed(
 // ---------------------------------------------------------------------------
 
 /// Position the camera relative to the avatar based on the current POV.
-pub fn camera_follow_avatar(
+pub(crate) fn camera_follow_avatar(
     pov_state: Res<PovState>,
     config: Res<AvatarMovementConfig>,
     avatar_q: Query<&Transform, (With<AvatarEntity>, Without<FlyCam>)>,
