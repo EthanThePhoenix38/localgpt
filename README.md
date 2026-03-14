@@ -55,7 +55,7 @@ localgpt-gen --verbose
 Use Gen from any MCP-compatible (Claude Desktop, Codex Desktop/CLI, Gemini CLI, etc.):
 
 ```bash
-localgpt-gen --mcp
+localgpt-gen mcp-server
 ```
 
 Add to your `.mcp.json`:
@@ -65,13 +65,13 @@ Add to your `.mcp.json`:
   "mcpServers": {
     "localgpt-gen": {
       "command": "localgpt-gen",
-      "args": ["--mcp"]
+      "args": ["mcp-server"]
     }
   }
 }
 ```
 
-Full docs: [`docs/gen.md`](docs/gen.md) | [MCP Server](docs/gen/mcp-server.md)
+Full docs: [`website/docs/gen/index.md`](website/docs/gen/index.md) | [MCP Server](website/docs/gen/mcp-server.md)
 
 Built something cool? Share on [Discord](https://discord.gg/yMQ8tfxG) or [YouTube](https://www.youtube.com/@localgpt-gen)!
 
@@ -139,7 +139,7 @@ enabled = true
 api_token = "${TELEGRAM_BOT_TOKEN}"
 ```
 
-Full config reference: [`docs/configuration.md`](docs/configuration.md)
+Full config reference: [`website/docs/configuration.md`](website/docs/configuration.md)
 
 ### Security
 
@@ -148,7 +148,7 @@ Full config reference: [`docs/configuration.md`](docs/configuration.md)
 - **Prompt injection defenses** — marker stripping, pattern detection, content boundaries
 - **Audit chain** — hash-chained security event log
 
-Security docs: [`docs/sandbox.md`](docs/sandbox.md) | [`docs/localgpt.md`](docs/localgpt.md)
+Security docs: [`website/docs/sandbox.md`](website/docs/sandbox.md) | [`website/docs/localgpt.md`](website/docs/localgpt.md)
 
 ### HTTP API
 
@@ -159,7 +159,7 @@ Security docs: [`docs/sandbox.md`](docs/sandbox.md) | [`docs/localgpt.md`](docs/
 | `POST /api/chat/stream` | SSE streaming chat |
 | `GET /api/memory/search?q=<query>` | Search memory |
 
-Full API reference: [`docs/http-api.md`](docs/http-api.md)
+Full API reference: [`website/docs/http-api.md`](website/docs/http-api.md)
 
 ### CLI Commands
 
@@ -172,7 +172,7 @@ localgpt config show            # Show config
 localgpt paths                  # Show resolved paths
 ```
 
-Full CLI reference: [`docs/cli-commands.md`](docs/cli-commands.md)
+Full CLI reference: [`website/docs/cli-commands.md`](website/docs/cli-commands.md)
 
 ## Blog
 

@@ -28,4 +28,4 @@ tarpc = { version = "0.37", features = ["tokio1", "serde-transport"] }
 rustyline = "15"
 
 # CLI argument parsing
-clap = { version = "4.5.60", features = ["derive"] }
+clap = { version = "4.6.0", features = ["derive"] }

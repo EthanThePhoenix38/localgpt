@@ -31,7 +31,7 @@ rate-limit.new-packages = 10
 
 [workspace.dependencies]
 # Async runtime
-tokio = { version = "1.49", features = ["full"] }
+tokio = { version = "1.50", features = ["full"] }
 
 # HTTP client for LLM APIs
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "multipart", "form", "native-tls-vendored"] }
@@ -52,7 +52,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Utilities
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.21", features = ["v4"] }
+uuid = { version = "1.22", features = ["v4"] }
 async-trait = "0.1"
 futures = "0.3"
 anyhow = "1.0"
