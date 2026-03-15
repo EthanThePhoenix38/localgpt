@@ -414,13 +414,322 @@ impl PlayerInventory {
 // Plugin
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Runtime systems
+// ---------------------------------------------------------------------------
+
+/// System: check proximity triggers against the player each frame.
+pub fn proximity_trigger_system(
+    time: Res<Time>,
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    mut trigger_query: Query<(
+        Entity,
+        &Transform,
+        &mut ProximityTrigger,
+        Option<&TeleportAction>,
+        Option<&AddScoreAction>,
+        Option<&ToggleStateAction>,
+        Option<&OnceTrigger>,
+    )>,
+    mut score_board: ResMut<ScoreBoard>,
+    mut player_mut: Query<
+        &mut Transform,
+        (With<crate::character::Player>, Without<ProximityTrigger>),
+    >,
+    mut commands: Commands,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+    let now = time.elapsed_secs();
+
+    for (entity, transform, mut trigger, teleport, score, toggle, once) in trigger_query.iter_mut()
+    {
+        let distance = player_pos.distance(transform.translation);
+        if distance > trigger.radius {
+            continue;
+        }
+        if now - trigger.last_triggered < trigger.cooldown {
+            continue;
+        }
+        trigger.last_triggered = now;
+
+        // Execute actions
+        if let Some(teleport_action) = teleport
+            && let Ok(mut pt) = player_mut.single_mut()
+        {
+            pt.translation = teleport_action.destination;
+        }
+        if let Some(score_action) = score {
+            let entry = score_board
+                .scores
+                .entry(score_action.category.clone())
+                .or_insert(0);
+            *entry += score_action.amount;
+        }
+        if let Some(_toggle) = toggle {
+            // Toggle state handled via EntityState component
+            if let Ok(mut estate) = commands.get_entity(entity) {
+                estate.insert(EntityState::default());
+            }
+        }
+
+        // Remove trigger if once
+        if once.is_some() {
+            commands.entity(entity).remove::<ProximityTrigger>();
+            commands.entity(entity).remove::<OnceTrigger>();
+        }
+    }
+}
+
+/// System: tick timer triggers and fire their actions.
+pub fn timer_trigger_system(
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut TimerTrigger, Option<&AddScoreAction>)>,
+    mut score_board: ResMut<ScoreBoard>,
+) {
+    for (_entity, mut trigger, score) in query.iter_mut() {
+        trigger.timer.tick(time.delta());
+        if trigger.timer.just_finished()
+            && let Some(score_action) = score
+        {
+            let entry = score_board
+                .scores
+                .entry(score_action.category.clone())
+                .or_insert(0);
+            *entry += score_action.amount;
+        }
+    }
+}
+
+/// System: animate doors through their state machine.
+pub fn door_system(time: Res<Time>, mut query: Query<(&mut Door, &mut Transform)>) {
+    let dt = time.delta_secs();
+
+    for (mut door, mut transform) in query.iter_mut() {
+        match door.state.clone() {
+            DoorState::Opening { progress } => {
+                let new_progress = (progress + dt / door.open_duration).min(1.0);
+                let angle = door.open_angle.to_radians() * new_progress;
+                transform.rotation = door.original_rotation * Quat::from_rotation_y(angle);
+
+                if new_progress >= 1.0 {
+                    if door.auto_close {
+                        door.state = DoorState::Open {
+                            close_timer: Timer::from_seconds(
+                                door.auto_close_delay,
+                                TimerMode::Once,
+                            ),
+                        };
+                    } else {
+                        door.state = DoorState::Open {
+                            close_timer: Timer::from_seconds(f32::MAX, TimerMode::Once),
+                        };
+                    }
+                } else {
+                    door.state = DoorState::Opening {
+                        progress: new_progress,
+                    };
+                }
+            }
+            DoorState::Open { mut close_timer } => {
+                close_timer.tick(time.delta());
+                if close_timer.just_finished() {
+                    door.state = DoorState::Closing { progress: 1.0 };
+                } else {
+                    door.state = DoorState::Open { close_timer };
+                }
+            }
+            DoorState::Closing { progress } => {
+                let new_progress = (progress - dt / door.open_duration).max(0.0);
+                let angle = door.open_angle.to_radians() * new_progress;
+                transform.rotation = door.original_rotation * Quat::from_rotation_y(angle);
+
+                if new_progress <= 0.0 {
+                    door.state = DoorState::Closed;
+                    transform.rotation = door.original_rotation;
+                } else {
+                    door.state = DoorState::Closing {
+                        progress: new_progress,
+                    };
+                }
+            }
+            DoorState::Closed => {}
+        }
+    }
+}
+
+/// System: open doors when player is near (proximity-triggered doors).
+pub fn door_proximity_system(
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    mut door_query: Query<
+        (&Transform, &mut Door, &ProximityTrigger),
+        Without<crate::character::Player>,
+    >,
+    inventory: Res<PlayerInventory>,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    for (transform, mut door, trigger) in door_query.iter_mut() {
+        let distance = player_pos.distance(transform.translation);
+        if distance <= trigger.radius && matches!(door.state, DoorState::Closed) {
+            // Check key requirement
+            if let Some(ref key) = door.requires_key
+                && !inventory.has_key(key)
+            {
+                continue;
+            }
+            door.state = DoorState::Opening { progress: 0.0 };
+        }
+    }
+}
+
+/// System: handle collectible pickup.
+pub fn collectible_system(
+    time: Res<Time>,
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    mut collectible_query: Query<(Entity, &Transform, &mut Collectible, &mut Visibility)>,
+    mut score_board: ResMut<ScoreBoard>,
+    mut commands: Commands,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    for (entity, transform, mut collectible, mut visibility) in collectible_query.iter_mut() {
+        // Handle respawn timer
+        if let Some(ref mut timer) = collectible.respawn_timer {
+            timer.tick(time.delta());
+            if timer.just_finished() {
+                collectible.respawn_timer = None;
+                *visibility = Visibility::Inherited;
+            }
+            continue; // Skip pickup check while respawning
+        }
+
+        // Check if visible (already collected items are hidden)
+        if *visibility == Visibility::Hidden {
+            continue;
+        }
+
+        let distance = player_pos.distance(transform.translation);
+        if distance > 2.0 {
+            continue;
+        }
+
+        // Collect!
+        let entry = score_board
+            .scores
+            .entry(collectible.category.clone())
+            .or_insert(0);
+        *entry += collectible.value;
+
+        if let Some(respawn_time) = collectible.respawn_time {
+            // Hide and start respawn timer
+            *visibility = Visibility::Hidden;
+            collectible.respawn_timer = Some(Timer::from_seconds(respawn_time, TimerMode::Once));
+        } else {
+            // Permanently remove
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+/// System: sync ScoreBoard → HudScore so the HUD reflects interaction scores.
+pub fn score_sync_system(score_board: Res<ScoreBoard>, mut hud_score: ResMut<crate::ui::HudScore>) {
+    // Sum all score categories into the HUD score
+    let total: i32 = score_board.scores.values().sum();
+    hud_score.score = total as i64;
+}
+
+/// System: animate entities with AnimateAction (tweens transform properties).
+pub fn animate_action_system(
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut AnimateAction, &mut Transform)>,
+    mut commands: Commands,
+) {
+    let dt = time.delta_secs();
+
+    for (entity, mut action, mut transform) in query.iter_mut() {
+        action.progress = (action.progress + dt / action.duration.max(0.01)).min(1.0);
+        let t = action.progress;
+
+        match action.property.as_str() {
+            "position" | "translation" if action.to.len() >= 3 => {
+                let target = Vec3::new(action.to[0], action.to[1], action.to[2]);
+                transform.translation = transform.translation.lerp(target, t);
+            }
+            "scale" if action.to.len() >= 3 => {
+                let target = Vec3::new(action.to[0], action.to[1], action.to[2]);
+                transform.scale = transform.scale.lerp(target, t);
+            }
+            "scale" if action.to.len() == 1 => {
+                let target = Vec3::splat(action.to[0]);
+                transform.scale = transform.scale.lerp(target, t);
+            }
+            "rotation" if action.to.len() >= 3 => {
+                let target = Quat::from_euler(
+                    EulerRot::YXZ,
+                    action.to[1].to_radians(),
+                    action.to[0].to_radians(),
+                    action.to[2].to_radians(),
+                );
+                transform.rotation = transform.rotation.slerp(target, t);
+            }
+            _ => {}
+        }
+
+        if action.progress >= 1.0 {
+            commands.entity(entity).remove::<AnimateAction>();
+        }
+    }
+}
+
+/// System: handle enable/disable actions toggling visibility.
+pub fn enable_disable_system(
+    mut commands: Commands,
+    enable_query: Query<Entity, Added<EnableAction>>,
+    disable_query: Query<Entity, Added<DisableAction>>,
+) {
+    for entity in enable_query.iter() {
+        commands
+            .entity(entity)
+            .insert(Visibility::Inherited)
+            .remove::<EnableAction>();
+    }
+    for entity in disable_query.iter() {
+        commands
+            .entity(entity)
+            .insert(Visibility::Hidden)
+            .remove::<DisableAction>();
+    }
+}
+
 /// Plugin for interaction systems.
 pub struct InteractionPlugin;
 
 impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ScoreBoard::default())
-            .insert_resource(PlayerInventory::default());
+            .insert_resource(PlayerInventory::default())
+            .add_systems(
+                Update,
+                (
+                    proximity_trigger_system,
+                    timer_trigger_system,
+                    door_system,
+                    door_proximity_system,
+                    collectible_system,
+                    score_sync_system,
+                    animate_action_system,
+                    enable_disable_system,
+                ),
+            );
     }
 }
 

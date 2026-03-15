@@ -278,8 +278,11 @@ pub fn setup_gen_app(
         // P2: Interaction plugin
         .add_plugins(crate::interaction::InteractionPlugin)
         // P3: Terrain & landscape plugins
+        .add_plugins(crate::terrain::TerrainPlugin)
         .add_plugins(crate::terrain::SkyPlugin)
         .add_plugins(crate::terrain::WaterPlugin)
+        .add_plugins(crate::terrain::FoliagePlugin)
+        .add_plugins(crate::terrain::PathPlugin)
         // P4: UI plugins
         .add_plugins(crate::ui::SignPlugin)
         .add_plugins(crate::ui::HudPlugin)
@@ -287,8 +290,11 @@ pub fn setup_gen_app(
         .add_plugins(crate::ui::TooltipPlugin)
         .add_plugins(crate::ui::NotificationPlugin)
         // P5: Physics plugins
+        .add_plugins(crate::physics::PhysicsBodyPlugin)
         .add_plugins(crate::physics::ForceFieldPlugin)
-        .add_plugins(crate::physics::GravityPlugin);
+        .add_plugins(crate::physics::GravityPlugin)
+        .add_plugins(crate::physics::ColliderPlugin)
+        .add_plugins(crate::physics::JointPlugin);
 }
 
 /// Default scene: ground plane, camera, directional light, ambient light.
@@ -1524,7 +1530,10 @@ fn process_gen_commands(
             }
             GenCommand::SetNpcDialogue(p) => {
                 let Some(entity) = params.registry.get_entity(&p.npc_id) else {
-                    return; // Entity not found, skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.npc_id),
+                    });
+                    continue;
                 };
                 let npc_name = p.npc_id.clone();
                 let tree = crate::character::DialogueTree::from(p);
@@ -1559,7 +1568,10 @@ fn process_gen_commands(
             // Tier 11: Interaction & Trigger System (P2)
             GenCommand::AddTrigger(p) => {
                 let Some(entity) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 let mut ec = commands.entity(entity);
@@ -1694,7 +1706,10 @@ fn process_gen_commands(
             }
             GenCommand::AddCollectible(p) => {
                 let Some(entity) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 let position = params
@@ -1721,7 +1736,10 @@ fn process_gen_commands(
             }
             GenCommand::AddDoor(p) => {
                 let Some(entity) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 let rotation = params
@@ -1765,7 +1783,10 @@ fn process_gen_commands(
             }
             GenCommand::LinkEntities(p) => {
                 let Some(entity) = params.registry.get_entity(&p.source_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.source_id),
+                    });
+                    continue;
                 };
                 let source_name = p.source_id.clone();
                 commands
@@ -2030,7 +2051,10 @@ fn process_gen_commands(
             }
             GenCommand::AddLabel(p) => {
                 let Some(target) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
@@ -2059,7 +2083,10 @@ fn process_gen_commands(
             }
             GenCommand::AddTooltip(p) => {
                 let Some(target) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 let duration_secs = p.duration.unwrap_or(3.0);
@@ -2108,7 +2135,10 @@ fn process_gen_commands(
             // requires `cargo build --features physics`.
             GenCommand::SetPhysics(p) => {
                 let Some(entity) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 let mass = p.mass.unwrap_or(1.0);
@@ -2132,7 +2162,10 @@ fn process_gen_commands(
             }
             GenCommand::AddCollider(p) => {
                 let Some(entity) = params.registry.get_entity(&p.entity_id) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_id),
+                    });
+                    continue;
                 };
                 let entity_name = p.entity_id.clone();
                 commands
@@ -2155,10 +2188,16 @@ fn process_gen_commands(
             }
             GenCommand::AddJoint(p) => {
                 let Some(entity_a) = params.registry.get_entity(&p.entity_a) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_a),
+                    });
+                    continue;
                 };
                 let Some(entity_b) = params.registry.get_entity(&p.entity_b) else {
-                    return; // skip
+                    let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                        message: format!("Entity '{}' not found", p.entity_b),
+                    });
+                    continue;
                 };
                 let name = format!("Joint_{}_{}", p.entity_a, p.entity_b);
                 let wid = params.next_entity_id.alloc();
@@ -2245,7 +2284,10 @@ fn process_gen_commands(
                 } else if let Some(ref entity_id) = p.entity_id {
                     // Per-entity gravity override
                     let Some(entity) = params.registry.get_entity(entity_id) else {
-                        return; // skip
+                        let _ = channel_res.channels.resp_tx.send(GenResponse::Error {
+                            message: format!("Entity '{}' not found", entity_id),
+                        });
+                        continue;
                     };
                     let entity_name = entity_id.clone();
                     commands
