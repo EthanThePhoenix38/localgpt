@@ -431,7 +431,10 @@ impl PlayerInventory {
 /// System: check proximity triggers against the player each frame.
 pub fn proximity_trigger_system(
     time: Res<Time>,
-    player_query: Query<&Transform, With<crate::character::Player>>,
+    mut player_query: Query<
+        &mut Transform,
+        (With<crate::character::Player>, Without<ProximityTrigger>),
+    >,
     mut trigger_query: Query<(
         Entity,
         &Transform,
@@ -442,16 +445,13 @@ pub fn proximity_trigger_system(
         Option<&OnceTrigger>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
-    mut player_mut: Query<
-        &mut Transform,
-        (With<crate::character::Player>, Without<ProximityTrigger>),
-    >,
     mut commands: Commands,
 ) {
-    let Ok(player_transform) = player_query.single() else {
+    let player_pos = if let Ok(player_transform) = player_query.single() {
+        player_transform.translation
+    } else {
         return;
     };
-    let player_pos = player_transform.translation;
     let now = time.elapsed_secs();
 
     for (entity, transform, mut trigger, teleport, score, toggle, once) in trigger_query.iter_mut()
@@ -467,7 +467,7 @@ pub fn proximity_trigger_system(
 
         // Execute actions
         if let Some(teleport_action) = teleport
-            && let Ok(mut pt) = player_mut.single_mut()
+            && let Ok(mut pt) = player_query.single_mut()
         {
             pt.translation = teleport_action.destination;
         }
@@ -496,7 +496,10 @@ pub fn proximity_trigger_system(
 /// System: handle click triggers (E key press within max_distance).
 pub fn click_trigger_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    player_query: Query<&Transform, With<crate::character::Player>>,
+    mut player_query: Query<
+        &mut Transform,
+        (With<crate::character::Player>, Without<ClickTrigger>),
+    >,
     click_query: Query<(
         Entity,
         &Transform,
@@ -507,17 +510,17 @@ pub fn click_trigger_system(
         Option<&OnceTrigger>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
-    mut player_mut: Query<&mut Transform, (With<crate::character::Player>, Without<ClickTrigger>)>,
     mut commands: Commands,
 ) {
     if !keyboard.just_pressed(KeyCode::KeyE) {
         return;
     }
 
-    let Ok(player_transform) = player_query.single() else {
+    let player_pos = if let Ok(player_transform) = player_query.single() {
+        player_transform.translation
+    } else {
         return;
     };
-    let player_pos = player_transform.translation;
 
     // Find the closest click-triggerable entity within range
     let mut closest: Option<(Entity, f32)> = None;
@@ -538,7 +541,7 @@ pub fn click_trigger_system(
         click_query.get(target_entity)
     {
         if let Some(teleport_action) = teleport
-            && let Ok(mut pt) = player_mut.single_mut()
+            && let Ok(mut pt) = player_query.single_mut()
         {
             pt.translation = teleport_action.destination;
         }
