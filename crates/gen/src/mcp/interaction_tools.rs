@@ -309,10 +309,11 @@ impl Tool for GenAddCollectibleTool {
             value: args["value"].as_i64().unwrap_or(1) as i32,
             category: args["category"].as_str().unwrap_or("points").to_string(),
             pickup_sound: args["pickup_sound"].as_str().map(|s| s.to_string()),
-            pickup_effect: args["pickup_effect"]
-                .as_str()
-                .unwrap_or("sparkle")
-                .to_string(),
+            pickup_effect: match args["pickup_effect"].as_str().unwrap_or("sparkle") {
+                "none" => interaction::PickupEffect::None,
+                "dissolve" => interaction::PickupEffect::Dissolve,
+                _ => interaction::PickupEffect::Sparkle,
+            },
             respawn_time: args["respawn_time"].as_f64().map(|v| v as f32),
         };
 

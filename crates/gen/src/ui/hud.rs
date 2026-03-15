@@ -85,12 +85,49 @@ impl Default for HudParams {
 pub struct HudElement {
     /// Element type.
     pub element_type: HudElementType,
+    /// Screen position.
+    pub position: HudPosition,
     /// Unique ID for updates.
     pub id: Option<String>,
     /// Current value.
     pub value: String,
     /// Label prefix.
     pub label: Option<String>,
+}
+
+/// Convert HUD position to absolute positioning Node.
+pub fn hud_position_node(position: HudPosition) -> Node {
+    let mut node = Node {
+        position_type: PositionType::Absolute,
+        ..default()
+    };
+    match position {
+        HudPosition::TopLeft => {
+            node.left = Val::Px(20.0);
+            node.top = Val::Px(20.0);
+        }
+        HudPosition::TopRight => {
+            node.right = Val::Px(20.0);
+            node.top = Val::Px(20.0);
+        }
+        HudPosition::BottomLeft => {
+            node.left = Val::Px(20.0);
+            node.bottom = Val::Px(20.0);
+        }
+        HudPosition::BottomRight => {
+            node.right = Val::Px(20.0);
+            node.bottom = Val::Px(20.0);
+        }
+        HudPosition::CenterTop => {
+            node.top = Val::Px(20.0);
+            node.left = Val::Percent(50.0);
+        }
+        HudPosition::CenterBottom => {
+            node.bottom = Val::Px(20.0);
+            node.left = Val::Percent(50.0);
+        }
+    }
+    node
 }
 
 /// Resource for tracking score (shared with P2 interaction).
@@ -275,5 +312,53 @@ mod tests {
     fn test_hud_element_types() {
         assert!(matches!(HudElementType::default(), HudElementType::Score));
         assert!(matches!(HudPosition::default(), HudPosition::TopLeft));
+    }
+
+    #[test]
+    fn test_hud_position_node_top_left() {
+        let node = hud_position_node(HudPosition::TopLeft);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.left, Val::Px(20.0));
+        assert_eq!(node.top, Val::Px(20.0));
+    }
+
+    #[test]
+    fn test_hud_position_node_top_right() {
+        let node = hud_position_node(HudPosition::TopRight);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.right, Val::Px(20.0));
+        assert_eq!(node.top, Val::Px(20.0));
+    }
+
+    #[test]
+    fn test_hud_position_node_bottom_left() {
+        let node = hud_position_node(HudPosition::BottomLeft);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.left, Val::Px(20.0));
+        assert_eq!(node.bottom, Val::Px(20.0));
+    }
+
+    #[test]
+    fn test_hud_position_node_bottom_right() {
+        let node = hud_position_node(HudPosition::BottomRight);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.right, Val::Px(20.0));
+        assert_eq!(node.bottom, Val::Px(20.0));
+    }
+
+    #[test]
+    fn test_hud_position_node_center_top() {
+        let node = hud_position_node(HudPosition::CenterTop);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.top, Val::Px(20.0));
+        assert_eq!(node.left, Val::Percent(50.0));
+    }
+
+    #[test]
+    fn test_hud_position_node_center_bottom() {
+        let node = hud_position_node(HudPosition::CenterBottom);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.bottom, Val::Px(20.0));
+        assert_eq!(node.left, Val::Percent(50.0));
     }
 }

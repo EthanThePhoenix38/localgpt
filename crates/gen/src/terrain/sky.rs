@@ -386,4 +386,62 @@ mod tests {
         assert_eq!(config.sun_altitude, 45.0);
         assert!(config.fog_enabled);
     }
+
+    #[test]
+    fn test_custom_preset() {
+        let config = SkyConfig::from_preset(SkyPreset::Custom);
+        assert_eq!(config.sun_altitude, 45.0);
+        assert_eq!(config.sun_intensity, 1.0);
+        assert!(!config.fog_enabled);
+    }
+
+    #[test]
+    fn test_sky_params_default() {
+        let params = SkyParams::default();
+        assert!(matches!(params.preset, SkyPreset::Day));
+        assert!(params.sun_altitude.is_none());
+        assert!(params.sun_azimuth.is_none());
+        assert!(!params.fog_enabled);
+        assert_eq!(params.fog_color, "#c8d0d8");
+        assert_eq!(params.fog_start, 50.0);
+        assert_eq!(params.fog_end, 200.0);
+    }
+
+    #[test]
+    fn test_sun_direction_night() {
+        let config = SkyConfig::from_preset(SkyPreset::Night);
+        let dir = config.sun_direction();
+        // At -10° altitude, sun is below horizon
+        assert!(dir.y > 0.0); // cos(-10°) > 0
+    }
+
+    #[test]
+    fn test_with_overrides_ambient() {
+        let config = SkyConfig::from_preset(SkyPreset::Day).with_overrides(&SkyParams {
+            ambient_color: Some("#ff0000".to_string()),
+            ambient_intensity: Some(0.8),
+            ..Default::default()
+        });
+        assert!((config.ambient_color[0] - 1.0).abs() < 0.01);
+        assert!((config.ambient_intensity - 0.8).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_preset_sun_values() {
+        // Verify presets match spec values
+        let day = SkyConfig::from_preset(SkyPreset::Day);
+        assert_eq!(day.sun_altitude, 60.0);
+        assert!((day.ambient_intensity - 0.3).abs() < f32::EPSILON);
+
+        let sunset = SkyConfig::from_preset(SkyPreset::Sunset);
+        assert_eq!(sunset.sun_altitude, 5.0);
+        assert_eq!(sunset.sun_azimuth, 270.0);
+
+        let night = SkyConfig::from_preset(SkyPreset::Night);
+        assert_eq!(night.sun_altitude, -10.0);
+
+        let overcast = SkyConfig::from_preset(SkyPreset::Overcast);
+        assert_eq!(overcast.sun_altitude, 45.0);
+        assert!((overcast.sun_intensity - 0.3).abs() < f32::EPSILON);
+    }
 }

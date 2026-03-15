@@ -252,6 +252,16 @@ fn default_teleporter_size() -> [f32; 3] {
     [2.0, 3.0, 2.0]
 }
 
+/// Pickup visual effect for collectibles.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
+#[serde(rename_all = "lowercase")]
+pub enum PickupEffect {
+    None,
+    #[default]
+    Sparkle,
+    Dissolve,
+}
+
 /// Parameters for collectible.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollectibleParams {
@@ -263,7 +273,7 @@ pub struct CollectibleParams {
     #[serde(default)]
     pub pickup_sound: Option<String>,
     #[serde(default)]
-    pub pickup_effect: String,
+    pub pickup_effect: PickupEffect,
     #[serde(default)]
     pub respawn_time: Option<f32>,
 }
@@ -275,7 +285,7 @@ impl Default for CollectibleParams {
             value: 1,
             category: "points".to_string(),
             pickup_sound: None,
-            pickup_effect: "sparkle".to_string(),
+            pickup_effect: PickupEffect::default(),
             respawn_time: None,
         }
     }
@@ -352,7 +362,7 @@ pub struct LinkEntitiesParams {
 pub struct Collectible {
     pub value: i32,
     pub category: String,
-    pub pickup_effect: String,
+    pub pickup_effect: PickupEffect,
     pub respawn_time: Option<f32>,
     pub original_position: Vec3,
     pub respawn_timer: Option<Timer>,
@@ -865,7 +875,7 @@ mod tests {
         assert_eq!(params.value, 1);
         assert_eq!(params.category, "points");
         assert!(params.pickup_sound.is_none());
-        assert_eq!(params.pickup_effect, "sparkle");
+        assert_eq!(params.pickup_effect, PickupEffect::Sparkle);
         assert!(params.respawn_time.is_none());
     }
 
@@ -907,5 +917,94 @@ mod tests {
         };
         assert_eq!(params.amount, Some(10));
         assert_eq!(params.category.as_deref(), Some("coins"));
+    }
+
+    #[test]
+    fn test_door_state_default() {
+        assert!(matches!(DoorState::default(), DoorState::Closed));
+    }
+
+    #[test]
+    fn test_collectible_component() {
+        let c = Collectible {
+            value: 5,
+            category: "gems".to_string(),
+            pickup_effect: PickupEffect::Sparkle,
+            respawn_time: Some(10.0),
+            original_position: Vec3::ZERO,
+            respawn_timer: None,
+        };
+        assert_eq!(c.value, 5);
+        assert_eq!(c.category, "gems");
+        assert_eq!(c.respawn_time, Some(10.0));
+    }
+
+    #[test]
+    fn test_scoreboard_add_multiple() {
+        let mut board = ScoreBoard::default();
+        board.scores.insert("coins".to_string(), 10);
+        board.scores.insert("gems".to_string(), 3);
+        assert_eq!(board.scores.len(), 2);
+        assert_eq!(board.scores["coins"], 10);
+        assert_eq!(board.scores["gems"], 3);
+    }
+
+    #[test]
+    fn test_player_inventory_multiple() {
+        let mut inv = PlayerInventory::default();
+        inv.add_item("key_a".to_string());
+        inv.add_item("key_b".to_string());
+        assert!(inv.has_key("key_a"));
+        assert!(inv.has_key("key_b"));
+        assert!(!inv.has_key("key_c"));
+    }
+
+    #[test]
+    fn test_teleporter_params_custom() {
+        let params = TeleporterParams {
+            position: [1.0, 0.0, 2.0],
+            destination: [10.0, 0.0, 20.0],
+            size: [3.0, 4.0, 3.0],
+            effect: "beam".to_string(),
+            sound: Some("whoosh".to_string()),
+            label: Some("Portal".to_string()),
+        };
+        assert_eq!(params.label.as_deref(), Some("Portal"));
+        assert_eq!(params.size, [3.0, 4.0, 3.0]);
+    }
+
+    #[test]
+    fn test_link_entities_params() {
+        let params = LinkEntitiesParams {
+            source_id: "button".to_string(),
+            source_event: "pressed".to_string(),
+            target_id: "door".to_string(),
+            target_action: "open".to_string(),
+            condition: None,
+        };
+        assert_eq!(params.source_id, "button");
+        assert!(params.condition.is_none());
+    }
+
+    #[test]
+    fn test_pickup_effect_default() {
+        assert_eq!(PickupEffect::default(), PickupEffect::Sparkle);
+    }
+
+    #[test]
+    fn test_pickup_effect_variants() {
+        assert_ne!(PickupEffect::None, PickupEffect::Sparkle);
+        assert_ne!(PickupEffect::Sparkle, PickupEffect::Dissolve);
+        assert_ne!(PickupEffect::Dissolve, PickupEffect::None);
+    }
+
+    #[test]
+    fn test_pickup_effect_serde() {
+        let json = serde_json::to_string(&PickupEffect::Dissolve).unwrap();
+        assert_eq!(json, "\"dissolve\"");
+        let parsed: PickupEffect = serde_json::from_str("\"sparkle\"").unwrap();
+        assert_eq!(parsed, PickupEffect::Sparkle);
+        let parsed_none: PickupEffect = serde_json::from_str("\"none\"").unwrap();
+        assert_eq!(parsed_none, PickupEffect::None);
     }
 }

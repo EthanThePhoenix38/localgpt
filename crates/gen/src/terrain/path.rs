@@ -280,4 +280,53 @@ mod tests {
         assert_ne!(stone, dirt);
         assert_ne!(dirt, custom);
     }
+
+    #[test]
+    fn test_path_material_all_variants() {
+        let wood = get_path_material_color(PathMaterial::Wood);
+        let cobblestone = get_path_material_color(PathMaterial::Cobblestone);
+        assert_ne!(wood, cobblestone);
+    }
+
+    #[test]
+    fn test_single_point_path() {
+        let params = PathParams {
+            points: vec![Vec3::ZERO],
+            ..default()
+        };
+        let mesh = generate_path_mesh(&params);
+        // Single point = less than 2 = empty mesh
+        assert_eq!(mesh.count_vertices(), 0);
+    }
+
+    #[test]
+    fn test_path_with_raised() {
+        let params = PathParams {
+            points: vec![Vec3::ZERO, Vec3::new(5.0, 0.0, 0.0)],
+            raised: 0.1,
+            curved: false,
+            ..default()
+        };
+        let mesh = generate_path_mesh(&params);
+        assert!(mesh.count_vertices() >= 4);
+    }
+
+    #[test]
+    fn test_catmull_rom_preserves_endpoints() {
+        let points = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(5.0, 0.0, 5.0),
+            Vec3::new(10.0, 0.0, 0.0),
+        ];
+        let samples = sample_catmull_rom(&points, 1.0);
+        assert_eq!(samples.first().unwrap(), &points[0]);
+        assert_eq!(samples.last().unwrap(), points.last().unwrap());
+    }
+
+    #[test]
+    fn test_path_default_functions() {
+        assert_eq!(default_width(), 2.0);
+        assert!(default_curved());
+        assert!((default_raised() - 0.02).abs() < f32::EPSILON);
+    }
 }

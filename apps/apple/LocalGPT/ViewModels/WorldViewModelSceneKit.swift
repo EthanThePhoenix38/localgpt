@@ -28,6 +28,7 @@ class WorldViewModelSceneKit: ObservableObject {
 
     private var activeBehaviors: [String: [ActiveBehavior]] = [:]
     private var displayLink: CVDisplayLink?
+    private var lastBehaviorTime: TimeInterval = CACurrentMediaTime()
 
     struct ActiveBehavior {
         let type: BehaviorType
@@ -95,16 +96,8 @@ class WorldViewModelSceneKit: ObservableObject {
 
         cameraNode = SCNNode()
         cameraNode!.camera = camera
-        cameraNode!.position = SCNVector3(
-            worldState.camera.position.x,
-            worldState.camera.position.y,
-            worldState.camera.position.z
-        )
-        cameraNode!.look(at: SCNVector3(
-            worldState.camera.lookAt.x,
-            worldState.camera.lookAt.y,
-            worldState.camera.lookAt.z
-        ))
+        cameraNode!.position = SCNVector3(worldState.camera.position.x, worldState.camera.position.y, worldState.camera.position.z)
+        cameraNode!.look(at: SCNVector3(worldState.camera.lookAt.x, worldState.camera.lookAt.y, worldState.camera.lookAt.z))
         rootNode.addChildNode(cameraNode!)
     }
 
@@ -119,15 +112,15 @@ class WorldViewModelSceneKit: ObservableObject {
     }
 
     private func startBehaviorUpdateLoop() {
-        var lastTime = CACurrentMediaTime()
+        lastBehaviorTime = CACurrentMediaTime()
 
         CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
         CVDisplayLinkSetOutputCallback(displayLink!, { _, inNow, _, _, _, userInfo in
             guard let userInfo = userInfo else { return kCVReturnSuccess }
             let viewModel = Unmanaged<WorldViewModelSceneKit>.fromOpaque(userInfo).takeUnretainedValue()
             let currentTime = CACurrentMediaTime()
-            let dt = Float(currentTime - lastTime)
-            lastTime = currentTime
+            let dt = Float(currentTime - viewModel.lastBehaviorTime)
+            viewModel.lastBehaviorTime = currentTime
 
             DispatchQueue.main.async {
                 viewModel.updateBehaviors(dt: dt)
@@ -377,7 +370,7 @@ class WorldViewModelSceneKit: ObservableObject {
         }
 
         var activeBehavior = ActiveBehavior(type: type, parameters: parameters)
-        activeBehavior.baseY = node.position.y
+        activeBehavior.baseY = Float(node.position.y)
         if activeBehaviors[entityId] == nil {
             activeBehaviors[entityId] = []
         }
@@ -456,7 +449,8 @@ class WorldViewModelSceneKit: ObservableObject {
         let x = cos(angle) * radius
         let z = sin(angle) * radius
 
-        node.position = SCNVector3(x, node.position.y, z)
+        let currentY = node.position.y
+        node.position = SCNVector3(CGFloat(x), currentY, CGFloat(z))
     }
 
     private func updateSpin(node: SCNNode, behavior: inout ActiveBehavior, dt: Float) {
@@ -472,7 +466,7 @@ class WorldViewModelSceneKit: ObservableObject {
             rotationAxis = SCNVector3(0, 1, 0)
         }
 
-        let deltaRotation = SCNQuaternion.fromAxisAngle(axis: rotationAxis, angle: speed * dt * .pi / 180)
+        let deltaRotation = SCNQuaternion.fromAxisAngle(axis: rotationAxis, angle: (speed * dt * Float.pi) / 180.0)
         node.localRotate(by: deltaRotation)
     }
 
@@ -480,8 +474,8 @@ class WorldViewModelSceneKit: ObservableObject {
         let amplitude = Float(behavior.parameters["amplitude"] ?? 0.5)
         let speed = Float(behavior.parameters["speed"] ?? 2.0)
 
-        let offset = sin(time * speed) * amplitude
-        node.position.y = behavior.baseY + offset
+        let offset: Float = sin(time * speed) * amplitude
+        node.position.y = CGFloat(behavior.baseY + offset)
     }
 
     private func updatePulse(node: SCNNode, behavior: inout ActiveBehavior, time: Float) {
@@ -489,10 +483,11 @@ class WorldViewModelSceneKit: ObservableObject {
         let maxScale = Float(behavior.parameters["max_scale"] ?? 1.2)
         let speed = Float(behavior.parameters["speed"] ?? 2.0)
 
-        let t = (sin(time * speed) + 1) / 2
-        let scale = minScale + (maxScale - minScale) * t
+        let t: Float = (sin(time * speed) + 1) / 2
+        let scale: Float = minScale + (maxScale - minScale) * t
 
-        node.scale = SCNVector3(scale, scale, scale)
+        let cg = CGFloat(scale)
+        node.scale = SCNVector3(cg, cg, cg)
     }
 
     private func updateBounce(node: SCNNode, behavior: inout ActiveBehavior, dt: Float) {
@@ -501,10 +496,11 @@ class WorldViewModelSceneKit: ObservableObject {
         let floorY = Float(behavior.parameters["floor_y"] ?? 0.0)
 
         behavior.velocity += gravity * dt
-        node.position.y += behavior.velocity * dt
+        let newYFloat: Float = Float(node.position.y) + behavior.velocity * dt
+        node.position.y = CGFloat(newYFloat)
 
-        if node.position.y < floorY {
-            node.position.y = floorY
+        if newYFloat < floorY {
+            node.position.y = CGFloat(floorY)
             behavior.velocity = -behavior.velocity * bounceFactor
 
             if abs(behavior.velocity) < 0.1 {
@@ -604,15 +600,15 @@ class WorldViewModelSceneKit: ObservableObject {
 
 extension SCNQuaternion {
     static func fromAxisAngle(axis: SCNVector3, angle: Float) -> SCNQuaternion {
-        let halfAngle = angle / 2
-        let s = sin(halfAngle)
-        return SCNQuaternion(
-            Float(axis.x * s),
-            Float(axis.y * s),
-            Float(axis.z * s),
-            cos(halfAngle)
-        )
+        let halfAngle: Float = angle / 2
+        let s: Float = sin(halfAngle)
+        let x: Float = Float(axis.x) * s
+        let y: Float = Float(axis.y) * s
+        let z: Float = Float(axis.z) * s
+        let w: Float = cos(halfAngle)
+        return SCNQuaternion(x, y, z, w)
     }
 }
 
 #endif
+

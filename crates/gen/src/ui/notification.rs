@@ -139,6 +139,12 @@ pub fn notification_spawn_system(
     mut queue: ResMut<NotificationQueue>,
 ) {
     for event in events.read() {
+        let icon_text = get_notification_icon_text(event.icon);
+        let display_text = if icon_text.is_empty() {
+            event.text.clone()
+        } else {
+            format!("{} {}", icon_text, event.text)
+        };
         let entity = commands
             .spawn((
                 Notification {
@@ -150,6 +156,14 @@ pub fn notification_spawn_system(
                     duration: default_duration(),
                     stack_offset: 0.0,
                     alpha: 0.0,
+                },
+                notification_position_node(event.position),
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+                Text::new(display_text),
+                TextColor(Color::WHITE),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
                 },
                 Name::new("Notification"),
             ))
@@ -171,10 +185,16 @@ pub fn notification_spawn_system(
 pub fn notification_animation_system(
     time: Res<Time>,
     mut commands: Commands,
-    mut notification_query: Query<(Entity, &mut Notification)>,
+    mut notification_query: Query<(
+        Entity,
+        &mut Notification,
+        Option<&mut TextColor>,
+        Option<&mut BackgroundColor>,
+        Option<&mut Node>,
+    )>,
     mut queue: ResMut<NotificationQueue>,
 ) {
-    for (entity, mut notification) in notification_query.iter_mut() {
+    for (entity, mut notification, text_color, bg_color, node) in notification_query.iter_mut() {
         notification.elapsed += time.delta_secs();
 
         match notification.phase {
@@ -203,12 +223,36 @@ pub fn notification_animation_system(
                 }
             }
         }
+
+        // Apply alpha to text and background
+        if let Some(mut tc) = text_color {
+            tc.0 = tc.0.with_alpha(notification.alpha);
+        }
+        if let Some(mut bg) = bg_color {
+            bg.0 = bg.0.with_alpha(notification.alpha * 0.7);
+        }
+
+        // Apply stack offset to node position
+        if let Some(mut n) = node {
+            let base_top = match notification.position {
+                NotificationPosition::Top => Val::Px(20.0),
+                NotificationPosition::Center => Val::Percent(50.0),
+                NotificationPosition::Bottom => Val::Auto,
+            };
+            if !matches!(notification.position, NotificationPosition::Bottom) {
+                n.top = match base_top {
+                    Val::Px(px) => Val::Px(px + notification.stack_offset * 50.0),
+                    Val::Percent(p) => Val::Percent(p),
+                    _ => base_top,
+                };
+            }
+        }
     }
 
     // Update stack positions
     let mut offset = 0.0;
     for entity in &queue.notifications {
-        if let Ok((_, mut notif)) = notification_query.get_mut(*entity) {
+        if let Ok((_, mut notif, _, _, _)) = notification_query.get_mut(*entity) {
             notif.stack_offset = offset;
             offset += 1.0;
         }
@@ -224,6 +268,43 @@ pub fn get_notification_icon_text(icon: NotificationIcon) -> &'static str {
         NotificationIcon::Key => "🔑",
         NotificationIcon::Heart => "❤",
         NotificationIcon::Warning => "⚠",
+    }
+}
+
+/// Build a positioned `Node` for notification screen placement.
+pub fn notification_position_node(position: NotificationPosition) -> Node {
+    let mut node = Node {
+        position_type: PositionType::Absolute,
+        padding: UiRect::all(Val::Px(8.0)),
+        max_width: Val::Px(300.0),
+        ..default()
+    };
+    match position {
+        NotificationPosition::Top => {
+            node.top = Val::Px(20.0);
+            node.right = Val::Px(20.0);
+        }
+        NotificationPosition::Center => {
+            node.top = Val::Percent(50.0);
+            node.left = Val::Percent(50.0);
+        }
+        NotificationPosition::Bottom => {
+            node.bottom = Val::Px(20.0);
+            node.right = Val::Px(20.0);
+        }
+    }
+    node
+}
+
+/// Plugin for notification systems.
+pub struct NotificationPlugin;
+
+impl Plugin for NotificationPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<NotificationQueue>()
+            .add_message::<NotificationEvent>()
+            .add_systems(Update, notification_spawn_system)
+            .add_systems(Update, notification_animation_system);
     }
 }
 
@@ -298,16 +379,29 @@ mod tests {
         assert_eq!(notif.style, NotificationStyle::Achievement);
         assert_eq!(notif.alpha, 1.0);
     }
-}
 
-/// Plugin for notification systems.
-pub struct NotificationPlugin;
+    #[test]
+    fn test_notification_position_node_top() {
+        let node = notification_position_node(NotificationPosition::Top);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.top, Val::Px(20.0));
+        assert_eq!(node.right, Val::Px(20.0));
+        assert_eq!(node.max_width, Val::Px(300.0));
+    }
 
-impl Plugin for NotificationPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<NotificationQueue>()
-            .add_message::<NotificationEvent>()
-            .add_systems(Update, notification_spawn_system)
-            .add_systems(Update, notification_animation_system);
+    #[test]
+    fn test_notification_position_node_center() {
+        let node = notification_position_node(NotificationPosition::Center);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.top, Val::Percent(50.0));
+        assert_eq!(node.left, Val::Percent(50.0));
+    }
+
+    #[test]
+    fn test_notification_position_node_bottom() {
+        let node = notification_position_node(NotificationPosition::Bottom);
+        assert_eq!(node.position_type, PositionType::Absolute);
+        assert_eq!(node.bottom, Val::Px(20.0));
+        assert_eq!(node.right, Val::Px(20.0));
     }
 }

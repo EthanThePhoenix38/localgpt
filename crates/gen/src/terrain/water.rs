@@ -206,4 +206,37 @@ mod tests {
         assert_eq!(water.wave_speed, 2.0);
         assert_eq!(water.base_height, 3.0);
     }
+
+    #[test]
+    fn test_water_mesh_with_position() {
+        let params = WaterParams {
+            position: Some(Vec3::new(10.0, 5.0, 20.0)),
+            size: Vec2::splat(50.0),
+            ..default()
+        };
+        let mesh = generate_water_mesh(&params);
+        assert_eq!(mesh.count_vertices(), 1089);
+    }
+
+    #[test]
+    fn test_parse_water_color_rgb() {
+        let color = parse_water_color("#ff0000");
+        assert!(color.is_some());
+    }
+
+    #[test]
+    fn test_parse_water_color_short_hex() {
+        // Only 6-char hex supported
+        let color = parse_water_color("#fff");
+        assert!(color.is_none());
+    }
+
+    #[test]
+    fn test_water_default_functions() {
+        assert_eq!(default_size(), Vec2::splat(100.0));
+        assert_eq!(default_color(), "#2389da");
+        assert!((default_opacity() - 0.7).abs() < f32::EPSILON);
+        assert!((default_wave_speed() - 1.0).abs() < f32::EPSILON);
+        assert!((default_wave_height() - 0.3).abs() < f32::EPSILON);
+    }
 }

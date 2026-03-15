@@ -446,6 +446,7 @@ struct GenCommandParams<'w, 's> {
     avatar_movement_config: ResMut<'w, avatar::AvatarMovementConfig>,
     pov_state: ResMut<'w, avatar::PovState>,
     avatar_entities: Query<'w, 's, Entity, With<AvatarEntity>>,
+    player_camera_query: Query<'w, 's, &'static mut crate::character::PlayerCamera>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -1546,22 +1547,29 @@ fn process_gen_commands(
             }
             GenCommand::SetPlayerCameraMode(p) => {
                 // Apply camera mode via avatar system resources
-                let pov = match p.mode.to_lowercase().as_str() {
-                    "first_person" | "firstperson" => {
-                        *params.camera_mode = avatar::CameraMode::Attached;
+                let camera_pov = p.mode_enum();
+                *params.camera_mode = avatar::CameraMode::Attached;
+                let pov = match camera_pov {
+                    crate::character::CameraPov::FirstPerson => {
                         super::commands::PointOfView::FirstPerson
                     }
-                    "third_person" | "thirdperson" => {
-                        *params.camera_mode = avatar::CameraMode::Attached;
-                        super::commands::PointOfView::ThirdPerson
-                    }
-                    _ => {
-                        *params.camera_mode = avatar::CameraMode::Attached;
-                        super::commands::PointOfView::ThirdPerson
-                    }
+                    _ => super::commands::PointOfView::ThirdPerson,
                 };
                 params.pov_state.pov = pov;
                 params.avatar_movement_config.eye_height = p.distance.max(1.0);
+
+                // Apply camera settings to PlayerCamera if present
+                for mut cam in params.player_camera_query.iter_mut() {
+                    cam.mode = camera_pov;
+                    cam.distance = p.distance;
+                    cam.pitch = p.pitch;
+                    cam.fov = p.fov;
+                    cam.fixed_position = p.fixed_position.map(Vec3::from);
+                    cam.fixed_look_at = p.fixed_look_at.map(Vec3::from);
+                    cam.transition_duration = p.transition_duration;
+                    cam.transition_progress = 0.0;
+                }
+
                 GenResponse::CameraSet
             }
 
@@ -2033,24 +2041,51 @@ fn process_gen_commands(
                         p.rotation.z.to_radians(),
                     );
                 }
-                let entity = commands
-                    .spawn((
-                        Name::new(name.clone()),
-                        GenEntity {
-                            entity_type: GenEntityType::Primitive,
-                            world_id: wid,
-                        },
-                        Text2d::new(p.text.clone()),
-                        TextColor(text_color),
-                        TextLayout::new_with_justify(bevy::text::Justify::Center),
-                        transform,
-                        Visibility::default(),
-                        crate::ui::Sign {
-                            billboard: p.billboard,
-                            text: p.text.clone(),
-                        },
-                    ))
-                    .id();
+                let mut ec = commands.spawn((
+                    Name::new(name.clone()),
+                    GenEntity {
+                        entity_type: GenEntityType::Primitive,
+                        world_id: wid,
+                    },
+                    Text2d::new(p.text.clone()),
+                    TextColor(text_color),
+                    TextLayout::new_with_justify(bevy::text::Justify::Center),
+                    transform,
+                    Visibility::default(),
+                    crate::ui::Sign {
+                        billboard: p.billboard,
+                        text: p.text.clone(),
+                    },
+                ));
+                // Word wrap if max_width is set
+                if let Some(max_width) = p.max_width {
+                    ec.insert(bevy::text::TextBounds::new_horizontal(max_width));
+                }
+                let entity = ec.id();
+                // Background panel behind text
+                if let Some(bg_color) = p
+                    .background_color
+                    .as_deref()
+                    .and_then(crate::ui::parse_sign_color)
+                {
+                    let bg_mesh = params
+                        .meshes
+                        .add(Plane3d::new(Vec3::Z, Vec2::new(2.0, 0.6)));
+                    let bg_mat = params.materials.add(StandardMaterial {
+                        base_color: bg_color.with_alpha(0.85),
+                        alpha_mode: AlphaMode::Blend,
+                        unlit: true,
+                        ..default()
+                    });
+                    commands.spawn((
+                        Name::new("SignBackground"),
+                        crate::ui::SignBackground,
+                        Mesh3d(bg_mesh),
+                        MeshMaterial3d(bg_mat),
+                        Transform::from_xyz(0.0, 0.0, -0.01),
+                        ChildOf(entity),
+                    ));
+                }
                 params.registry.insert_with_id(name.clone(), entity, wid);
                 GenResponse::Spawned {
                     name,
@@ -2077,10 +2112,13 @@ fn process_gen_commands(
                         },
                         crate::ui::HudElement {
                             element_type: p.element_type,
+                            position: p.position,
                             id: p.id.clone(),
                             value: p.initial_value.clone(),
                             label: p.label.clone(),
                         },
+                        crate::ui::hud_position_node(p.position),
+                        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.5)),
                         Text::new(display_text),
                         TextColor(text_color),
                         TextFont {
@@ -2117,7 +2155,8 @@ fn process_gen_commands(
                     Text2d::new(p.text.clone()),
                     TextColor(text_color),
                     TextLayout::new_with_justify(bevy::text::Justify::Center),
-                    Transform::from_xyz(0.0, p.offset_y, 0.0).with_scale(Vec3::splat(0.01)),
+                    Transform::from_xyz(0.0, p.offset_y, 0.0)
+                        .with_scale(Vec3::splat(p.font_size / 1600.0)),
                     Visibility::default(),
                     ChildOf(target),
                 ));
@@ -2155,19 +2194,55 @@ fn process_gen_commands(
             }
             GenCommand::AddNotification(p) => {
                 let text = p.text.clone();
-                commands.spawn((
-                    Name::new("Notification"),
-                    crate::ui::Notification {
-                        text: p.text.clone(),
-                        style: p.style,
-                        position: p.position,
-                        phase: crate::ui::NotificationPhase::EnterIn,
-                        elapsed: 0.0,
-                        duration: p.duration,
-                        stack_offset: 0.0,
-                        alpha: 0.0,
-                    },
-                ));
+                let icon_text = crate::ui::get_notification_icon_text(p.icon);
+                let display_text = if icon_text.is_empty() {
+                    p.text.clone()
+                } else {
+                    format!("{} {}", icon_text, p.text)
+                };
+                let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
+                let notif_entity = commands
+                    .spawn((
+                        Name::new("Notification"),
+                        crate::ui::Notification {
+                            text: p.text.clone(),
+                            style: p.style,
+                            position: p.position,
+                            phase: crate::ui::NotificationPhase::EnterIn,
+                            elapsed: 0.0,
+                            duration: p.duration,
+                            stack_offset: 0.0,
+                            alpha: 0.0,
+                        },
+                        crate::ui::notification_position_node(p.position),
+                        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.7)),
+                        Text::new(display_text),
+                        TextColor(text_color),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                    ))
+                    .id();
+                // Add to notification queue for stacking/limit management
+                commands.queue(move |world: &mut World| {
+                    let mut to_despawn = Vec::new();
+                    {
+                        let mut queue = world.resource_mut::<crate::ui::NotificationQueue>();
+                        queue.notifications.push(notif_entity);
+                        while queue.notifications.len() > 4 {
+                            if let Some(oldest) = queue.notifications.first().copied() {
+                                queue.notifications.remove(0);
+                                to_despawn.push(oldest);
+                            }
+                        }
+                    }
+                    for entity in to_despawn {
+                        if let Ok(ec) = world.get_entity_mut(entity) {
+                            ec.despawn();
+                        }
+                    }
+                });
                 let _ = channel_res
                     .channels
                     .resp_tx
