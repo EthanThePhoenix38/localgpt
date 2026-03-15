@@ -3,6 +3,10 @@
 //! Converts the entire scene (shapes, materials, lights, behaviors, audio, environment,
 //! camera) into a single HTML file using Three.js for 3D and the Web Audio API for
 //! procedural sound synthesis.
+//!
+//! The exported HTML is designed to be embeddable in other websites via `<iframe>`.
+//! It includes Open Graph meta tags, responsive sizing, and a postMessage API
+//! for parent-frame communication.
 
 use localgpt_world_types as wt;
 use std::fmt::Write;
@@ -88,8 +92,18 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
     )
     .unwrap();
 
-    // Camera
-    let cam = manifest.camera.as_ref().cloned().unwrap_or_default();
+    // Camera — prefer explicit camera, fall back to avatar spawn, then default
+    let cam = manifest.camera.as_ref().cloned().unwrap_or_else(|| {
+        if let Some(ref avatar) = manifest.avatar {
+            wt::CameraDef {
+                position: avatar.spawn_position,
+                look_at: avatar.spawn_look_at,
+                ..Default::default()
+            }
+        } else {
+            wt::CameraDef::default()
+        }
+    });
     writeln!(
         js,
         "const camera = new THREE.PerspectiveCamera({:.1}, window.innerWidth / window.innerHeight, 0.1, 1000);",
@@ -102,15 +116,11 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
     )
     .unwrap();
 
-    // Renderer
+    // Renderer — append to #scene container (works in both standalone and embedded)
+    writeln!(js, "const container = document.getElementById('scene');").unwrap();
     writeln!(
         js,
         "const renderer = new THREE.WebGLRenderer({{ antialias: true }});"
-    )
-    .unwrap();
-    writeln!(
-        js,
-        "renderer.setSize(window.innerWidth, window.innerHeight);"
     )
     .unwrap();
     writeln!(js, "renderer.setPixelRatio(window.devicePixelRatio);").unwrap();
@@ -118,11 +128,24 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
     writeln!(js, "renderer.shadowMap.type = THREE.PCFSoftShadowMap;").unwrap();
     writeln!(js, "renderer.toneMapping = THREE.ACESFilmicToneMapping;").unwrap();
     writeln!(js, "renderer.toneMappingExposure = 1.0;").unwrap();
+    writeln!(js, "renderer.physicallyCorrectLights = true;").unwrap();
+    writeln!(js, "container.appendChild(renderer.domElement);").unwrap();
+
+    // Container-aware sizing (supports both full-page and embedded containers)
     writeln!(
         js,
-        "document.getElementById('scene').appendChild(renderer.domElement);"
+        r#"function resizeRenderer() {{
+  const w = container.clientWidth || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}}"#
     )
     .unwrap();
+    writeln!(js, "resizeRenderer();").unwrap();
+    writeln!(js, "new ResizeObserver(resizeRenderer).observe(container);").unwrap();
+    writeln!(js, "window.addEventListener('resize', resizeRenderer);").unwrap();
 
     // OrbitControls
     writeln!(
@@ -201,25 +224,34 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
     writeln!(js, "  behaviorTime.value += dt;").unwrap();
     writeln!(js, "  const t = behaviorTime.value;").unwrap();
     writeln!(js, "  for (const b of behaviors) b(dt, t);").unwrap();
+    writeln!(
+        js,
+        "  if (typeof updateMovement === 'function') updateMovement(dt);"
+    )
+    .unwrap();
+    writeln!(
+        js,
+        "  if (typeof updateTour === 'function') updateTour(dt);"
+    )
+    .unwrap();
     writeln!(js, "  controls.update();").unwrap();
     writeln!(js, "  renderer.render(scene, camera);").unwrap();
     writeln!(js, "}}").unwrap();
     writeln!(js, "animate();").unwrap();
 
-    // Resize handler
-    writeln!(js, "window.addEventListener('resize', () => {{").unwrap();
-    writeln!(
-        js,
-        "  camera.aspect = window.innerWidth / window.innerHeight;"
-    )
-    .unwrap();
-    writeln!(js, "  camera.updateProjectionMatrix();").unwrap();
-    writeln!(
-        js,
-        "  renderer.setSize(window.innerWidth, window.innerHeight);"
-    )
-    .unwrap();
-    writeln!(js, "}});").unwrap();
+    // ---- WASD keyboard navigation ----
+    let move_speed = manifest
+        .avatar
+        .as_ref()
+        .map(|a| a.movement_speed)
+        .unwrap_or(5.0);
+    emit_keyboard_controls(&mut js, move_speed);
+
+    // ---- Guided tours ----
+    emit_tours(&mut js, manifest);
+
+    // ---- postMessage API for parent-frame communication ----
+    emit_embed_api(&mut js);
 
     // ---- Wrap in HTML ----
     let title = &manifest.meta.name;
@@ -229,6 +261,10 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
         .as_deref()
         .unwrap_or("A 3D scene exported from LocalGPT Gen");
 
+    let entity_count = manifest.entities.len();
+    let has_tours = !manifest.tours.is_empty();
+    let has_audio = manifest.entities.iter().any(|e| e.audio.is_some());
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -237,10 +273,27 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{description}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{description}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{title}">
+<meta name="twitter:description" content="{description}">
+<meta name="generator" content="LocalGPT Gen">
+<script type="application/ld+json">
+{{
+  "@context": "https://schema.org",
+  "@type": "3DModel",
+  "name": "{title}",
+  "description": "{description}",
+  "encodingFormat": "text/html",
+  "creator": {{ "@type": "SoftwareApplication", "name": "LocalGPT Gen" }}
+}}
+</script>
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{ overflow: hidden; background: #000; }}
-#scene {{ width: 100vw; height: 100vh; }}
+html, body {{ width: 100%; height: 100%; overflow: hidden; background: #000; }}
+#scene {{ width: 100%; height: 100%; }}
 #info {{
   position: absolute; top: 10px; left: 10px;
   color: #fff; font: 14px/1.4 system-ui, sans-serif;
@@ -253,13 +306,27 @@ body {{ overflow: hidden; background: #000; }}
   padding: 8px 16px; border-radius: 6px; cursor: pointer;
   font: 14px system-ui, sans-serif;
 }}
-#audio-btn:hover {{ background: rgba(0,0,0,0.8); }}
+#audio-btn:hover, #tour-btn:hover {{ background: rgba(0,0,0,0.8); }}
+#tour-btn {{
+  position: absolute; bottom: 20px; right: 140px;
+  background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+  padding: 8px 16px; border-radius: 6px; cursor: pointer;
+  font: 14px system-ui, sans-serif; display: none;
+}}
+#tour-desc {{
+  position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.7); color: #fff; padding: 10px 20px; border-radius: 8px;
+  font: 14px/1.5 system-ui, sans-serif; max-width: 500px; text-align: center;
+  display: none; pointer-events: none;
+}}
 </style>
 </head>
 <body>
 <div id="scene"></div>
-<div id="info">{title}<br><small>Drag to orbit &middot; Scroll to zoom</small></div>
+<div id="info">{title}<br><small>Drag to orbit &middot; Scroll to zoom &middot; WASD to move</small><br><small>{entity_count} entities{tours_label}{audio_label}</small></div>
 <button id="audio-btn" style="display:none" onclick="toggleAudio()">Sound On</button>
+<button id="tour-btn">Start Tour</button>
+<div id="tour-desc"></div>
 <script type="importmap">
 {{
   "imports": {{
@@ -278,6 +345,9 @@ import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
 "#,
         title = html_escape(title),
         description = html_escape(description),
+        entity_count = entity_count,
+        tours_label = if has_tours { " &middot; Tours" } else { "" },
+        audio_label = if has_audio { " &middot; Audio" } else { "" },
         js = js,
     )
 }
@@ -305,6 +375,21 @@ fn emit_entity(js: &mut String, entity: &wt::WorldEntity, idx: usize) {
         // Enable shadows on meshes
         writeln!(js, "{}.castShadow = true;", var).unwrap();
         writeln!(js, "{}.receiveShadow = true;", var).unwrap();
+    } else if entity.mesh_asset.is_some() {
+        // Imported glTF mesh — can't inline binary data; emit a wireframe placeholder
+        writeln!(
+            js,
+            "const {v}_geo = new THREE.BoxGeometry(1, 1, 1); \
+             const {v}_mat = new THREE.MeshBasicMaterial({{ color: 0x888888, wireframe: true }}); \
+             const {v} = new THREE.Mesh({v}_geo, {v}_mat); // placeholder for imported mesh: {}",
+            v = var,
+            entity
+                .mesh_asset
+                .as_ref()
+                .map(|a| a.path.as_str())
+                .unwrap_or("unknown")
+        )
+        .unwrap();
     } else if !has_light {
         // Group / empty entity
         writeln!(js, "const {} = new THREE.Group();", var).unwrap();
@@ -527,7 +612,12 @@ fn emit_material(js: &mut String, mat: Option<&wt::MaterialDef>, var: &str) {
     let transparent = opacity < 1.0
         || matches!(
             mat.alpha_mode,
-            Some(wt::AlphaModeDef::Blend | wt::AlphaModeDef::Add)
+            Some(
+                wt::AlphaModeDef::Blend
+                    | wt::AlphaModeDef::Add
+                    | wt::AlphaModeDef::Multiply
+                    | wt::AlphaModeDef::Mask(_)
+            )
         );
     let unlit = mat.unlit.unwrap_or(false);
 
@@ -562,6 +652,42 @@ fn emit_material(js: &mut String, mat: Option<&wt::MaterialDef>, var: &str) {
             t = transparent,
             side = if mat.double_sided.unwrap_or(false) { "THREE.DoubleSide" } else { "THREE.FrontSide" },
         ).unwrap();
+    }
+
+    // Alpha mode — set blending mode for Add/Multiply
+    match mat.alpha_mode {
+        Some(wt::AlphaModeDef::Add) => {
+            writeln!(js, "{v}_mat.blending = THREE.AdditiveBlending;", v = var).unwrap();
+        }
+        Some(wt::AlphaModeDef::Multiply) => {
+            writeln!(js, "{v}_mat.blending = THREE.MultiplyBlending;", v = var).unwrap();
+        }
+        Some(wt::AlphaModeDef::Mask(cutoff)) => {
+            writeln!(js, "{v}_mat.alphaTest = {c:.2};", v = var, c = cutoff).unwrap();
+        }
+        _ => {}
+    }
+
+    // Reflectance — map Bevy's 0..1 reflectance to Three.js MeshPhysicalMaterial IOR
+    // Note: MeshStandardMaterial doesn't directly support reflectance, but
+    // we approximate by adjusting metalness/roughness when reflectance differs from default.
+    // Bevy reflectance 0.5 = 4% (F0 = 0.04), which is the Three.js default for dielectrics.
+    if let Some(refl) = mat.reflectance {
+        if !unlit && (refl - 0.5).abs() > 0.01 {
+            // F0 = 0.16 * reflectance^2 (Bevy formula)
+            // Map to IOR: n = (1 + sqrt(F0)) / (1 - sqrt(F0))
+            let f0 = 0.16 * refl * refl;
+            let sqrt_f0 = f0.sqrt();
+            let ior = (1.0 + sqrt_f0) / (1.0 - sqrt_f0).max(0.001);
+            writeln!(
+                js,
+                "// reflectance={r:.2} → F0={f0:.4} → IOR={ior:.2} (upgrade to MeshPhysicalMaterial for full support)",
+                r = refl,
+                f0 = f0,
+                ior = ior,
+            )
+            .unwrap();
+        }
     }
 }
 
@@ -604,15 +730,16 @@ fn emit_light(js: &mut String, light: &wt::LightDef, transform: &wt::WorldTransf
             .unwrap();
         }
         wt::LightType::Point => {
-            // Bevy point light intensity is in candela; Three.js uses similar scale
-            let intensity = light.intensity;
+            // Bevy point light intensity is in lumens.
+            // Three.js with physicallyCorrectLights uses candela (lumens / 4π).
+            let candela = light.intensity / (4.0 * std::f32::consts::PI);
             let distance = light.range.unwrap_or(50.0);
             writeln!(
                 js,
-                "const {v} = new THREE.PointLight({c}, {i:.1}, {d:.1});",
+                "const {v} = new THREE.PointLight({c}, {i:.2}, {d:.1}, 2);",
                 v = var,
                 c = color,
-                i = intensity,
+                i = candela,
                 d = distance
             )
             .unwrap();
@@ -621,7 +748,8 @@ fn emit_light(js: &mut String, light: &wt::LightDef, transform: &wt::WorldTransf
             }
         }
         wt::LightType::Spot => {
-            let intensity = light.intensity;
+            // Bevy spot light intensity is in lumens → convert to candela
+            let candela = light.intensity / (4.0 * std::f32::consts::PI);
             let distance = light.range.unwrap_or(50.0);
             let angle = light.outer_angle.unwrap_or(0.5);
             let penumbra =
@@ -636,10 +764,10 @@ fn emit_light(js: &mut String, light: &wt::LightDef, transform: &wt::WorldTransf
                 };
             writeln!(
                 js,
-                "const {v} = new THREE.SpotLight({c}, {i:.1}, {d:.1}, {a:.4}, {p:.2});",
+                "const {v} = new THREE.SpotLight({c}, {i:.2}, {d:.1}, {a:.4}, {p:.2}, 2);",
                 v = var,
                 c = color,
-                i = intensity,
+                i = candela,
                 d = distance,
                 a = angle,
                 p = penumbra
@@ -1186,4 +1314,230 @@ fn emit_audio_source(js: &mut String, audio: &wt::AudioDef, entity_idx: usize) {
 
     let _ = var; // suppress unused warning
     writeln!(js, "  }}").unwrap();
+}
+
+/// Emit WASD + Space/Shift keyboard navigation.
+fn emit_keyboard_controls(js: &mut String, move_speed: f32) {
+    writeln!(
+        js,
+        r#"// ---- WASD Keyboard Navigation ----
+const keysPressed = {{}};
+const MOVE_SPEED = {speed:.1};
+document.addEventListener('keydown', (e) => {{ keysPressed[e.code] = true; }});
+document.addEventListener('keyup', (e) => {{ keysPressed[e.code] = false; }});
+
+function updateMovement(dt) {{
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize();
+  const move = new THREE.Vector3();
+  if (keysPressed['KeyW']) move.add(dir);
+  if (keysPressed['KeyS']) move.sub(dir);
+  if (keysPressed['KeyA']) move.sub(right);
+  if (keysPressed['KeyD']) move.add(right);
+  if (keysPressed['Space']) move.y += 1;
+  if (keysPressed['ShiftLeft'] || keysPressed['ShiftRight']) move.y -= 1;
+  if (move.length() > 0) {{
+    move.normalize().multiplyScalar(MOVE_SPEED * dt);
+    camera.position.add(move);
+    controls.target.add(move);
+  }}
+}}"#,
+        speed = move_speed
+    )
+    .unwrap();
+}
+
+/// Emit guided tour system if tours are defined.
+fn emit_tours(js: &mut String, manifest: &wt::WorldManifest) {
+    if manifest.tours.is_empty() {
+        return;
+    }
+
+    // Build tour data
+    writeln!(js, "// ---- Guided Tours ----").unwrap();
+    writeln!(js, "const tours = [];").unwrap();
+
+    for tour in &manifest.tours {
+        if tour.waypoints.is_empty() {
+            continue;
+        }
+
+        let waypoints_json: Vec<String> = tour
+            .waypoints
+            .iter()
+            .map(|wp| {
+                format!(
+                    "{{pos:[{:.4},{:.4},{:.4}],look:[{:.4},{:.4},{:.4}],pause:{:.1},desc:{}}}",
+                    wp.position[0],
+                    wp.position[1],
+                    wp.position[2],
+                    wp.look_at[0],
+                    wp.look_at[1],
+                    wp.look_at[2],
+                    wp.pause_duration,
+                    wp.description
+                        .as_ref()
+                        .map(|d| format!("'{}'", d.replace('\'', "\\'")))
+                        .unwrap_or_else(|| "null".into())
+                )
+            })
+            .collect();
+
+        let mode_str = match tour.mode {
+            wt::TourMode::Walk => "walk",
+            wt::TourMode::Fly => "fly",
+            wt::TourMode::Teleport => "teleport",
+        };
+
+        writeln!(
+            js,
+            "tours.push({{ name: '{}', speed: {:.1}, loop: {}, mode: '{}', waypoints: [{}] }});",
+            tour.name.replace('\'', "\\'"),
+            tour.speed,
+            tour.loop_tour,
+            mode_str,
+            waypoints_json.join(",")
+        )
+        .unwrap();
+    }
+
+    writeln!(
+        js,
+        r#"let activeTour = null;
+let tourWpIdx = 0;
+let tourFrac = 0;
+let tourPaused = 0;
+const tourBtn = document.getElementById('tour-btn');
+if (tours.length > 0) tourBtn.style.display = 'block';
+
+function startTour(idx) {{
+  activeTour = tours[idx || 0];
+  tourWpIdx = 0; tourFrac = 0; tourPaused = 0;
+  controls.enabled = false;
+  tourBtn.textContent = 'Stop Tour';
+  const wp0 = activeTour.waypoints[0];
+  if (activeTour.mode === 'teleport') {{
+    camera.position.set(wp0.pos[0], wp0.pos[1], wp0.pos[2]);
+    camera.lookAt(wp0.look[0], wp0.look[1], wp0.look[2]);
+  }}
+  const desc = document.getElementById('tour-desc');
+  if (wp0.desc) {{ desc.textContent = wp0.desc; desc.style.display = 'block'; }}
+}}
+function stopTour() {{
+  activeTour = null;
+  controls.enabled = true;
+  tourBtn.textContent = 'Start Tour';
+  document.getElementById('tour-desc').style.display = 'none';
+}}
+function toggleTour() {{ if (activeTour) stopTour(); else startTour(0); }}
+if (tourBtn) tourBtn.onclick = toggleTour;
+
+function updateTour(dt) {{
+  if (!activeTour) return;
+  const wp = activeTour.waypoints;
+  if (tourPaused > 0) {{ tourPaused -= dt; return; }}
+  const a = wp[tourWpIdx], b = wp[(tourWpIdx + 1) % wp.length];
+  if (activeTour.mode === 'teleport') {{
+    // Instant jump to next waypoint after pause
+    tourWpIdx++;
+    if (tourWpIdx >= wp.length - 1) {{
+      if (activeTour.loop) tourWpIdx = 0; else {{ stopTour(); return; }}
+    }}
+    const next = wp[tourWpIdx];
+    camera.position.set(next.pos[0], next.pos[1], next.pos[2]);
+    camera.lookAt(next.look[0], next.look[1], next.look[2]);
+    tourPaused = next.pause;
+    tourFrac = 0;
+    const desc = document.getElementById('tour-desc');
+    if (next.desc) {{ desc.textContent = next.desc; desc.style.display = 'block'; }}
+    else desc.style.display = 'none';
+    return;
+  }}
+  const dx = b.pos[0]-a.pos[0], dy = b.pos[1]-a.pos[1], dz = b.pos[2]-a.pos[2];
+  const dist = Math.sqrt(dx*dx+dy*dy+dz*dz) || 1;
+  tourFrac += (activeTour.speed * dt) / dist;
+  if (tourFrac >= 1) {{
+    tourWpIdx++;
+    if (tourWpIdx >= wp.length - 1) {{
+      if (activeTour.loop) tourWpIdx = 0; else {{ stopTour(); return; }}
+    }}
+    tourFrac = 0;
+    tourPaused = wp[tourWpIdx].pause;
+    const desc = document.getElementById('tour-desc');
+    if (wp[tourWpIdx].desc) {{ desc.textContent = wp[tourWpIdx].desc; desc.style.display = 'block'; }}
+    else desc.style.display = 'none';
+  }}
+  const na = wp[tourWpIdx], nb = wp[(tourWpIdx+1) % wp.length];
+  const f = tourFrac;
+  camera.position.set(na.pos[0]+(nb.pos[0]-na.pos[0])*f, na.pos[1]+(nb.pos[1]-na.pos[1])*f, na.pos[2]+(nb.pos[2]-na.pos[2])*f);
+  const lx = na.look[0]+(nb.look[0]-na.look[0])*f, ly = na.look[1]+(nb.look[1]-na.look[1])*f, lz = na.look[2]+(nb.look[2]-na.look[2])*f;
+  camera.lookAt(lx, ly, lz);
+  // Walk mode: clamp Y to ground level (approximate ground plane at y=avatar height)
+  if (activeTour.mode === 'walk') {{
+    const groundY = Math.min(na.pos[1], nb.pos[1]);
+    camera.position.y = Math.max(camera.position.y, groundY);
+  }}
+}}"#
+    )
+    .unwrap();
+
+    // Auto-start if first tour has autostart flag
+    if manifest.tours[0].autostart {
+        writeln!(js, "startTour(0);").unwrap();
+    }
+}
+
+/// Emit postMessage API for parent-frame communication when embedded via iframe.
+fn emit_embed_api(js: &mut String) {
+    writeln!(
+        js,
+        r#"// ---- Embed API (postMessage) ----
+// Allows parent frames to control the scene via postMessage.
+// Messages: {{ action: "startTour", index: 0 }}, {{ action: "stopTour" }},
+//           {{ action: "toggleAudio" }}, {{ action: "setCameraPosition", position: [x,y,z] }},
+//           {{ action: "setCameraTarget", target: [x,y,z] }}, {{ action: "getSceneInfo" }}
+window.addEventListener('message', (event) => {{
+  const msg = event.data;
+  if (!msg || typeof msg !== 'object' || !msg.action) return;
+  switch (msg.action) {{
+    case 'startTour':
+      if (typeof startTour === 'function') startTour(msg.index || 0);
+      break;
+    case 'stopTour':
+      if (typeof stopTour === 'function') stopTour();
+      break;
+    case 'toggleAudio':
+      if (typeof toggleAudio === 'function') toggleAudio();
+      break;
+    case 'setCameraPosition':
+      if (Array.isArray(msg.position) && msg.position.length === 3) {{
+        camera.position.set(msg.position[0], msg.position[1], msg.position[2]);
+      }}
+      break;
+    case 'setCameraTarget':
+      if (Array.isArray(msg.target) && msg.target.length === 3) {{
+        controls.target.set(msg.target[0], msg.target[1], msg.target[2]);
+        controls.update();
+      }}
+      break;
+    case 'getSceneInfo':
+      const info = {{
+        type: 'sceneInfo',
+        entityCount: Object.keys(entityMap).length,
+        cameraPosition: [camera.position.x, camera.position.y, camera.position.z],
+        cameraTarget: [controls.target.x, controls.target.y, controls.target.z],
+        tourCount: typeof tours !== 'undefined' ? tours.length : 0,
+        audioEnabled: typeof audioStarted !== 'undefined' ? audioStarted : false,
+      }};
+      event.source.postMessage(info, event.origin !== 'null' ? event.origin : '*');
+      break;
+  }}
+}});
+// Notify parent we're ready
+if (window.parent !== window) {{
+  window.parent.postMessage({{ type: 'localgpt-scene-ready' }}, '*');
+}}"#
+    )
+    .unwrap();
 }

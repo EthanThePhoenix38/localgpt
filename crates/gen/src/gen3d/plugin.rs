@@ -126,10 +126,8 @@ struct PendingGltfLoads {
 
 /// Deferred world setup — applied after a world's glTF scene finishes spawning.
 ///
-/// When loading a world, the glTF scene is async. Entity names from the glTF
-/// aren't available until Bevy's scene spawner creates them (1-2 frames after
-/// the asset loads). This resource holds the behaviors and audio emitters
-/// that need to be applied once the named entities appear.
+/// Placeholder resource retained for `handle_clear_scene` compatibility.
+/// No longer populated now that the legacy TOML format has been removed.
 #[derive(Resource, Default)]
 struct PendingWorldSetup {
     active: Option<WorldSetupData>,
@@ -1274,9 +1272,8 @@ fn process_gen_commands(
                         params.current_world.name = Some(world_name);
                         params.current_world.path = Some(world_path);
 
+                        // Spawn entities directly from WorldManifest data
                         if !world_load.world_entities.is_empty() {
-                            // RON format — spawn entities directly from WorldEntity data
-                            // Pass world_dir for relative path resolution
                             let world_dir = PathBuf::from(&world_load.world_path);
                             spawn_world_entities(
                                 &world_load.world_entities,
@@ -1290,33 +1287,6 @@ fn process_gen_commands(
                                 &mut params.pending_gltf,
                                 Some(&world_dir),
                             );
-                        } else if let Some(scene_path) = world_load.scene_path
-                            && let Some(resolved) =
-                                resolve_gltf_path(&scene_path, &params.workspace.path)
-                        {
-                            // Legacy format — queue glTF scene load (async)
-                            let asset_path = resolved
-                                .to_string_lossy()
-                                .trim_start_matches('/')
-                                .to_string();
-                            let handle = params
-                                .asset_server
-                                .load::<Scene>(format!("{}#Scene0", asset_path));
-                            params.pending_gltf.queue.push(PendingGltfLoad {
-                                handle,
-                                name: "world_scene".to_string(),
-                                path: resolved.to_string_lossy().into_owned(),
-                                send_response: false,
-                            });
-                        }
-
-                        // Legacy: defer behaviors and emitters for glTF entities
-                        if !world_load.behaviors.is_empty() || !world_load.emitters.is_empty() {
-                            params.pending_world.active = Some(WorldSetupData {
-                                behaviors: world_load.behaviors.clone(),
-                                emitters: world_load.emitters.clone(),
-                                frames_waited: 0,
-                            });
                         }
 
                         // Ambience doesn't reference entities — apply immediately.
@@ -3660,7 +3630,7 @@ fn spawn_world_entities(
                     mesh_ref.path.clone()
                 }
             } else {
-                // Absolute or workspace-relative (legacy support)
+                // Absolute or workspace-relative
                 shellexpand::tilde(&mesh_ref.path).into_owned()
             };
 
@@ -5156,7 +5126,7 @@ fn handle_export_html(workspace: &GenWorkspace, current_world: &CurrentWorld) ->
         };
     };
 
-    // Read the world.ron manifest
+    // Read the world manifest (RON format)
     let ron_path = world_dir.join("world.ron");
     if !ron_path.exists() {
         return GenResponse::Error {
@@ -5167,21 +5137,22 @@ fn handle_export_html(workspace: &GenWorkspace, current_world: &CurrentWorld) ->
         };
     }
 
-    let ron_content = match std::fs::read_to_string(&ron_path) {
-        Ok(c) => c,
-        Err(e) => {
-            return GenResponse::Error {
-                message: format!("Failed to read world.ron: {}", e),
-            };
-        }
-    };
-
-    let manifest: localgpt_world_types::WorldManifest = match ron::from_str(&ron_content) {
-        Ok(m) => m,
-        Err(e) => {
-            return GenResponse::Error {
-                message: format!("Failed to parse world.ron: {}", e),
-            };
+    let manifest: localgpt_world_types::WorldManifest = {
+        let ron_content = match std::fs::read_to_string(&ron_path) {
+            Ok(c) => c,
+            Err(e) => {
+                return GenResponse::Error {
+                    message: format!("Failed to read world.ron: {}", e),
+                };
+            }
+        };
+        match ron::from_str(&ron_content) {
+            Ok(m) => m,
+            Err(e) => {
+                return GenResponse::Error {
+                    message: format!("Failed to parse world.ron: {}", e),
+                };
+            }
         }
     };
 
