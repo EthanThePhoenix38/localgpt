@@ -316,6 +316,39 @@ mod tests {
     fn test_npc_behavior_default() {
         assert!(matches!(NpcBehavior::default(), NpcBehavior::Idle));
     }
+
+    #[test]
+    fn test_npc_behavior_patrol() {
+        let behavior = NpcBehavior::Patrol {
+            points: vec![Vec3::ZERO, Vec3::new(10.0, 0.0, 0.0)],
+            speed: 3.0,
+            current_index: 0,
+            wait_timer: 0.0,
+        };
+        assert!(matches!(behavior, NpcBehavior::Patrol { speed, .. } if speed == 3.0));
+    }
+
+    #[test]
+    fn test_npc_behavior_wander() {
+        let behavior = NpcBehavior::Wander {
+            spawn_position: Vec3::ZERO,
+            radius: 8.0,
+            target_position: None,
+            speed: 1.8,
+            wait_timer: 0.0,
+        };
+        assert!(matches!(behavior, NpcBehavior::Wander { radius, .. } if radius == 8.0));
+    }
+
+    #[test]
+    fn test_npc_component() {
+        let npc = Npc {
+            name: "Guard".to_string(),
+            dialogue_id: Some("guard_intro".to_string()),
+        };
+        assert_eq!(npc.name, "Guard");
+        assert_eq!(npc.dialogue_id.as_deref(), Some("guard_intro"));
+    }
 }
 
 /// Plugin for NPC systems.

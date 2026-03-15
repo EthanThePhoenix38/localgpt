@@ -139,6 +139,30 @@ mod tests {
         assert_eq!(params.font_size, 16.0);
         assert_eq!(params.visible_distance, 15.0);
     }
+
+    #[test]
+    fn test_label_params_custom() {
+        let params = LabelParams {
+            entity_id: "npc_1".to_string(),
+            text: "Guard".to_string(),
+            color: "#ff0000".to_string(),
+            offset_y: 1.0,
+            visible_distance: 25.0,
+            ..Default::default()
+        };
+        assert_eq!(params.text, "Guard");
+        assert_eq!(params.offset_y, 1.0);
+        assert_eq!(params.visible_distance, 25.0);
+    }
+
+    #[test]
+    fn test_default_functions() {
+        assert_eq!(default_color(), "#ffffff");
+        assert_eq!(default_bg_color(), "#00000088");
+        assert_eq!(default_offset_y(), 0.5);
+        assert_eq!(default_font_size(), 16.0);
+        assert_eq!(default_visible_distance(), 15.0);
+    }
 }
 
 /// Plugin for label systems.

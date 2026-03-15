@@ -231,6 +231,23 @@ mod tests {
         let kp = KillPlane::default();
         assert_eq!(kp.y_level, -50.0);
     }
+
+    #[test]
+    fn test_spawn_point_default() {
+        let sp = SpawnPoint::default();
+        assert!(sp.is_default);
+        assert!(sp.name.is_none());
+    }
+
+    #[test]
+    fn test_spawn_point_named() {
+        let sp = SpawnPoint {
+            name: Some("checkpoint_1".to_string()),
+            is_default: false,
+        };
+        assert!(!sp.is_default);
+        assert_eq!(sp.name.as_deref(), Some("checkpoint_1"));
+    }
 }
 
 /// Plugin for spawn point systems.

@@ -183,4 +183,27 @@ mod tests {
         let color = parse_water_color("invalid");
         assert!(color.is_none());
     }
+
+    #[test]
+    fn test_water_params_default() {
+        let params = WaterParams::default();
+        assert_eq!(params.height, 0.0);
+        assert_eq!(params.size, Vec2::splat(100.0));
+        assert_eq!(params.color, "#2389da");
+        assert!((params.opacity - 0.7).abs() < f32::EPSILON);
+        assert!((params.wave_speed - 1.0).abs() < f32::EPSILON);
+        assert!((params.wave_height - 0.3).abs() < f32::EPSILON);
+        assert!(params.position.is_none());
+    }
+
+    #[test]
+    fn test_water_component() {
+        let water = Water {
+            wave_speed: 2.0,
+            wave_height: 0.5,
+            base_height: 3.0,
+        };
+        assert_eq!(water.wave_speed, 2.0);
+        assert_eq!(water.base_height, 3.0);
+    }
 }

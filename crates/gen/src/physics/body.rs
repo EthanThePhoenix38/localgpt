@@ -118,6 +118,27 @@ mod tests {
     fn test_body_type_default() {
         assert!(matches!(BodyType::default(), BodyType::Dynamic));
     }
+
+    #[test]
+    fn test_physics_body_component() {
+        let body = PhysicsBody {
+            body_type: BodyType::Kinematic,
+            mass: 50.0,
+            restitution: 0.8,
+            friction: 0.2,
+            gravity_scale: 0.0,
+        };
+        assert!(matches!(body.body_type, BodyType::Kinematic));
+        assert!((body.mass - 50.0).abs() < f32::EPSILON);
+        assert!((body.gravity_scale).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_body_type_variants() {
+        assert!(matches!(BodyType::Dynamic, BodyType::Dynamic));
+        assert!(!matches!(BodyType::Dynamic, BodyType::Static));
+        assert!(!matches!(BodyType::Static, BodyType::Kinematic));
+    }
 }
 
 /// Plugin for physics body systems.

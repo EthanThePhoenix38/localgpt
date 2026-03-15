@@ -2,6 +2,7 @@
 //!
 //! Sets sun direction, ambient light, fog, and sky appearance.
 
+use bevy::pbr::{DistanceFog, FogFalloff};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -247,13 +248,78 @@ pub fn parse_hex_color(hex: &str) -> Option<Color> {
 #[derive(Component)]
 pub struct SunLight;
 
+/// System to apply SkyConfig changes to the scene's directional light, ambient light, and fog.
+pub fn sky_apply_system(
+    sky: Res<SkyConfig>,
+    mut sun_query: Query<(&mut DirectionalLight, &mut Transform), With<SunLight>>,
+    mut fog_query: Query<&mut DistanceFog, With<Camera3d>>,
+    mut commands: Commands,
+) {
+    if !sky.is_changed() {
+        return;
+    }
+
+    let sun_dir = sky.sun_direction();
+
+    // Update existing sun light, or spawn one if none exists
+    if let Ok((mut light, mut transform)) = sun_query.single_mut() {
+        light.illuminance = sky.sun_intensity * 10000.0;
+        light.color = Color::WHITE;
+        // Point the light in the sun direction (light shines in -Z of its local space)
+        if sun_dir != Vec3::ZERO {
+            transform.rotation = Transform::IDENTITY.looking_to(-sun_dir, Vec3::Y).rotation;
+        }
+    } else {
+        // Spawn a sun light entity
+        let mut transform = Transform::IDENTITY;
+        if sun_dir != Vec3::ZERO {
+            transform.rotation = Transform::IDENTITY.looking_to(-sun_dir, Vec3::Y).rotation;
+        }
+        commands.spawn((
+            SunLight,
+            DirectionalLight {
+                illuminance: sky.sun_intensity * 10000.0,
+                shadows_enabled: true,
+                color: Color::WHITE,
+                ..default()
+            },
+            transform,
+        ));
+    }
+
+    // Update ambient light
+    let [r, g, b] = sky.ambient_color;
+    commands.insert_resource(GlobalAmbientLight {
+        color: Color::srgb(r, g, b),
+        brightness: sky.ambient_intensity * 1000.0,
+        affects_lightmapped_meshes: true,
+    });
+
+    // Update fog on camera
+    let [fr, fg, fb] = sky.fog_color;
+    let fog_color = Color::srgb(fr, fg, fb);
+    if sky.fog_enabled {
+        if let Ok(mut fog) = fog_query.single_mut() {
+            fog.color = fog_color;
+            fog.falloff = FogFalloff::Linear {
+                start: sky.fog_start,
+                end: sky.fog_end,
+            };
+        }
+        // If no camera with fog yet, it will be applied when camera spawns
+    } else if let Ok(mut fog) = fog_query.single_mut() {
+        // Disable fog by setting alpha to 0
+        fog.color = Color::srgba(0.0, 0.0, 0.0, 0.0);
+    }
+}
+
 /// Plugin for sky systems.
 pub struct SkyPlugin;
 
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<SkyConfig>();
-        // Note: Light/fog updates are handled by existing systems in gen3d/plugin.rs
+        app.init_resource::<SkyConfig>()
+            .add_systems(Update, sky_apply_system);
     }
 }
 
@@ -294,5 +360,30 @@ mod tests {
 
         let color = parse_hex_color("invalid");
         assert!(color.is_none());
+    }
+
+    #[test]
+    fn test_night_preset() {
+        let config = SkyConfig::from_preset(SkyPreset::Night);
+        assert_eq!(config.sun_altitude, -10.0);
+        assert!(config.sun_intensity < 0.2);
+    }
+
+    #[test]
+    fn test_overcast_preset() {
+        let config = SkyConfig::from_preset(SkyPreset::Overcast);
+        assert!(config.fog_enabled);
+        assert!(config.sun_intensity < 0.5);
+    }
+
+    #[test]
+    fn test_with_overrides() {
+        let config = SkyConfig::from_preset(SkyPreset::Day).with_overrides(&SkyParams {
+            sun_altitude: Some(45.0),
+            fog_enabled: true,
+            ..Default::default()
+        });
+        assert_eq!(config.sun_altitude, 45.0);
+        assert!(config.fog_enabled);
     }
 }

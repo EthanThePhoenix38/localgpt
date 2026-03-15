@@ -483,6 +483,75 @@ pub fn proximity_trigger_system(
     }
 }
 
+/// System: handle click triggers (E key press within max_distance).
+pub fn click_trigger_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    click_query: Query<(
+        Entity,
+        &Transform,
+        &ClickTrigger,
+        Option<&TeleportAction>,
+        Option<&AddScoreAction>,
+        Option<&ToggleStateAction>,
+        Option<&OnceTrigger>,
+    )>,
+    mut score_board: ResMut<ScoreBoard>,
+    mut player_mut: Query<&mut Transform, (With<crate::character::Player>, Without<ClickTrigger>)>,
+    mut commands: Commands,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyE) {
+        return;
+    }
+
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    // Find the closest click-triggerable entity within range
+    let mut closest: Option<(Entity, f32)> = None;
+    for (entity, transform, trigger, _, _, _, _) in click_query.iter() {
+        let distance = player_pos.distance(transform.translation);
+        if distance <= trigger.max_distance && (closest.is_none() || distance < closest.unwrap().1)
+        {
+            closest = Some((entity, distance));
+        }
+    }
+
+    let Some((target_entity, _)) = closest else {
+        return;
+    };
+
+    // Fire actions on the closest entity
+    if let Ok((entity, _transform, _trigger, teleport, score, toggle, once)) =
+        click_query.get(target_entity)
+    {
+        if let Some(teleport_action) = teleport
+            && let Ok(mut pt) = player_mut.single_mut()
+        {
+            pt.translation = teleport_action.destination;
+        }
+        if let Some(score_action) = score {
+            let entry = score_board
+                .scores
+                .entry(score_action.category.clone())
+                .or_insert(0);
+            *entry += score_action.amount;
+        }
+        if toggle.is_some()
+            && let Ok(mut estate) = commands.get_entity(entity)
+        {
+            estate.insert(EntityState::default());
+        }
+
+        if once.is_some() {
+            commands.entity(entity).remove::<ClickTrigger>();
+            commands.entity(entity).remove::<OnceTrigger>();
+        }
+    }
+}
+
 /// System: tick timer triggers and fire their actions.
 pub fn timer_trigger_system(
     time: Res<Time>,
@@ -721,6 +790,7 @@ impl Plugin for InteractionPlugin {
                 Update,
                 (
                     proximity_trigger_system,
+                    click_trigger_system,
                     timer_trigger_system,
                     door_system,
                     door_proximity_system,
@@ -766,6 +836,55 @@ mod tests {
     fn test_timer_trigger() {
         let trigger = TimerTrigger::new(2.0);
         assert_eq!(trigger.interval, 2.0);
+    }
+
+    #[test]
+    fn test_click_trigger_default() {
+        let trigger = ClickTrigger::default();
+        assert_eq!(trigger.max_distance, 5.0);
+        assert!(trigger.prompt_text.is_none());
+    }
+
+    #[test]
+    fn test_area_trigger_default() {
+        let trigger = AreaTrigger::default();
+        assert!(trigger.is_enter);
+    }
+
+    #[test]
+    fn test_proximity_trigger_default() {
+        let trigger = ProximityTrigger::default();
+        assert_eq!(trigger.radius, 5.0);
+        assert_eq!(trigger.cooldown, 1.0);
+        assert_eq!(trigger.last_triggered, 0.0);
+    }
+
+    #[test]
+    fn test_collectible_params_default() {
+        let params = CollectibleParams::default();
+        assert_eq!(params.value, 1);
+        assert_eq!(params.category, "points");
+        assert!(params.pickup_sound.is_none());
+        assert_eq!(params.pickup_effect, "sparkle");
+        assert!(params.respawn_time.is_none());
+    }
+
+    #[test]
+    fn test_teleporter_params_size_default() {
+        let size = default_teleporter_size();
+        assert_eq!(size, [2.0, 3.0, 2.0]);
+    }
+
+    #[test]
+    fn test_entity_link_fields() {
+        let link = EntityLink {
+            source_event: "clicked".to_string(),
+            target_entity: "door_1".to_string(),
+            target_action: "toggle_state:is_open".to_string(),
+            condition: Some("source.is_active".to_string()),
+        };
+        assert_eq!(link.source_event, "clicked");
+        assert!(link.condition.is_some());
     }
 
     #[test]

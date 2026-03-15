@@ -1680,6 +1680,16 @@ fn process_gen_commands(
                 let wid = params.next_entity_id.alloc();
                 let position = Vec3::from_array(p.position);
                 let destination = Vec3::from_array(p.destination);
+                let radius = p.size[0].max(p.size[2]) * 0.5;
+                let height = p.size[1];
+                // Visible portal: cylinder mesh with emissive material
+                let mesh = params.meshes.add(Cylinder::new(radius, height));
+                let material = params.materials.add(StandardMaterial {
+                    base_color: Color::srgba(0.3, 0.1, 0.8, 0.5),
+                    emissive: bevy::color::LinearRgba::new(0.5, 0.2, 1.0, 1.0),
+                    alpha_mode: AlphaMode::Blend,
+                    ..default()
+                });
                 let entity = commands
                     .spawn((
                         Name::new(name.clone()),
@@ -1687,12 +1697,14 @@ fn process_gen_commands(
                             entity_type: GenEntityType::Primitive,
                             world_id: wid,
                         },
+                        Mesh3d(mesh),
+                        MeshMaterial3d(material),
                         Transform::from_translation(position),
                         Visibility::default(),
                         crate::interaction::InteractionEntity,
                         crate::interaction::ProximityTrigger {
-                            radius: p.size[0].max(p.size[2]),
-                            cooldown: 1.0,
+                            radius: radius * 2.0,
+                            cooldown: 2.0,
                             last_triggered: 0.0,
                         },
                         crate::interaction::TeleportAction { destination },
@@ -1717,6 +1729,27 @@ fn process_gen_commands(
                     .get(entity)
                     .map(|t| t.translation)
                     .unwrap_or(Vec3::ZERO);
+                // Add bob + spin idle animation for collectibles
+                let bob = behaviors::BehaviorInstance {
+                    id: format!("collectible_bob_{}", entity_name),
+                    def: BehaviorDef::Bob {
+                        axis: [0.0, 1.0, 0.0],
+                        amplitude: 0.2,
+                        frequency: 0.5,
+                        phase: 0.0,
+                    },
+                    base_position: position,
+                    base_scale: Vec3::ONE,
+                };
+                let spin = behaviors::BehaviorInstance {
+                    id: format!("collectible_spin_{}", entity_name),
+                    def: BehaviorDef::Spin {
+                        axis: [0.0, 1.0, 0.0],
+                        speed: 45.0,
+                    },
+                    base_position: position,
+                    base_scale: Vec3::ONE,
+                };
                 commands.entity(entity).insert((
                     crate::interaction::InteractionEntity,
                     crate::interaction::Collectible {
@@ -1726,6 +1759,9 @@ fn process_gen_commands(
                         respawn_time: p.respawn_time,
                         original_position: position,
                         respawn_timer: None,
+                    },
+                    EntityBehaviors {
+                        behaviors: vec![bob, spin],
                     },
                 ));
                 let _ = channel_res
@@ -1872,6 +1908,11 @@ fn process_gen_commands(
                             entity_type: GenEntityType::Primitive,
                             world_id: wid,
                         },
+                        crate::terrain::Water {
+                            wave_speed: p.wave_speed,
+                            wave_height: p.wave_height,
+                            base_height: p.height,
+                        },
                         Mesh3d(mesh),
                         MeshMaterial3d(material),
                         Transform::from_translation(pos),
@@ -1887,9 +1928,10 @@ fn process_gen_commands(
             GenCommand::AddPath(p) => {
                 let name = "Path".to_string();
                 let wid = params.next_entity_id.alloc();
+                let path_width = p.width;
                 let mesh = params.meshes.add(crate::terrain::generate_path_mesh(&p));
                 let material = params.materials.add(StandardMaterial {
-                    base_color: Color::srgb(0.55, 0.45, 0.35),
+                    base_color: crate::terrain::get_path_material_color(p.material),
                     perceptual_roughness: 0.85,
                     ..default()
                 });
@@ -1900,6 +1942,7 @@ fn process_gen_commands(
                             entity_type: GenEntityType::Primitive,
                             world_id: wid,
                         },
+                        crate::terrain::Path { width: path_width },
                         Mesh3d(mesh),
                         MeshMaterial3d(material),
                         Transform::default(),
@@ -1938,6 +1981,9 @@ fn process_gen_commands(
                         GenEntity {
                             entity_type: GenEntityType::Group,
                             world_id: wid,
+                        },
+                        crate::terrain::Foliage {
+                            foliage_type: p.foliage_type,
                         },
                         Transform::from_translation(p.area.center),
                         Visibility::default(),

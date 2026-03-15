@@ -250,4 +250,34 @@ mod tests {
         // Curved path should have more vertices than straight
         assert!(mesh.count_vertices() >= 6);
     }
+
+    #[test]
+    fn test_path_params_default() {
+        let params = PathParams::default();
+        assert_eq!(params.width, 2.0);
+        assert!(params.curved);
+        assert!((params.raised - 0.02).abs() < f32::EPSILON);
+        assert!(!params.border);
+        assert!(params.points.is_empty());
+    }
+
+    #[test]
+    fn test_empty_path() {
+        let params = PathParams {
+            points: vec![],
+            ..default()
+        };
+        let mesh = generate_path_mesh(&params);
+        assert_eq!(mesh.count_vertices(), 0);
+    }
+
+    #[test]
+    fn test_path_material_colors() {
+        // Verify each material preset produces a distinct color
+        let stone = get_path_material_color(PathMaterial::Stone);
+        let dirt = get_path_material_color(PathMaterial::Dirt);
+        let custom = get_path_material_color(PathMaterial::Custom);
+        assert_ne!(stone, dirt);
+        assert_ne!(dirt, custom);
+    }
 }
