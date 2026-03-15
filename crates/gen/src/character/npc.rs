@@ -139,6 +139,7 @@ pub fn spawn_npc(
             Visibility::default(),
             Mesh3d(capsule_mesh),
             MeshMaterial3d(npc_material),
+            crate::terrain::TerrainFollower,
         ))
         .id();
 

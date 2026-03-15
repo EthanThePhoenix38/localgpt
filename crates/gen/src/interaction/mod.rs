@@ -184,13 +184,66 @@ pub struct ScoreChanged {
 #[derive(Clone, Debug)]
 pub struct TriggerFired {
     pub entity: Entity,
-    pub trigger_type: String,
+    pub trigger_type: TriggerType,
 }
 
 /// Entity state storage.
 #[derive(Component, Clone, Default)]
 pub struct EntityState {
     pub states: HashMap<String, String>,
+}
+
+// ---------------------------------------------------------------------------
+// Enums for trigger/interaction parameters
+// ---------------------------------------------------------------------------
+
+/// Trigger activation type.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerType {
+    #[default]
+    Proximity,
+    Click,
+    AreaEnter,
+    AreaExit,
+    Collision,
+    Timer,
+}
+
+/// Action performed when trigger fires.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
+#[serde(rename_all = "snake_case")]
+pub enum TriggerAction {
+    #[default]
+    Animate,
+    Teleport,
+    PlaySound,
+    ShowText,
+    ToggleState,
+    Spawn,
+    Destroy,
+    AddScore,
+    Enable,
+    Disable,
+}
+
+/// Teleporter visual effect.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
+#[serde(rename_all = "lowercase")]
+pub enum TeleportEffect {
+    #[default]
+    None,
+    Fade,
+    Particles,
+}
+
+/// Door activation trigger.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
+#[serde(rename_all = "lowercase")]
+pub enum DoorTrigger {
+    #[default]
+    Proximity,
+    Click,
 }
 
 // ---------------------------------------------------------------------------
@@ -201,8 +254,8 @@ pub struct EntityState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddTriggerParams {
     pub entity_id: String,
-    pub trigger_type: String,
-    pub action: String,
+    pub trigger_type: TriggerType,
+    pub action: TriggerAction,
     #[serde(default)]
     pub radius: Option<f32>,
     #[serde(default)]
@@ -241,7 +294,7 @@ pub struct TeleporterParams {
     #[serde(default = "default_teleporter_size")]
     pub size: [f32; 3],
     #[serde(default)]
-    pub effect: String,
+    pub effect: TeleportEffect,
     #[serde(default)]
     pub sound: Option<String>,
     #[serde(default)]
@@ -296,7 +349,7 @@ impl Default for CollectibleParams {
 pub struct DoorParams {
     pub entity_id: String,
     #[serde(default)]
-    pub trigger: String,
+    pub trigger: DoorTrigger,
     #[serde(default = "default_open_angle")]
     pub open_angle: f32,
     #[serde(default = "default_open_duration")]
@@ -330,7 +383,7 @@ impl Default for DoorParams {
     fn default() -> Self {
         Self {
             entity_id: String::new(),
-            trigger: "proximity".to_string(),
+            trigger: DoorTrigger::default(),
             open_angle: default_open_angle(),
             open_duration: default_open_duration(),
             auto_close: default_auto_close(),
@@ -904,8 +957,8 @@ mod tests {
     fn test_add_trigger_params_action_fields() {
         let params = AddTriggerParams {
             entity_id: "box".to_string(),
-            trigger_type: "proximity".to_string(),
-            action: "add_score".to_string(),
+            trigger_type: TriggerType::Proximity,
+            action: TriggerAction::AddScore,
             radius: Some(5.0),
             cooldown: None,
             interval: None,
@@ -968,7 +1021,7 @@ mod tests {
             position: [1.0, 0.0, 2.0],
             destination: [10.0, 0.0, 20.0],
             size: [3.0, 4.0, 3.0],
-            effect: "beam".to_string(),
+            effect: TeleportEffect::Particles,
             sound: Some("whoosh".to_string()),
             label: Some("Portal".to_string()),
         };
@@ -1009,5 +1062,41 @@ mod tests {
         assert_eq!(parsed, PickupEffect::Sparkle);
         let parsed_none: PickupEffect = serde_json::from_str("\"none\"").unwrap();
         assert_eq!(parsed_none, PickupEffect::None);
+    }
+
+    #[test]
+    fn test_trigger_type_default_and_serde() {
+        assert_eq!(TriggerType::default(), TriggerType::Proximity);
+        let json = serde_json::to_string(&TriggerType::AreaEnter).unwrap();
+        assert_eq!(json, "\"area_enter\"");
+        let parsed: TriggerType = serde_json::from_str("\"click\"").unwrap();
+        assert_eq!(parsed, TriggerType::Click);
+    }
+
+    #[test]
+    fn test_trigger_action_default_and_serde() {
+        assert_eq!(TriggerAction::default(), TriggerAction::Animate);
+        let json = serde_json::to_string(&TriggerAction::AddScore).unwrap();
+        assert_eq!(json, "\"add_score\"");
+        let parsed: TriggerAction = serde_json::from_str("\"toggle_state\"").unwrap();
+        assert_eq!(parsed, TriggerAction::ToggleState);
+    }
+
+    #[test]
+    fn test_teleport_effect_default_and_serde() {
+        assert_eq!(TeleportEffect::default(), TeleportEffect::None);
+        let json = serde_json::to_string(&TeleportEffect::Fade).unwrap();
+        assert_eq!(json, "\"fade\"");
+        let parsed: TeleportEffect = serde_json::from_str("\"particles\"").unwrap();
+        assert_eq!(parsed, TeleportEffect::Particles);
+    }
+
+    #[test]
+    fn test_door_trigger_default_and_serde() {
+        assert_eq!(DoorTrigger::default(), DoorTrigger::Proximity);
+        let json = serde_json::to_string(&DoorTrigger::Click).unwrap();
+        assert_eq!(json, "\"click\"");
+        let parsed: DoorTrigger = serde_json::from_str("\"proximity\"").unwrap();
+        assert_eq!(parsed, DoorTrigger::Proximity);
     }
 }

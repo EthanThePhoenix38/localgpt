@@ -1585,36 +1585,36 @@ fn process_gen_commands(
                 let mut ec = commands.entity(entity);
                 ec.insert(crate::interaction::InteractionEntity);
                 // Insert trigger component
-                match p.trigger_type.as_str() {
-                    "proximity" => {
+                match p.trigger_type {
+                    crate::interaction::TriggerType::Proximity => {
                         ec.insert(crate::interaction::ProximityTrigger {
                             radius: p.radius.unwrap_or(5.0),
                             cooldown: p.cooldown.unwrap_or(1.0),
                             last_triggered: 0.0,
                         });
                     }
-                    "click" => {
+                    crate::interaction::TriggerType::Click => {
                         ec.insert(crate::interaction::ClickTrigger {
                             max_distance: p.max_distance.unwrap_or(5.0),
                             prompt_text: p.prompt_text.clone(),
                         });
                     }
-                    "timer" => {
+                    crate::interaction::TriggerType::Timer => {
                         if let Some(interval) = p.interval {
                             ec.insert(crate::interaction::TimerTrigger::new(interval));
                         }
                     }
-                    "area_enter" => {
+                    crate::interaction::TriggerType::AreaEnter => {
                         ec.insert(crate::interaction::AreaTrigger { is_enter: true });
                     }
-                    "area_exit" => {
+                    crate::interaction::TriggerType::AreaExit => {
                         ec.insert(crate::interaction::AreaTrigger { is_enter: false });
                     }
-                    _ => {}
+                    crate::interaction::TriggerType::Collision => {}
                 }
                 // Insert action component
-                match p.action.as_str() {
-                    "animate" => {
+                match p.action {
+                    crate::interaction::TriggerAction::Animate => {
                         ec.insert(crate::interaction::AnimateAction {
                             property: p
                                 .state_key
@@ -1625,19 +1625,19 @@ fn process_gen_commands(
                             progress: 0.0,
                         });
                     }
-                    "teleport" => {
+                    crate::interaction::TriggerAction::Teleport => {
                         if let Some(dest) = p.destination {
                             ec.insert(crate::interaction::TeleportAction {
                                 destination: Vec3::from_array(dest),
                             });
                         }
                     }
-                    "play_sound" => {
+                    crate::interaction::TriggerAction::PlaySound => {
                         ec.insert(crate::interaction::PlaySoundAction {
                             sound: p.text.clone().unwrap_or_else(|| "default".to_string()),
                         });
                     }
-                    "show_text" => {
+                    crate::interaction::TriggerAction::ShowText => {
                         if let Some(text) = &p.text {
                             ec.insert(crate::interaction::ShowTextAction {
                                 text: text.clone(),
@@ -1645,33 +1645,32 @@ fn process_gen_commands(
                             });
                         }
                     }
-                    "toggle_state" => {
+                    crate::interaction::TriggerAction::ToggleState => {
                         ec.insert(crate::interaction::ToggleStateAction {
                             state_key: p.state_key.clone().unwrap_or_else(|| "active".to_string()),
                             value: p.text.clone(),
                         });
                     }
-                    "spawn" => {
+                    crate::interaction::TriggerAction::Spawn => {
                         ec.insert(crate::interaction::SpawnAction {
                             template: p.text.clone().unwrap_or_default(),
                         });
                     }
-                    "destroy" => {
+                    crate::interaction::TriggerAction::Destroy => {
                         ec.insert(crate::interaction::DestroyAction);
                     }
-                    "add_score" => {
+                    crate::interaction::TriggerAction::AddScore => {
                         ec.insert(crate::interaction::AddScoreAction {
                             amount: p.amount.unwrap_or(1),
                             category: p.category.clone().unwrap_or_else(|| "points".to_string()),
                         });
                     }
-                    "enable" => {
+                    crate::interaction::TriggerAction::Enable => {
                         ec.insert(crate::interaction::EnableAction);
                     }
-                    "disable" => {
+                    crate::interaction::TriggerAction::Disable => {
                         ec.insert(crate::interaction::DisableAction);
                     }
-                    _ => {}
                 }
                 // Mark as once-trigger if requested
                 if p.once {
@@ -1763,7 +1762,7 @@ fn process_gen_commands(
                     crate::interaction::Collectible {
                         value: p.value,
                         category: p.category.clone(),
-                        pickup_effect: p.pickup_effect.clone(),
+                        pickup_effect: p.pickup_effect,
                         respawn_time: p.respawn_time,
                         original_position: position,
                         respawn_timer: None,
@@ -1803,7 +1802,7 @@ fn process_gen_commands(
                         original_rotation: rotation,
                     },
                 ));
-                if p.trigger == "proximity" {
+                if p.trigger == crate::interaction::DoorTrigger::Proximity {
                     commands
                         .entity(entity)
                         .insert(crate::interaction::ProximityTrigger {
@@ -1879,6 +1878,11 @@ fn process_gen_commands(
                         crate::terrain::Terrain {
                             size: p.size,
                             resolution: p.resolution,
+                            height_scale: p.height_scale,
+                            noise_type: p.noise_type,
+                            noise_frequency: p.noise_frequency,
+                            noise_octaves: p.noise_octaves,
+                            seed: p.seed.unwrap_or_else(rand::random::<u32>),
                         },
                     ))
                     .id();
@@ -2143,23 +2147,45 @@ fn process_gen_commands(
                 let entity_name = p.entity_id.clone();
                 let text_color = crate::ui::parse_sign_color(&p.color).unwrap_or(Color::WHITE);
                 // Spawn label as child of target entity
-                commands.spawn((
-                    Name::new(format!("Label_{}", entity_name)),
-                    crate::ui::EntityLabel {
-                        text: p.text.clone(),
-                        offset_y: p.offset_y,
-                        visible_distance: p.visible_distance,
-                        current_alpha: 1.0,
-                        parent_entity: target,
-                    },
-                    Text2d::new(p.text.clone()),
-                    TextColor(text_color),
-                    TextLayout::new_with_justify(bevy::text::Justify::Center),
-                    Transform::from_xyz(0.0, p.offset_y, 0.0)
-                        .with_scale(Vec3::splat(p.font_size / 1600.0)),
-                    Visibility::default(),
-                    ChildOf(target),
-                ));
+                let label_entity = commands
+                    .spawn((
+                        Name::new(format!("Label_{}", entity_name)),
+                        crate::ui::EntityLabel {
+                            text: p.text.clone(),
+                            offset_y: p.offset_y,
+                            visible_distance: p.visible_distance,
+                            current_alpha: 1.0,
+                            parent_entity: target,
+                        },
+                        Text2d::new(p.text.clone()),
+                        TextColor(text_color),
+                        TextLayout::new_with_justify(bevy::text::Justify::Center),
+                        Transform::from_xyz(0.0, p.offset_y, 0.0)
+                            .with_scale(Vec3::splat(p.font_size / 1600.0)),
+                        Visibility::default(),
+                        ChildOf(target),
+                    ))
+                    .id();
+                // Background quad behind label text
+                if let Some(bg_color) = crate::ui::parse_sign_color(&p.background_color) {
+                    let bg_mesh = params
+                        .meshes
+                        .add(Plane3d::new(Vec3::Z, Vec2::new(1.5, 0.3)));
+                    let bg_mat = params.materials.add(StandardMaterial {
+                        base_color: bg_color,
+                        alpha_mode: AlphaMode::Blend,
+                        unlit: true,
+                        ..default()
+                    });
+                    commands.spawn((
+                        Name::new("LabelBackground"),
+                        crate::ui::LabelBackground,
+                        Mesh3d(bg_mesh),
+                        MeshMaterial3d(bg_mat),
+                        Transform::from_xyz(0.0, 0.0, -0.01),
+                        ChildOf(label_entity),
+                    ));
+                }
                 let _ = channel_res
                     .channels
                     .resp_tx
@@ -3113,6 +3139,7 @@ fn handle_spawn_primitive(
                 world_id: wid,
             },
             parametric,
+            crate::terrain::TerrainFollower,
         ))
         .id();
 

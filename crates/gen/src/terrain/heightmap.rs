@@ -8,7 +8,7 @@ use noise::{Fbm, MultiFractal, NoiseFn, Perlin, SuperSimplex};
 use serde::{Deserialize, Serialize};
 
 /// Noise type for terrain generation.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
 #[serde(rename_all = "lowercase")]
 pub enum NoiseType {
     #[default]
@@ -92,7 +92,6 @@ impl Default for TerrainParams {
         }
     }
 }
-
 /// Marker component for terrain entities.
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -101,7 +100,47 @@ pub struct Terrain {
     pub size: Vec2,
     /// Resolution (vertices per side).
     pub resolution: u32,
+    /// Height scale.
+    pub height_scale: f32,
+    /// Noise algorithm.
+    pub noise_type: NoiseType,
+    /// Noise frequency.
+    pub noise_frequency: f32,
+    /// Number of noise octaves.
+    pub noise_octaves: usize,
+    /// Seed.
+    pub seed: u32,
 }
+
+impl Terrain {
+    /// Sample the terrain height at a given world XZ coordinate.
+    pub fn sample_height(&self, world_pos: Vec3, terrain_transform: &Transform) -> f32 {
+        if matches!(self.noise_type, NoiseType::Flat) {
+            return terrain_transform.translation.y;
+        }
+
+        let local_pos = world_pos - terrain_transform.translation;
+        let nx = local_pos.x * self.noise_frequency;
+        let nz = local_pos.z * self.noise_frequency;
+
+        let fbm_perlin: Fbm<Perlin> = Fbm::new(self.seed).set_octaves(self.noise_octaves);
+        let fbm_simplex: Fbm<SuperSimplex> = Fbm::new(self.seed).set_octaves(self.noise_octaves);
+
+        let noise_value = match self.noise_type {
+            NoiseType::Perlin => fbm_perlin.get([nx as f64, nz as f64]),
+            NoiseType::Simplex => fbm_simplex.get([nx as f64, nz as f64]),
+            NoiseType::Flat => 0.0,
+        };
+
+        let height = ((noise_value as f32 + 1.0) / 2.0) * self.height_scale;
+        height + terrain_transform.translation.y
+    }
+}
+
+/// Marker component to make an entity follow the terrain height.
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
+pub struct TerrainFollower;
 
 /// Generate terrain mesh from noise parameters.
 pub fn generate_terrain_mesh(params: &TerrainParams) -> Mesh {
@@ -256,8 +295,22 @@ pub fn get_terrain_material_color(material: TerrainMaterial) -> Color {
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
-    fn build(&self, _app: &mut App) {
-        // Terrain is generated on demand, no continuous systems needed
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, terrain_follow_system);
+    }
+}
+
+fn terrain_follow_system(
+    terrain_query: Query<(&Terrain, &Transform)>,
+    mut follower_query: Query<&mut Transform, (With<TerrainFollower>, Without<Terrain>)>,
+) {
+    let Ok((terrain, terrain_transform)) = terrain_query.single() else {
+        return;
+    };
+
+    for mut transform in follower_query.iter_mut() {
+        let height = terrain.sample_height(transform.translation, terrain_transform);
+        transform.translation.y = height;
     }
 }
 
@@ -273,7 +326,6 @@ mod tests {
             ..default()
         };
         let mesh = generate_terrain_mesh(&params);
-        // Should have (17 * 17) = 289 vertices
         assert_eq!(mesh.count_vertices(), 289);
     }
 
@@ -286,7 +338,6 @@ mod tests {
             ..default()
         };
         let mesh = generate_terrain_mesh(&params);
-        // Should have (33 * 33) = 1089 vertices
         assert_eq!(mesh.count_vertices(), 1089);
     }
 
@@ -347,6 +398,22 @@ mod tests {
             ..default()
         };
         let mesh = generate_terrain_mesh(&params);
-        assert_eq!(mesh.count_vertices(), 25); // (4+1)^2
+        assert_eq!(mesh.count_vertices(), 25);
+    }
+
+    #[test]
+    fn test_terrain_sample_height_flat() {
+        let terrain = Terrain {
+            size: Vec2::splat(100.0),
+            resolution: 16,
+            height_scale: 20.0,
+            noise_type: NoiseType::Flat,
+            noise_frequency: 0.02,
+            noise_octaves: 4,
+            seed: 0,
+        };
+        let transform = Transform::from_xyz(0.0, 5.0, 0.0);
+        let height = terrain.sample_height(Vec3::new(10.0, 0.0, 10.0), &transform);
+        assert_eq!(height, 5.0);
     }
 }

@@ -83,14 +83,32 @@ impl Tool for GenAddTriggerTool {
 
         let params = interaction::AddTriggerParams {
             entity_id: entity_id.clone(),
-            trigger_type: args["trigger_type"]
+            trigger_type: match args["trigger_type"]
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("trigger_type is required"))?
-                .to_string(),
-            action: args["action"]
+            {
+                "click" => interaction::TriggerType::Click,
+                "area_enter" => interaction::TriggerType::AreaEnter,
+                "area_exit" => interaction::TriggerType::AreaExit,
+                "collision" => interaction::TriggerType::Collision,
+                "timer" => interaction::TriggerType::Timer,
+                _ => interaction::TriggerType::Proximity,
+            },
+            action: match args["action"]
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("action is required"))?
-                .to_string(),
+            {
+                "teleport" => interaction::TriggerAction::Teleport,
+                "play_sound" => interaction::TriggerAction::PlaySound,
+                "show_text" => interaction::TriggerAction::ShowText,
+                "toggle_state" => interaction::TriggerAction::ToggleState,
+                "spawn" => interaction::TriggerAction::Spawn,
+                "destroy" => interaction::TriggerAction::Destroy,
+                "add_score" => interaction::TriggerAction::AddScore,
+                "enable" => interaction::TriggerAction::Enable,
+                "disable" => interaction::TriggerAction::Disable,
+                _ => interaction::TriggerAction::Animate,
+            },
             radius: args["radius"].as_f64().map(|v| v as f32),
             cooldown: args["cooldown"].as_f64().map(|v| v as f32),
             interval: args["interval"].as_f64().map(|v| v as f32),
@@ -219,7 +237,11 @@ impl Tool for GenAddTeleporterTool {
                 destination[2].as_f64().unwrap_or(0.0) as f32,
             ],
             size,
-            effect: args["effect"].as_str().unwrap_or("fade").to_string(),
+            effect: match args["effect"].as_str().unwrap_or("none") {
+                "fade" => interaction::TeleportEffect::Fade,
+                "particles" => interaction::TeleportEffect::Particles,
+                _ => interaction::TeleportEffect::None,
+            },
             sound: args["sound"].as_str().map(|s| s.to_string()),
             label: args["label"].as_str().map(|s| s.to_string()),
         };
@@ -405,7 +427,10 @@ impl Tool for GenAddDoorTool {
 
         let params = interaction::DoorParams {
             entity_id: entity_id.clone(),
-            trigger: args["trigger"].as_str().unwrap_or("proximity").to_string(),
+            trigger: match args["trigger"].as_str().unwrap_or("proximity") {
+                "click" => interaction::DoorTrigger::Click,
+                _ => interaction::DoorTrigger::Proximity,
+            },
             open_angle: args["open_angle"].as_f64().unwrap_or(90.0) as f32,
             open_duration: args["open_duration"].as_f64().unwrap_or(1.5) as f32,
             auto_close: args["auto_close"].as_bool().unwrap_or(true),
