@@ -523,4 +523,78 @@ mod tests {
         let mesh = generate_foliage_mesh(FoliageType::Tree);
         assert!(mesh.count_vertices() > 0);
     }
+
+    #[test]
+    fn test_generate_bush_mesh() {
+        let mesh = generate_foliage_mesh(FoliageType::Bush);
+        assert_eq!(mesh.count_vertices(), 12);
+    }
+
+    #[test]
+    fn test_generate_grass_mesh() {
+        let mesh = generate_foliage_mesh(FoliageType::Grass);
+        // 6 blades * 4 vertices each = 24
+        assert_eq!(mesh.count_vertices(), 24);
+    }
+
+    #[test]
+    fn test_generate_flower_mesh() {
+        let mesh = generate_foliage_mesh(FoliageType::Flower);
+        // 2 stem vertices + 5 head vertices = 7
+        assert_eq!(mesh.count_vertices(), 7);
+    }
+
+    #[test]
+    fn test_generate_rock_mesh() {
+        let mesh = generate_foliage_mesh(FoliageType::Rock);
+        assert_eq!(mesh.count_vertices(), 12);
+    }
+
+    #[test]
+    fn test_foliage_params_default() {
+        let params = FoliageParams::default();
+        assert!(matches!(params.foliage_type, FoliageType::Tree));
+        assert_eq!(params.density, 0.5);
+        assert_eq!(params.scale_range, Vec2::new(0.8, 1.2));
+        assert!(params.seed.is_none());
+        assert!(params.avoid_paths);
+        assert!(params.avoid_water);
+        assert_eq!(params.max_slope, 30.0);
+    }
+
+    #[test]
+    fn test_foliage_area_default() {
+        let area = FoliageArea::default();
+        assert_eq!(area.center, Vec3::ZERO);
+        assert_eq!(area.radius, 30.0);
+    }
+
+    #[test]
+    fn test_foliage_colors_distinct() {
+        let tree = get_foliage_color(FoliageType::Tree);
+        let bush = get_foliage_color(FoliageType::Bush);
+        let flower = get_foliage_color(FoliageType::Flower);
+        let rock = get_foliage_color(FoliageType::Rock);
+        assert_ne!(tree, flower);
+        assert_ne!(bush, rock);
+    }
+
+    #[test]
+    fn test_deterministic_points() {
+        let params = FoliageParams {
+            seed: Some(123),
+            area: FoliageArea {
+                radius: 10.0,
+                ..default()
+            },
+            density: 0.3,
+            ..default()
+        };
+        let points_a = generate_foliage_points(&params);
+        let points_b = generate_foliage_points(&params);
+        assert_eq!(points_a.len(), points_b.len());
+        for (a, b) in points_a.iter().zip(points_b.iter()) {
+            assert_eq!(*a, *b);
+        }
+    }
 }

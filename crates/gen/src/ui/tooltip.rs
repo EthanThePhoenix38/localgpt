@@ -249,4 +249,27 @@ mod tests {
         assert!(active.active_center.is_none());
         assert!(active.active_bottom.is_none());
     }
+
+    #[test]
+    fn test_tooltip_params_custom() {
+        let params = TooltipParams {
+            entity_id: "chest".to_string(),
+            text: "Press E to open".to_string(),
+            trigger: TooltipTrigger::LookAt,
+            range: 5.0,
+            style: TooltipStyle::ScreenBottom,
+            color: "#ffcc00".to_string(),
+            duration: Some(2.5),
+        };
+        assert_eq!(params.trigger, TooltipTrigger::LookAt);
+        assert_eq!(params.style, TooltipStyle::ScreenBottom);
+        assert_eq!(params.range, 5.0);
+        assert_eq!(params.duration, Some(2.5));
+    }
+
+    #[test]
+    fn test_tooltip_default_functions() {
+        assert_eq!(default_range(), 3.0);
+        assert_eq!(default_tooltip_color(), "#ffffff");
+    }
 }

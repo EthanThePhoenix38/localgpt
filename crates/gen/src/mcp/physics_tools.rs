@@ -321,7 +321,7 @@ impl Tool for GenAddJointTool {
                         "description": "Spring damping"
                     }
                 },
-                "required": ["entity_a", "entity_b"]
+                "required": ["entity_a", "entity_b", "joint_type"]
             }),
         }
     }
@@ -448,7 +448,7 @@ impl Tool for GenAddForceTool {
                     "falloff": {
                         "type": "string",
                         "enum": ["none", "linear", "quadratic"],
-                        "default": "none",
+                        "default": "linear",
                         "description": "Distance falloff type"
                     },
                     "affects_player": {
@@ -462,7 +462,7 @@ impl Tool for GenAddForceTool {
                         "description": "Continuous force (false = one-time)"
                     }
                 },
-                "required": []
+                "required": ["position", "force_type"]
             }),
         }
     }

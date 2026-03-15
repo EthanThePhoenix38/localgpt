@@ -759,4 +759,50 @@ mod tests {
             "custom"
         );
     }
+
+    #[test]
+    fn test_audio_emitter_component() {
+        let emitter = AudioEmitter {
+            sound: EmitterSound::Water { turbulence: 0.8 },
+            radius: 15.0,
+            volume: 0.6,
+            emitter_name: "fountain_audio".to_string(),
+        };
+        assert_eq!(emitter.radius, 15.0);
+        assert_eq!(emitter.volume, 0.6);
+        assert_eq!(emitter.emitter_name, "fountain_audio");
+    }
+
+    #[test]
+    fn test_emitter_meta() {
+        let meta = EmitterMeta {
+            sound_type: "fire".to_string(),
+            sound: EmitterSound::Fire {
+                intensity: 0.7,
+                crackle: 0.4,
+            },
+            base_volume: 0.5,
+            radius: 10.0,
+            attached_to: Some("campfire".to_string()),
+            position: Some([1.0, 0.0, 2.0]),
+        };
+        assert_eq!(meta.sound_type, "fire");
+        assert_eq!(meta.base_volume, 0.5);
+        assert_eq!(meta.attached_to, Some("campfire".to_string()));
+        assert_eq!(meta.position, Some([1.0, 0.0, 2.0]));
+    }
+
+    #[test]
+    fn test_emitter_meta_standalone() {
+        let meta = EmitterMeta {
+            sound_type: "water".to_string(),
+            sound: EmitterSound::Water { turbulence: 0.3 },
+            base_volume: 0.8,
+            radius: 20.0,
+            attached_to: None,
+            position: None,
+        };
+        assert!(meta.attached_to.is_none());
+        assert!(meta.position.is_none());
+    }
 }

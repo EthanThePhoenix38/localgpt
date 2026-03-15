@@ -453,7 +453,7 @@ impl Tool for GenAddFoliageTool {
                         "description": "Maximum terrain slope (degrees)"
                     }
                 },
-                "required": []
+                "required": ["foliage_type"]
             }),
         }
     }

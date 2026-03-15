@@ -161,5 +161,32 @@ mod tests {
         assert!(params.billboard);
         assert_eq!(params.font_size, 24.0);
         assert_eq!(params.color, "#ffffff");
+        assert!(params.background_color.is_none());
+        assert!(params.max_width.is_none());
+        assert_eq!(params.rotation, Vec3::ZERO);
+        assert_eq!(params.position, Vec3::ZERO);
+        assert!(params.text.is_empty());
+    }
+
+    #[test]
+    fn test_sign_component() {
+        let sign = Sign {
+            billboard: false,
+            text: "Hello world".to_string(),
+        };
+        assert!(!sign.billboard);
+        assert_eq!(sign.text, "Hello world");
+    }
+
+    #[test]
+    fn test_parse_sign_color_values() {
+        // Test actual RGB values
+        let color = parse_sign_color("#ff8000").unwrap();
+        // orange-ish color
+        assert_ne!(color, Color::BLACK);
+
+        // RGBA with half alpha
+        let color = parse_sign_color("#00ff0080").unwrap();
+        assert_ne!(color, Color::BLACK);
     }
 }

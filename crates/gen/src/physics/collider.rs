@@ -110,4 +110,37 @@ mod tests {
     fn test_collider_shape_default_is_box() {
         assert!(matches!(ColliderShape::default(), ColliderShape::Box));
     }
+
+    #[test]
+    fn test_collider_shape_variants() {
+        assert!(!matches!(ColliderShape::Sphere, ColliderShape::Box));
+        assert!(!matches!(ColliderShape::Capsule, ColliderShape::Cylinder));
+        assert!(!matches!(ColliderShape::Mesh, ColliderShape::Sphere));
+    }
+
+    #[test]
+    fn test_collider_config_component() {
+        let config = ColliderConfig {
+            shape: ColliderShape::Capsule,
+            is_trigger: true,
+            visible_in_debug: false,
+        };
+        assert!(matches!(config.shape, ColliderShape::Capsule));
+        assert!(config.is_trigger);
+        assert!(!config.visible_in_debug);
+    }
+
+    #[test]
+    fn test_collider_params_with_size() {
+        let params = ColliderParams {
+            entity_id: "box1".to_string(),
+            shape: ColliderShape::Box,
+            size: Some(Vec3::new(2.0, 3.0, 4.0)),
+            offset: Vec3::new(0.0, 1.5, 0.0),
+            is_trigger: false,
+            visible_in_debug: true,
+        };
+        assert_eq!(params.size, Some(Vec3::new(2.0, 3.0, 4.0)));
+        assert_eq!(params.offset, Vec3::new(0.0, 1.5, 0.0));
+    }
 }

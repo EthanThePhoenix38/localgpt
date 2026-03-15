@@ -141,4 +141,27 @@ mod tests {
         assert_eq!(params.stiffness, Some(100.0));
         assert_eq!(params.damping, Some(5.0));
     }
+
+    #[test]
+    fn test_joint_type_all_variants() {
+        assert_ne!(JointType::Fixed, JointType::Revolute);
+        assert_ne!(JointType::Spherical, JointType::Prismatic);
+        assert_ne!(JointType::Prismatic, JointType::Spring);
+    }
+
+    #[test]
+    fn test_joint_params_with_limits() {
+        let params = JointParams {
+            entity_a: "hinge_a".to_string(),
+            entity_b: "hinge_b".to_string(),
+            joint_type: JointType::Revolute,
+            axis: Vec3::X,
+            limits: Some(Vec2::new(-90.0, 90.0)),
+            ..default()
+        };
+        assert_eq!(params.axis, Vec3::X);
+        let limits = params.limits.unwrap();
+        assert_eq!(limits.x, -90.0);
+        assert_eq!(limits.y, 90.0);
+    }
 }

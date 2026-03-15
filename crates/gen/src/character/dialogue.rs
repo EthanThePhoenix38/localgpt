@@ -338,6 +338,51 @@ mod tests {
         });
         assert_eq!(tree.trigger, DialogueTrigger::Click);
     }
+
+    #[test]
+    fn test_dialogue_tree_get_missing_node() {
+        let tree = DialogueTree::default();
+        assert!(tree.get_node("nonexistent").is_none());
+        assert!(tree.get_start_node().is_none());
+    }
+
+    #[test]
+    fn test_dialogue_node_def_conversion() {
+        let def = DialogueNodeDef {
+            id: "test".to_string(),
+            text: "Hello world".to_string(),
+            speaker: Some("NPC".to_string()),
+            choices: vec![
+                DialogueChoiceDef {
+                    text: "Option A".to_string(),
+                    next_node_id: Some("next".to_string()),
+                },
+                DialogueChoiceDef {
+                    text: "Option B".to_string(),
+                    next_node_id: None,
+                },
+            ],
+        };
+        let node: DialogueNode = def.into();
+        assert_eq!(node.id, "test");
+        assert_eq!(node.speaker, Some("NPC".to_string()));
+        assert_eq!(node.choices.len(), 2);
+        assert!(node.choices[1].next_node_id.is_none());
+    }
+
+    #[test]
+    fn test_set_dialogue_params_default_trigger_radius() {
+        assert_eq!(default_trigger_radius(), 3.0);
+    }
+
+    #[test]
+    fn test_dialogue_state_fields() {
+        let mut state = DialogueState::default();
+        state.is_typing = true;
+        state.typewriter_progress = 0.5;
+        assert!(state.is_typing);
+        assert_eq!(state.typewriter_progress, 0.5);
+    }
 }
 
 /// Plugin for dialogue systems.

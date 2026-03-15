@@ -165,8 +165,8 @@ impl Tool for GenAddHudTool {
                     },
                     "position": {
                         "type": "string",
-                        "enum": ["top_left", "top_right", "bottom_left", "bottom_right", "center_top", "center_bottom"],
-                        "default": "top_left",
+                        "enum": ["top-left", "top-right", "bottom-left", "bottom-right", "center-top", "center-bottom"],
+                        "default": "top-left",
                         "description": "Screen position"
                     },
                     "label": {
@@ -193,7 +193,7 @@ impl Tool for GenAddHudTool {
                         "description": "Unique ID for updates"
                     }
                 },
-                "required": []
+                "required": ["element_type"]
             }),
         }
     }
@@ -208,12 +208,12 @@ impl Tool for GenAddHudTool {
             _ => ui::HudElementType::Score,
         };
 
-        let position = match args["position"].as_str().unwrap_or("top_left") {
-            "top_right" => ui::HudPosition::TopRight,
-            "bottom_left" => ui::HudPosition::BottomLeft,
-            "bottom_right" => ui::HudPosition::BottomRight,
-            "center_top" => ui::HudPosition::CenterTop,
-            "center_bottom" => ui::HudPosition::CenterBottom,
+        let position = match args["position"].as_str().unwrap_or("top-left") {
+            "top_right" | "top-right" => ui::HudPosition::TopRight,
+            "bottom_left" | "bottom-left" => ui::HudPosition::BottomLeft,
+            "bottom_right" | "bottom-right" => ui::HudPosition::BottomRight,
+            "center_top" | "center-top" => ui::HudPosition::CenterTop,
+            "center_bottom" | "center-bottom" => ui::HudPosition::CenterBottom,
             _ => ui::HudPosition::TopLeft,
         };
 

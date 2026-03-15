@@ -404,6 +404,40 @@ mod tests {
         assert_eq!(config.camera_mode, CameraMode::FirstPerson);
         assert_eq!(config.camera_distance, 3.0);
     }
+
+    #[test]
+    fn test_player_config_default() {
+        let config = PlayerConfig::default();
+        assert_eq!(config.walk_speed, 5.0);
+        assert_eq!(config.run_speed, 10.0);
+        assert_eq!(config.jump_force, 8.0);
+        assert_eq!(config.camera_mode, CameraMode::ThirdPerson);
+        assert_eq!(config.collision_radius, 0.3);
+        assert_eq!(config.collision_height, 1.8);
+    }
+
+    #[test]
+    fn test_player_input_default() {
+        let input = PlayerInput::default();
+        assert_eq!(input.move_forward, 0.0);
+        assert_eq!(input.move_right, 0.0);
+        assert!(!input.jump);
+        assert!(!input.run);
+    }
+
+    #[test]
+    fn test_spawn_params_collision() {
+        let params = SpawnPlayerParams {
+            collision_radius: 0.5,
+            collision_height: 2.0,
+            ..Default::default()
+        };
+        assert_eq!(params.collision_radius, 0.5);
+        assert_eq!(params.collision_height, 2.0);
+        let config = params.to_config();
+        assert_eq!(config.collision_radius, 0.5);
+        assert_eq!(config.collision_height, 2.0);
+    }
 }
 
 /// Plugin for player systems.

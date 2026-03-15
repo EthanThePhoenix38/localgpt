@@ -255,6 +255,49 @@ mod tests {
         let queue = NotificationQueue::default();
         assert!(queue.notifications.is_empty());
     }
+
+    #[test]
+    fn test_notification_style_variants() {
+        assert_eq!(NotificationStyle::default(), NotificationStyle::Toast);
+        assert_ne!(NotificationStyle::Banner, NotificationStyle::Achievement);
+    }
+
+    #[test]
+    fn test_notification_position_variants() {
+        assert_eq!(NotificationPosition::default(), NotificationPosition::Top);
+        assert_ne!(NotificationPosition::Center, NotificationPosition::Bottom);
+    }
+
+    #[test]
+    fn test_notification_phase_default() {
+        assert!(matches!(
+            NotificationPhase::default(),
+            NotificationPhase::EnterIn
+        ));
+    }
+
+    #[test]
+    fn test_notification_icon_all_variants() {
+        assert_eq!(get_notification_icon_text(NotificationIcon::Key), "🔑");
+        assert_eq!(get_notification_icon_text(NotificationIcon::Heart), "❤");
+    }
+
+    #[test]
+    fn test_notification_component() {
+        let notif = Notification {
+            text: "Achievement unlocked!".to_string(),
+            style: NotificationStyle::Achievement,
+            position: NotificationPosition::Center,
+            phase: NotificationPhase::Hold,
+            elapsed: 1.0,
+            duration: 3.0,
+            stack_offset: 0.0,
+            alpha: 1.0,
+        };
+        assert_eq!(notif.text, "Achievement unlocked!");
+        assert_eq!(notif.style, NotificationStyle::Achievement);
+        assert_eq!(notif.alpha, 1.0);
+    }
 }
 
 /// Plugin for notification systems.

@@ -237,5 +237,43 @@ mod tests {
         let params = HudParams::default();
         assert_eq!(params.font_size, 18.0);
         assert_eq!(params.initial_value, "0");
+        assert_eq!(params.color, "#ffffff");
+        assert!(params.label.is_none());
+        assert!(params.id.is_none());
+        assert!(matches!(params.element_type, HudElementType::Score));
+        assert!(matches!(params.position, HudPosition::TopLeft));
+    }
+
+    #[test]
+    fn test_hud_timer_negative_clamp() {
+        let timer = HudTimer {
+            value: -5.0,
+            is_countdown: true,
+            running: false,
+        };
+        // formatted() clamps to 0
+        assert_eq!(timer.formatted(), "00:00");
+    }
+
+    #[test]
+    fn test_hud_timer_large_value() {
+        let timer = HudTimer {
+            value: 3661.0, // 61 minutes, 1 second
+            is_countdown: false,
+            running: true,
+        };
+        assert_eq!(timer.formatted(), "61:01");
+    }
+
+    #[test]
+    fn test_hud_score_default() {
+        let score = HudScore::default();
+        assert_eq!(score.score, 0);
+    }
+
+    #[test]
+    fn test_hud_element_types() {
+        assert!(matches!(HudElementType::default(), HudElementType::Score));
+        assert!(matches!(HudPosition::default(), HudPosition::TopLeft));
     }
 }

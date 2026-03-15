@@ -21,8 +21,8 @@ pub enum ForceType {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Reflect)]
 #[serde(rename_all = "snake_case")]
 pub enum FalloffType {
-    #[default]
     None,
+    #[default]
     Linear,
     Quadratic,
 }
@@ -231,7 +231,41 @@ mod tests {
     }
 
     #[test]
-    fn test_falloff_type_default_is_none() {
-        assert!(matches!(FalloffType::default(), FalloffType::None));
+    fn test_falloff_type_default_is_linear() {
+        assert!(matches!(FalloffType::default(), FalloffType::Linear));
+    }
+
+    #[test]
+    fn test_force_type_all_variants() {
+        assert_eq!(ForceType::default(), ForceType::Directional);
+        assert_ne!(ForceType::PointAttract, ForceType::PointRepel);
+        assert_ne!(ForceType::Vortex, ForceType::Impulse);
+    }
+
+    #[test]
+    fn test_force_field_custom() {
+        let field = ForceField {
+            force_type: ForceType::PointAttract,
+            strength: 50.0,
+            radius: 20.0,
+            direction: Vec3::Y,
+            falloff: FalloffType::Quadratic,
+            affects_player: false,
+            continuous: false,
+        };
+        assert_eq!(field.force_type, ForceType::PointAttract);
+        assert!(!field.affects_player);
+        assert!(!field.continuous);
+        assert!(matches!(field.falloff, FalloffType::Quadratic));
+    }
+
+    #[test]
+    fn test_force_params_with_direction() {
+        let params = ForceParams {
+            force_type: ForceType::Directional,
+            direction: Some(Vec3::new(1.0, 0.0, 0.0)),
+            ..default()
+        };
+        assert_eq!(params.direction, Some(Vec3::new(1.0, 0.0, 0.0)));
     }
 }

@@ -355,6 +355,99 @@ mod tests {
         assert_eq!(sens.x, 0.1);
         assert_eq!(sens.y, 0.1);
     }
+
+    #[test]
+    fn test_camera_pov_variants() {
+        assert_eq!(CameraPov::default(), CameraPov::ThirdPerson);
+        assert_ne!(CameraPov::FirstPerson, CameraPov::ThirdPerson);
+        assert_ne!(CameraPov::TopDown, CameraPov::Fixed);
+    }
+
+    #[test]
+    fn test_mode_enum_aliases() {
+        let params = SetCameraModeParams {
+            mode: "firstperson".to_string(),
+            distance: 5.0,
+            pitch: -20.0,
+            fov: 60.0,
+            transition_duration: 0.5,
+            fixed_position: None,
+            fixed_look_at: None,
+        };
+        assert_eq!(params.mode_enum(), CameraPov::FirstPerson);
+
+        let params2 = SetCameraModeParams {
+            mode: "topdown".to_string(),
+            ..params.clone()
+        };
+        assert_eq!(params2.mode_enum(), CameraPov::TopDown);
+
+        // Unknown falls back to ThirdPerson
+        let params3 = SetCameraModeParams {
+            mode: "invalid".to_string(),
+            ..params
+        };
+        assert_eq!(params3.mode_enum(), CameraPov::ThirdPerson);
+    }
+
+    #[test]
+    fn test_compute_first_person_position() {
+        let camera = PlayerCamera {
+            mode: CameraPov::FirstPerson,
+            ..default()
+        };
+        let player = Transform::from_translation(Vec3::new(1.0, 0.0, 2.0));
+        let pos = compute_target_position(&camera, &player);
+        assert_eq!(pos, Vec3::new(1.0, 1.6, 2.0));
+    }
+
+    #[test]
+    fn test_compute_top_down_position() {
+        let camera = PlayerCamera {
+            mode: CameraPov::TopDown,
+            distance: 10.0,
+            ..default()
+        };
+        let player = Transform::from_translation(Vec3::new(3.0, 0.0, 5.0));
+        let pos = compute_target_position(&camera, &player);
+        assert_eq!(pos, Vec3::new(3.0, 10.0, 5.0));
+    }
+
+    #[test]
+    fn test_compute_fixed_position() {
+        let camera = PlayerCamera {
+            mode: CameraPov::Fixed,
+            fixed_position: Some(Vec3::new(10.0, 20.0, 30.0)),
+            ..default()
+        };
+        let player = Transform::IDENTITY;
+        let pos = compute_target_position(&camera, &player);
+        assert_eq!(pos, Vec3::new(10.0, 20.0, 30.0));
+    }
+
+    #[test]
+    fn test_compute_fixed_position_default() {
+        let camera = PlayerCamera {
+            mode: CameraPov::Fixed,
+            fixed_position: None,
+            ..default()
+        };
+        let player = Transform::IDENTITY;
+        let pos = compute_target_position(&camera, &player);
+        // Default fixed position
+        assert_eq!(pos, Vec3::new(0.0, 10.0, 10.0));
+    }
+
+    #[test]
+    fn test_player_camera_transition() {
+        let cam = PlayerCamera {
+            transition_progress: 0.5,
+            transition_duration: 1.0,
+            ..default()
+        };
+        assert!(cam.transition_progress < 1.0);
+        assert_eq!(cam.transition_duration, 1.0);
+    }
 }
 
 /// Plugin for camera systems.

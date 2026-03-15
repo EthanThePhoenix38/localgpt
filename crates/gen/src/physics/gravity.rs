@@ -217,4 +217,39 @@ mod tests {
         assert!((gravity.transition_progress - 1.0).abs() < f32::EPSILON);
         assert!((gravity.transition_duration).abs() < f32::EPSILON);
     }
+
+    #[test]
+    fn test_gravity_override_component() {
+        let override_comp = GravityOverride {
+            direction: Vec3::new(0.0, 1.0, 0.0),
+            strength_scale: 0.5,
+        };
+        assert_eq!(override_comp.direction, Vec3::Y);
+        assert_eq!(override_comp.strength_scale, 0.5);
+    }
+
+    #[test]
+    fn test_gravity_zone_component() {
+        let zone = GravityZone {
+            center: Vec3::new(10.0, 0.0, 5.0),
+            radius: 15.0,
+            gravity: Vec3::new(0.0, -GRAVITY_MOON, 0.0),
+            transition_duration: 1.0,
+        };
+        assert_eq!(zone.radius, 15.0);
+        assert!((zone.gravity.y - (-GRAVITY_MOON)).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_gravity_params_with_zone() {
+        let params = GravityParams {
+            zone_position: Some(Vec3::new(5.0, 0.0, 5.0)),
+            zone_radius: Some(10.0),
+            strength: GRAVITY_MARS,
+            ..default()
+        };
+        assert_eq!(params.zone_position, Some(Vec3::new(5.0, 0.0, 5.0)));
+        assert_eq!(params.zone_radius, Some(10.0));
+        assert!((params.strength - GRAVITY_MARS).abs() < 0.01);
+    }
 }

@@ -301,4 +301,52 @@ mod tests {
         let mesh2 = generate_terrain_mesh(&params);
         assert_eq!(mesh1.count_vertices(), mesh2.count_vertices());
     }
+
+    #[test]
+    fn test_terrain_params_default() {
+        let params = TerrainParams::default();
+        assert_eq!(params.size, Vec2::splat(100.0));
+        assert_eq!(params.resolution, 128);
+        assert_eq!(params.height_scale, 20.0);
+        assert!(matches!(params.noise_type, NoiseType::Perlin));
+        assert_eq!(params.noise_octaves, 4);
+        assert!((params.noise_frequency - 0.02).abs() < f32::EPSILON);
+        assert!(params.seed.is_none());
+        assert!(matches!(params.material, TerrainMaterial::Grass));
+        assert_eq!(params.position, Vec3::ZERO);
+    }
+
+    #[test]
+    fn test_generate_simplex_terrain() {
+        let params = TerrainParams {
+            noise_type: NoiseType::Simplex,
+            resolution: 16,
+            seed: Some(99),
+            ..default()
+        };
+        let mesh = generate_terrain_mesh(&params);
+        assert_eq!(mesh.count_vertices(), 289);
+    }
+
+    #[test]
+    fn test_terrain_material_colors_distinct() {
+        let grass = get_terrain_material_color(TerrainMaterial::Grass);
+        let sand = get_terrain_material_color(TerrainMaterial::Sand);
+        let snow = get_terrain_material_color(TerrainMaterial::Snow);
+        let rock = get_terrain_material_color(TerrainMaterial::Rock);
+        assert_ne!(grass, sand);
+        assert_ne!(snow, rock);
+    }
+
+    #[test]
+    fn test_terrain_with_position_offset() {
+        let params = TerrainParams {
+            noise_type: NoiseType::Flat,
+            resolution: 4,
+            position: Vec3::new(10.0, 5.0, 20.0),
+            ..default()
+        };
+        let mesh = generate_terrain_mesh(&params);
+        assert_eq!(mesh.count_vertices(), 25); // (4+1)^2
+    }
 }
