@@ -9,13 +9,17 @@
 //! 6. GLTF mesh segmentation (WG6.3)
 
 pub mod blockout;
+pub mod collision_check;
 pub mod navmesh;
 pub mod ordering;
+pub mod populate;
 pub mod segment;
 pub mod tier;
 
 pub use blockout::*;
+pub use collision_check::*;
 pub use navmesh::*;
 pub use ordering::*;
+pub use populate::*;
 pub use segment::*;
 pub use tier::*;
