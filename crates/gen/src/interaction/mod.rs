@@ -98,6 +98,7 @@ pub struct AnimateAction {
 #[derive(Component, Clone)]
 pub struct TeleportAction {
     pub destination: Vec3,
+    pub effect: TeleportEffect,
 }
 
 /// Action to show floating text.
@@ -526,10 +527,17 @@ pub fn proximity_trigger_system(
         });
 
         // Execute actions
-        if let Some(teleport_action) = teleport
-            && let Ok(mut pt) = player_query.single_mut()
-        {
-            pt.translation = teleport_action.destination;
+        if let Some(teleport_action) = teleport {
+            match teleport_action.effect {
+                TeleportEffect::Fade => {
+                    spawn_teleport_fade(&mut commands, teleport_action.destination);
+                }
+                _ => {
+                    if let Ok(mut pt) = player_query.single_mut() {
+                        pt.translation = teleport_action.destination;
+                    }
+                }
+            }
         }
         if let Some(score_action) = score {
             let entry = score_board
@@ -607,10 +615,17 @@ pub fn click_trigger_system(
             trigger_type: TriggerType::Click,
         });
 
-        if let Some(teleport_action) = teleport
-            && let Ok(mut pt) = player_query.single_mut()
-        {
-            pt.translation = teleport_action.destination;
+        if let Some(teleport_action) = teleport {
+            match teleport_action.effect {
+                TeleportEffect::Fade => {
+                    spawn_teleport_fade(&mut commands, teleport_action.destination);
+                }
+                _ => {
+                    if let Ok(mut pt) = player_query.single_mut() {
+                        pt.translation = teleport_action.destination;
+                    }
+                }
+            }
         }
         if let Some(score_action) = score {
             let entry = score_board
@@ -778,6 +793,24 @@ pub fn collectible_system(
             .or_insert(0);
         *entry += collectible.value;
 
+        // Apply pickup effect
+        match collectible.pickup_effect {
+            PickupEffect::Sparkle => {
+                spawn_sparkle_burst(&mut commands, transform.translation);
+            }
+            PickupEffect::Dissolve => {
+                // Start dissolve animation instead of instant removal
+                commands.entity(entity).insert(DissolveEffect {
+                    progress: 0.0,
+                    duration: 0.3,
+                    original_scale: transform.scale,
+                });
+                // Skip normal hide/despawn — dissolve system handles it
+                continue;
+            }
+            PickupEffect::None => {}
+        }
+
         if let Some(respawn_time) = collectible.respawn_time {
             // Hide and start respawn timer
             *visibility = Visibility::Hidden;
@@ -856,6 +889,175 @@ pub fn enable_disable_system(
             .entity(entity)
             .insert(Visibility::Hidden)
             .remove::<DisableAction>();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GAP-P2-02: Teleport fade overlay
+// ---------------------------------------------------------------------------
+
+/// State machine for teleport fade-to-black transition.
+#[derive(Component)]
+pub struct TeleportFadeOverlay {
+    /// Phase: FadeIn (0→1 alpha), Teleport (instant), FadeOut (1→0 alpha).
+    pub phase: TeleportFadePhase,
+    /// Progress within current phase (0.0–1.0).
+    pub progress: f32,
+    /// Duration of each phase in seconds.
+    pub fade_duration: f32,
+    /// Destination to teleport to.
+    pub destination: Vec3,
+}
+
+/// Teleport fade phases.
+pub enum TeleportFadePhase {
+    FadeIn,
+    Teleport,
+    FadeOut,
+}
+
+/// System: animate the teleport fade overlay (fade in → teleport → fade out).
+pub fn teleport_fade_system(
+    time: Res<Time>,
+    mut overlay_query: Query<(Entity, &mut TeleportFadeOverlay, &mut BackgroundColor)>,
+    mut player_query: Query<&mut Transform, With<crate::character::Player>>,
+    mut commands: Commands,
+) {
+    let dt = time.delta_secs();
+
+    for (entity, mut overlay, mut bg_color) in overlay_query.iter_mut() {
+        overlay.progress += dt / overlay.fade_duration.max(0.01);
+
+        match overlay.phase {
+            TeleportFadePhase::FadeIn => {
+                let alpha = overlay.progress.min(1.0);
+                *bg_color = BackgroundColor(Color::srgba(0.0, 0.0, 0.0, alpha));
+                if overlay.progress >= 1.0 {
+                    overlay.phase = TeleportFadePhase::Teleport;
+                    overlay.progress = 0.0;
+                }
+            }
+            TeleportFadePhase::Teleport => {
+                // Teleport player
+                if let Ok(mut pt) = player_query.single_mut() {
+                    pt.translation = overlay.destination;
+                }
+                overlay.phase = TeleportFadePhase::FadeOut;
+                overlay.progress = 0.0;
+            }
+            TeleportFadePhase::FadeOut => {
+                let alpha = 1.0 - overlay.progress.min(1.0);
+                *bg_color = BackgroundColor(Color::srgba(0.0, 0.0, 0.0, alpha));
+                if overlay.progress >= 1.0 {
+                    commands.entity(entity).despawn();
+                }
+            }
+        }
+    }
+}
+
+/// Spawn a fade overlay for a teleport with the Fade effect.
+fn spawn_teleport_fade(commands: &mut Commands, destination: Vec3) {
+    commands.spawn((
+        TeleportFadeOverlay {
+            phase: TeleportFadePhase::FadeIn,
+            progress: 0.0,
+            fade_duration: 0.3,
+            destination,
+        },
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            position_type: PositionType::Absolute,
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        ZIndex(100),
+    ));
+}
+
+// ---------------------------------------------------------------------------
+// GAP-P2-03: Collectible pickup effects
+// ---------------------------------------------------------------------------
+
+/// Component for a dissolve animation (scale to zero over duration).
+#[derive(Component)]
+pub struct DissolveEffect {
+    pub progress: f32,
+    pub duration: f32,
+    pub original_scale: Vec3,
+}
+
+/// System: animate dissolve effect (scale entity to zero, then despawn).
+pub fn dissolve_effect_system(
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut DissolveEffect, &mut Transform)>,
+    mut commands: Commands,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut effect, mut transform) in query.iter_mut() {
+        effect.progress += dt / effect.duration.max(0.01);
+        let t = effect.progress.min(1.0);
+        // Smooth scale-to-zero
+        transform.scale = effect.original_scale * (1.0 - t);
+        if effect.progress >= 1.0 {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+/// Component for a sparkle burst (small particles flying upward).
+#[derive(Component)]
+pub struct SparkleParticle {
+    pub velocity: Vec3,
+    pub lifetime: f32,
+    pub age: f32,
+}
+
+/// System: animate sparkle particles (move upward, fade, despawn).
+pub fn sparkle_particle_system(
+    time: Res<Time>,
+    mut query: Query<(
+        Entity,
+        &mut SparkleParticle,
+        &mut Transform,
+        &mut Visibility,
+    )>,
+    mut commands: Commands,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut particle, mut transform, mut vis) in query.iter_mut() {
+        particle.age += dt;
+        if particle.age >= particle.lifetime {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        transform.translation += particle.velocity * dt;
+        // Slow down velocity
+        particle.velocity *= 0.95;
+        // Fade out in the last 30%
+        let fade_start = particle.lifetime * 0.7;
+        if particle.age > fade_start {
+            *vis = Visibility::Hidden; // Simple approach: hide near end
+        }
+    }
+}
+
+/// Spawn sparkle burst particles at position.
+fn spawn_sparkle_burst(commands: &mut Commands, position: Vec3) {
+    use std::f32::consts::PI;
+    for i in 0..12 {
+        let angle = (i as f32 / 12.0) * PI * 2.0;
+        let velocity = Vec3::new(angle.cos() * 2.0, 3.0 + (i as f32 % 3.0), angle.sin() * 2.0);
+        commands.spawn((
+            SparkleParticle {
+                velocity,
+                lifetime: 0.8,
+                age: 0.0,
+            },
+            Transform::from_translation(position),
+            Visibility::Inherited,
+        ));
     }
 }
 
@@ -1061,6 +1263,9 @@ impl Plugin for InteractionPlugin {
                     animate_action_system,
                     enable_disable_system,
                     click_prompt_system,
+                    teleport_fade_system,
+                    dissolve_effect_system,
+                    sparkle_particle_system,
                 ),
             );
     }

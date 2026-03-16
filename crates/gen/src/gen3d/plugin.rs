@@ -1678,6 +1678,7 @@ fn process_gen_commands(
                         if let Some(dest) = p.destination {
                             ec.insert(crate::interaction::TeleportAction {
                                 destination: Vec3::from_array(dest),
+                                effect: crate::interaction::TeleportEffect::None,
                             });
                         }
                     }
@@ -1763,7 +1764,10 @@ fn process_gen_commands(
                             cooldown: 2.0,
                             last_triggered: 0.0,
                         },
-                        crate::interaction::TeleportAction { destination },
+                        crate::interaction::TeleportAction {
+                            destination,
+                            effect: p.effect,
+                        },
                     ))
                     .id();
                 params.registry.insert_with_id(name.clone(), entity, wid);
