@@ -72,10 +72,17 @@ pub struct Path {
 }
 
 /// Generate path mesh from waypoints.
+///
+/// Mesh vertices are generated in **local space** relative to the first waypoint.
+/// The caller should spawn the entity at `origin()` (the first waypoint) so that
+/// moving the entity's Transform correctly moves the entire path.
 pub fn generate_path_mesh(params: &PathParams) -> Mesh {
     if params.points.len() < 2 {
         return Mesh::new(PrimitiveTopology::TriangleList, default());
     }
+
+    // Origin = first waypoint. All vertices are relative to this.
+    let origin = params.points[0];
 
     // Sample path at regular intervals
     let sample_points = if params.curved {
@@ -93,7 +100,8 @@ pub fn generate_path_mesh(params: &PathParams) -> Mesh {
     let mut accumulated_length = 0.0f32;
 
     for i in 0..sample_points.len() {
-        let point = sample_points[i];
+        // Convert to local space relative to origin
+        let point = sample_points[i] - origin;
 
         // Compute tangent (direction along path)
         let tangent = if i == 0 {
@@ -107,7 +115,7 @@ pub fn generate_path_mesh(params: &PathParams) -> Mesh {
         // Compute perpendicular on XZ plane
         let right = Vec3::new(-tangent.z, 0.0, tangent.x).normalize();
 
-        // Two vertices at this point
+        // Two vertices at this point (local space)
         let left_pos = point - right * half_width + Vec3::Y * params.raised;
         let right_pos = point + right * half_width + Vec3::Y * params.raised;
 
@@ -149,6 +157,11 @@ pub fn generate_path_mesh(params: &PathParams) -> Mesh {
     mesh.insert_indices(Indices::U32(indices));
 
     mesh
+}
+
+/// Returns the origin point (first waypoint) for positioning the path entity.
+pub fn path_origin(params: &PathParams) -> Vec3 {
+    params.points.first().copied().unwrap_or(Vec3::ZERO)
 }
 
 /// Sample Catmull-Rom spline through waypoints.

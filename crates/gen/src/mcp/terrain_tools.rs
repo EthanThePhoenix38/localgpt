@@ -628,6 +628,104 @@ impl Tool for GenSetSkyTool {
     }
 }
 
+// ---------------------------------------------------------------------------
+// gen_query_terrain_height
+// ---------------------------------------------------------------------------
+
+pub struct GenQueryTerrainHeightTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenQueryTerrainHeightTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenQueryTerrainHeightTool {
+    fn name(&self) -> &str {
+        "gen_query_terrain_height"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_query_terrain_height".to_string(),
+            description: "Query terrain height at one or more (x, z) coordinates. Returns the world Y height for each point, enabling accurate entity placement on terrain.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "points": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": { "type": "number" },
+                            "minItems": 2,
+                            "maxItems": 2
+                        },
+                        "description": "Array of [x, z] coordinates to query"
+                    },
+                    "x": {
+                        "type": "number",
+                        "description": "Single point X coordinate (shortcut for one point)"
+                    },
+                    "z": {
+                        "type": "number",
+                        "description": "Single point Z coordinate (shortcut for one point)"
+                    }
+                },
+                "required": []
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let mut points: Vec<[f32; 2]> = Vec::new();
+
+        // Support batch: {"points": [[x,z], [x,z], ...]}
+        if let Some(pts) = args["points"].as_array() {
+            for p in pts {
+                if let Some(arr) = p.as_array() {
+                    let x = arr[0].as_f64().unwrap_or(0.0) as f32;
+                    let z = arr[1].as_f64().unwrap_or(0.0) as f32;
+                    points.push([x, z]);
+                }
+            }
+        }
+
+        // Support single: {"x": 10, "z": 20}
+        if points.is_empty() {
+            if let (Some(x), Some(z)) = (args["x"].as_f64(), args["z"].as_f64()) {
+                points.push([x as f32, z as f32]);
+            }
+        }
+
+        if points.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Provide either 'points' array or 'x'+'z' for a single query"
+            ));
+        }
+
+        let cmd = GenCommand::QueryTerrainHeight { points };
+        let response = self.bridge.send(cmd).await?;
+        match response {
+            GenResponse::TerrainHeights { heights } => {
+                let results: Vec<Value> = heights
+                    .iter()
+                    .map(|[x, y, z]| {
+                        json!({"x": *x, "y": *y, "z": *z})
+                    })
+                    .collect();
+                Ok(serde_json::to_string_pretty(&json!({"heights": results}))?)
+            }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("Unexpected response".to_string()),
+        }
+    }
+}
+
 /// Create all P3 terrain tools.
 pub fn create_terrain_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
     vec![
@@ -635,6 +733,7 @@ pub fn create_terrain_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenAddWaterTool::new(bridge.clone())),
         Box::new(GenAddPathTool::new(bridge.clone())),
         Box::new(GenAddFoliageTool::new(bridge.clone())),
-        Box::new(GenSetSkyTool::new(bridge)),
+        Box::new(GenSetSkyTool::new(bridge.clone())),
+        Box::new(GenQueryTerrainHeightTool::new(bridge)),
     ]
 }

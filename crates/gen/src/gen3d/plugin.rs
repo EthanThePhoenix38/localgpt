@@ -463,6 +463,8 @@ struct GenCommandParams<'w, 's> {
     pov_state: ResMut<'w, avatar::PovState>,
     avatar_entities: Query<'w, 's, Entity, With<AvatarEntity>>,
     player_camera_query: Query<'w, 's, &'static mut crate::character::PlayerCamera>,
+    terrain_q: Query<'w, 's, (&'static crate::terrain::Terrain, &'static Transform)>,
+    npc_behaviors: Query<'w, 's, &'static mut crate::character::npc::NpcBehavior>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -564,6 +566,66 @@ fn process_gen_commands(
                     &params.material_handles,
                     &params.transforms,
                 );
+                // GAP-P0-02/04: Update behavior anchors + NPC wander center
+                // when entity position/scale changes
+                if let GenResponse::Modified { .. } = &resp
+                    && let Some(entity) = params.registry.get_entity(&cmd.name)
+                {
+                    if cmd.position.is_some() || cmd.scale.is_some() {
+                        let new_transform = params
+                            .transforms
+                            .get(entity)
+                            .copied()
+                            .unwrap_or_default();
+                        // Update behavior base_position/base_scale
+                        if let Ok(mut behaviors) = params.behaviors_query.get_mut(entity) {
+                            for bi in &mut behaviors.behaviors {
+                                if cmd.position.is_some() {
+                                    bi.base_position = new_transform.translation;
+                                }
+                                if cmd.scale.is_some() {
+                                    bi.base_scale = new_transform.scale;
+                                }
+                            }
+                        }
+                        // Update NPC wander center / patrol waypoints
+                        if cmd.position.is_some() {
+                            if let Ok(mut npc_beh) = params.npc_behaviors.get_mut(entity) {
+                                match npc_beh.as_mut() {
+                                    crate::character::npc::NpcBehavior::Wander {
+                                        spawn_position,
+                                        target_position,
+                                        ..
+                                    } => {
+                                        *spawn_position = new_transform.translation;
+                                        *target_position = None; // reset target
+                                    }
+                                    crate::character::npc::NpcBehavior::Patrol {
+                                        points,
+                                        current_index,
+                                        ..
+                                    } => {
+                                        // Shift all patrol points by the position delta
+                                        if let Some(new_pos) = cmd.position {
+                                            let delta = Vec3::from_array(new_pos)
+                                                - pre_snapshot
+                                                    .as_ref()
+                                                    .map(|s| {
+                                                        Vec3::from_array(s.transform.position)
+                                                    })
+                                                    .unwrap_or(Vec3::ZERO);
+                                            for pt in points.iter_mut() {
+                                                *pt += delta;
+                                            }
+                                            *current_index = 0;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
                 if let GenResponse::Modified { .. } = &resp
                     && let Some(old_we) = pre_snapshot
                 {
@@ -1929,6 +1991,8 @@ fn process_gen_commands(
                 let name = "Path".to_string();
                 let wid = params.next_entity_id.alloc();
                 let path_width = p.width;
+                // Mesh is in local space relative to first waypoint
+                let origin = crate::terrain::path_origin(&p);
                 let mesh = params.meshes.add(crate::terrain::generate_path_mesh(&p));
                 let material = params.materials.add(StandardMaterial {
                     base_color: crate::terrain::get_path_material_color(p.material),
@@ -1945,7 +2009,7 @@ fn process_gen_commands(
                         crate::terrain::Path { width: path_width },
                         Mesh3d(mesh),
                         MeshMaterial3d(material),
-                        Transform::default(),
+                        Transform::from_translation(origin),
                         Visibility::default(),
                     ))
                     .id();
@@ -2013,6 +2077,32 @@ fn process_gen_commands(
                 // Apply sky config: update directional light and ambient
                 commands.insert_resource(config);
                 GenResponse::EnvironmentSet
+            }
+            GenCommand::QueryTerrainHeight { points } => {
+                // Find terrain entity
+                let terrain_entity = params
+                    .registry
+                    .all_names()
+                    .find(|(_, e)| params.terrain_q.get(*e).is_ok())
+                    .map(|(_, e)| e);
+
+                if let Some(entity) = terrain_entity
+                    && let Ok((terrain, terrain_transform)) = params.terrain_q.get(entity)
+                {
+                    let heights: Vec<[f32; 3]> = points
+                        .iter()
+                        .map(|[x, z]| {
+                            let y = terrain
+                                .sample_height(Vec3::new(*x, 0.0, *z), terrain_transform);
+                            [*x, y, *z]
+                        })
+                        .collect();
+                    GenResponse::TerrainHeights { heights }
+                } else {
+                    GenResponse::Error {
+                        message: "No terrain found in scene".to_string(),
+                    }
+                }
             }
 
             // Tier 13: In-World Text & UI (P4)

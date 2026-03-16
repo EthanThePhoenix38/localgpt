@@ -133,6 +133,10 @@ pub enum GenCommand {
     AddPath(terrain::PathParams),
     AddFoliage(terrain::FoliageParams),
     SetSky(terrain::SkyParams),
+    QueryTerrainHeight {
+        /// Points to query: [[x, z], ...]
+        points: Vec<[f32; 2]>,
+    },
 
     // Tier 13: In-World Text & UI (P4)
     AddSign(ui::SignParams),
@@ -782,6 +786,12 @@ pub enum GenResponse {
         redo_count: usize,
         entity_count: usize,
         dirty_count: usize,
+    },
+
+    // Terrain query
+    TerrainHeights {
+        /// Results: [[x, y, z], ...] with y = sampled height
+        heights: Vec<[f32; 3]>,
     },
 
     Error {
