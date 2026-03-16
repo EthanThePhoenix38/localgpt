@@ -3683,6 +3683,40 @@ fn process_gen_commands(
                     },
                 }
             }
+
+            GenCommand::PreviewWorld { config } => {
+                use crate::worldgen::preview::*;
+
+                let _full_prompt = build_preview_prompt(
+                    &config.prompt,
+                    config.style_preset,
+                );
+
+                let depth_map = config.depth_map_path.clone()
+                    .unwrap_or_else(|| "(auto-render needed)".to_string());
+
+                let style_name = config.style_preset
+                    .map(|s| format!("{:?}", s).to_lowercase())
+                    .unwrap_or_else(|| "custom".to_string());
+
+                let out_path = config.output_path.unwrap_or_else(|| {
+                    let folder = params.workspace.path.join("screenshots");
+                    let _ = std::fs::create_dir_all(&folder);
+                    let ts = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis();
+                    folder.join(format!("preview_{ts}.png")).to_string_lossy().to_string()
+                });
+
+                // NOTE: Actual image generation requires external API (ControlNet/ComfyUI).
+                // This handler returns metadata for the generation request.
+                GenResponse::PreviewGenerated {
+                    path: out_path,
+                    style: style_name,
+                    depth_map_used: depth_map,
+                }
+            }
         };
 
         // Mark entities dirty and record undo history.

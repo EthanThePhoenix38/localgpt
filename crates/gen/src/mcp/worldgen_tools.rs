@@ -1342,6 +1342,107 @@ impl Tool for GenRenderDepthTool {
 }
 
 // ---------------------------------------------------------------------------
+// gen_preview_world
+// ---------------------------------------------------------------------------
+
+pub struct GenPreviewWorldTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenPreviewWorldTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenPreviewWorldTool {
+    fn name(&self) -> &str {
+        "gen_preview_world"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_preview_world".to_string(),
+            description: "Generate a styled 2D preview image from the blockout depth map + text prompt. Validates creative direction before full 3D generation.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Text description of the desired scene appearance"
+                    },
+                    "depth_map_path": {
+                        "type": "string",
+                        "description": "Path to the depth map PNG (from gen_render_depth). If omitted, one will need to be rendered first."
+                    },
+                    "style_preset": {
+                        "type": "string",
+                        "enum": ["realistic", "stylized", "pixel_art", "watercolor", "concept_art"],
+                        "description": "Visual style preset to apply"
+                    },
+                    "negative_prompt": {
+                        "type": "string",
+                        "description": "Things to avoid in the generated image"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Custom output path for the preview image PNG"
+                    }
+                },
+                "required": ["prompt"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let prompt = args["prompt"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: prompt"))?;
+
+        let depth_map_path = args["depth_map_path"].as_str().map(String::from);
+
+        let style_preset = args["style_preset"].as_str().and_then(|s| {
+            serde_json::from_value::<worldgen::PreviewStyle>(Value::String(s.to_string())).ok()
+        });
+
+        let negative_prompt = args["negative_prompt"].as_str().map(String::from);
+        let output_path = args["output_path"].as_str().map(String::from);
+
+        let config = worldgen::PreviewConfig {
+            prompt: prompt.to_string(),
+            depth_map_path,
+            style_preset,
+            negative_prompt,
+            output_path,
+        };
+
+        match self
+            .bridge
+            .send(GenCommand::PreviewWorld { config })
+            .await?
+        {
+            GenResponse::PreviewGenerated {
+                path,
+                style,
+                depth_map_used,
+            } => Ok(json!({
+                "path": path,
+                "style": style,
+                "depth_map_used": depth_map_used,
+                "status": "metadata_ready",
+                "note": "Actual image generation requires external API (ControlNet/ComfyUI). This response contains the computed parameters for the generation request."
+            })
+            .to_string()),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -1360,6 +1461,7 @@ pub fn create_worldgen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenValidateNavigabilityTool::new(bridge.clone())),
         Box::new(GenEditNavMeshTool::new(bridge.clone())),
         Box::new(GenRegenerateTool::new(bridge.clone())),
-        Box::new(GenRenderDepthTool::new(bridge)),
+        Box::new(GenRenderDepthTool::new(bridge.clone())),
+        Box::new(GenPreviewWorldTool::new(bridge)),
     ]
 }

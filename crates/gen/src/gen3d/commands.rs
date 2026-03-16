@@ -227,6 +227,33 @@ pub enum GenCommand {
         config: worldgen::DepthRenderConfig,
         output_path: Option<String>,
     },
+
+    // Tier 22: Styled Preview (WG7.2)
+    PreviewWorld {
+        config: worldgen::PreviewConfig,
+    },
+
+    // Tier 23: AI Asset Generation (AI1)
+    GenerateAsset {
+        prompt: String,
+        name: String,
+        reference_image: Option<String>,
+        position: [f32; 3],
+        scale: f32,
+        model: crate::gen3d::asset_gen::GenerationModel,
+        quality: crate::gen3d::asset_gen::GenerationQuality,
+        pbr: bool,
+    },
+    GenerateTexture {
+        entity: String,
+        prompt: String,
+        style: crate::gen3d::asset_gen::TextureStyle,
+        resolution: u32,
+    },
+    GenerationStatus {
+        task_id: Option<String>,
+        action: String, // "status", "cancel", "list"
+    },
 }
 
 /// Actions for editing the navmesh.
@@ -1013,6 +1040,28 @@ pub enum GenResponse {
         width: u32,
         height: u32,
         depth_range: [f32; 2],
+    },
+
+    // Preview responses
+    PreviewGenerated {
+        path: String,
+        style: String,
+        depth_map_used: String,
+    },
+
+    // AI asset generation responses
+    AssetGenerating {
+        task_id: String,
+        estimated_seconds: u32,
+        message: String,
+    },
+    TextureGenerating {
+        task_id: String,
+        estimated_seconds: u32,
+        message: String,
+    },
+    GenerationStatusResult {
+        status_json: String,
     },
 
     Error {
