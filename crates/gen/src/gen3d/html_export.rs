@@ -672,22 +672,23 @@ fn emit_material(js: &mut String, mat: Option<&wt::MaterialDef>, var: &str) {
     // Note: MeshStandardMaterial doesn't directly support reflectance, but
     // we approximate by adjusting metalness/roughness when reflectance differs from default.
     // Bevy reflectance 0.5 = 4% (F0 = 0.04), which is the Three.js default for dielectrics.
-    if let Some(refl) = mat.reflectance {
-        if !unlit && (refl - 0.5).abs() > 0.01 {
-            // F0 = 0.16 * reflectance^2 (Bevy formula)
-            // Map to IOR: n = (1 + sqrt(F0)) / (1 - sqrt(F0))
-            let f0 = 0.16 * refl * refl;
-            let sqrt_f0 = f0.sqrt();
-            let ior = (1.0 + sqrt_f0) / (1.0 - sqrt_f0).max(0.001);
-            writeln!(
-                js,
-                "// reflectance={r:.2} → F0={f0:.4} → IOR={ior:.2} (upgrade to MeshPhysicalMaterial for full support)",
-                r = refl,
-                f0 = f0,
-                ior = ior,
-            )
-            .unwrap();
-        }
+    if let Some(refl) = mat.reflectance
+        && !unlit
+        && (refl - 0.5).abs() > 0.01
+    {
+        // F0 = 0.16 * reflectance^2 (Bevy formula)
+        // Map to IOR: n = (1 + sqrt(F0)) / (1 - sqrt(F0))
+        let f0 = 0.16 * refl * refl;
+        let sqrt_f0 = f0.sqrt();
+        let ior = (1.0 + sqrt_f0) / (1.0 - sqrt_f0).max(0.001);
+        writeln!(
+            js,
+            "// reflectance={r:.2} → F0={f0:.4} → IOR={ior:.2} (upgrade to MeshPhysicalMaterial for full support)",
+            r = refl,
+            f0 = f0,
+            ior = ior,
+        )
+        .unwrap();
     }
 }
 

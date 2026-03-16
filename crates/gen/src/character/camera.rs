@@ -474,13 +474,14 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(MouseSensitivity::default()).add_systems(
-            Update,
-            (
-                camera_input_system,
-                camera_follow_system,
-                player_mesh_visibility_system,
-            ),
-        );
+        app.insert_resource(MouseSensitivity::default())
+            .add_systems(
+                Update,
+                (
+                    camera_input_system,
+                    camera_follow_system,
+                    player_mesh_visibility_system,
+                ),
+            );
     }
 }

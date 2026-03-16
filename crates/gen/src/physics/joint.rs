@@ -5,6 +5,9 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "physics")]
+use avian3d::prelude::*;
+
 /// Joint type enumeration.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
 #[serde(rename_all = "snake_case")]
@@ -83,14 +86,87 @@ pub struct JointConfig {
     pub anchor_b: Vec3,
     /// Axis.
     pub axis: Vec3,
+    /// Angular limits in degrees [min, max].
+    pub limits: Option<Vec2>,
+    /// Spring stiffness (Spring joint only).
+    pub stiffness: Option<f32>,
+    /// Spring damping (Spring joint only).
+    pub damping: Option<f32>,
+}
+
+/// System to convert JointConfig into Avian joint constraints.
+///
+/// Spawns the appropriate joint type between entity_a and entity_b.
+/// Spring joints use a DistanceJoint with compliance derived from stiffness.
+#[cfg(feature = "physics")]
+pub fn joint_setup_system(
+    mut commands: Commands,
+    query: Query<(Entity, &JointConfig), Added<JointConfig>>,
+) {
+    for (joint_entity, config) in query.iter() {
+        match config.joint_type {
+            JointType::Fixed => {
+                commands.entity(joint_entity).insert(
+                    FixedJoint::new(config.entity_a, config.entity_b)
+                        .with_local_anchor_1(config.anchor_a)
+                        .with_local_anchor_2(config.anchor_b),
+                );
+            }
+            JointType::Revolute => {
+                let mut joint = RevoluteJoint::new(config.entity_a, config.entity_b)
+                    .with_aligned_axis(config.axis)
+                    .with_local_anchor_1(config.anchor_a)
+                    .with_local_anchor_2(config.anchor_b);
+                if let Some(limits) = config.limits {
+                    joint = joint.with_angle_limits(limits.x.to_radians(), limits.y.to_radians());
+                }
+                commands.entity(joint_entity).insert(joint);
+            }
+            JointType::Spherical => {
+                commands.entity(joint_entity).insert(
+                    SphericalJoint::new(config.entity_a, config.entity_b)
+                        .with_local_anchor_1(config.anchor_a)
+                        .with_local_anchor_2(config.anchor_b),
+                );
+            }
+            JointType::Prismatic => {
+                let mut joint = PrismaticJoint::new(config.entity_a, config.entity_b)
+                    .with_free_axis(config.axis)
+                    .with_local_anchor_1(config.anchor_a)
+                    .with_local_anchor_2(config.anchor_b);
+                if let Some(limits) = config.limits {
+                    joint = joint.with_limits(limits.x, limits.y);
+                }
+                commands.entity(joint_entity).insert(joint);
+            }
+            JointType::Spring => {
+                let mut joint = DistanceJoint::new(config.entity_a, config.entity_b)
+                    .with_local_anchor_1(config.anchor_a)
+                    .with_local_anchor_2(config.anchor_b);
+                if let Some(stiffness) = config.stiffness {
+                    // Compliance = 1/stiffness
+                    let compliance = if stiffness > 0.0 {
+                        1.0 / stiffness
+                    } else {
+                        0.0
+                    };
+                    joint = joint.with_compliance(compliance);
+                }
+                commands.entity(joint_entity).insert(joint);
+            }
+        }
+    }
 }
 
 /// Plugin for joint systems.
 pub struct JointPlugin;
 
 impl Plugin for JointPlugin {
-    fn build(&self, _app: &mut App) {
-        // Joint creation handled by Avian integration
+    fn build(&self, app: &mut App) {
+        #[cfg(feature = "physics")]
+        app.add_systems(Update, joint_setup_system);
+
+        let _ = app;
     }
 }
 

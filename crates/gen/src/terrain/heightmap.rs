@@ -7,6 +7,9 @@ use bevy::prelude::*;
 use noise::{Fbm, MultiFractal, NoiseFn, Perlin, SuperSimplex};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "physics")]
+use avian3d::prelude::*;
+
 /// Noise type for terrain generation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Reflect)]
 #[serde(rename_all = "lowercase")]
@@ -291,12 +294,62 @@ pub fn get_terrain_material_color(material: TerrainMaterial) -> Color {
     }
 }
 
+/// System to generate an Avian trimesh collider from the terrain mesh.
+///
+/// Runs on newly added Terrain entities that also have a Mesh3d.
+/// Extracts vertex positions and triangle indices from the mesh asset
+/// and creates a `Collider::trimesh` so physics bodies don't fall through.
+#[cfg(feature = "physics")]
+pub fn terrain_collider_system(
+    mut commands: Commands,
+    query: Query<(Entity, &Mesh3d), (Added<Terrain>, Without<Collider>)>,
+    meshes: Res<Assets<Mesh>>,
+) {
+    for (entity, mesh_handle) in query.iter() {
+        let Some(mesh) = meshes.get(&mesh_handle.0) else {
+            continue;
+        };
+
+        // Extract positions
+        let Some(positions) = mesh
+            .attribute(Mesh::ATTRIBUTE_POSITION)
+            .and_then(|attr| attr.as_float3())
+        else {
+            continue;
+        };
+
+        let vertices: Vec<Vec3> = positions.iter().map(|p| Vec3::from_array(*p)).collect();
+
+        // Extract indices
+        let Some(indices) = mesh.indices() else {
+            continue;
+        };
+
+        let tri_indices: Vec<[u32; 3]> = match indices {
+            Indices::U32(idx) => idx.chunks(3).map(|c| [c[0], c[1], c[2]]).collect(),
+            Indices::U16(idx) => idx
+                .chunks(3)
+                .map(|c| [c[0] as u32, c[1] as u32, c[2] as u32])
+                .collect(),
+        };
+
+        if !vertices.is_empty() && !tri_indices.is_empty() {
+            commands
+                .entity(entity)
+                .insert(Collider::trimesh(vertices, tri_indices));
+        }
+    }
+}
+
 /// Plugin for terrain systems.
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, terrain_follow_system);
+
+        #[cfg(feature = "physics")]
+        app.add_systems(Update, terrain_collider_system);
     }
 }
 

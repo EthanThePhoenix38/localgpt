@@ -5,6 +5,9 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "physics")]
+use avian3d::prelude::*;
+
 /// Gravity presets.
 pub const GRAVITY_EARTH: f32 = 9.81;
 pub const GRAVITY_MOON: f32 = 1.62;
@@ -160,6 +163,26 @@ pub fn gravity_zone_system(
     }
 }
 
+/// System to sync GravityOverride components with Avian GravityScale.
+///
+/// When a GravityOverride is added or changed, updates the entity's Avian
+/// GravityScale. When removed, restores GravityScale to 1.0.
+#[cfg(feature = "physics")]
+pub fn gravity_avian_sync_system(
+    mut commands: Commands,
+    added: Query<(Entity, &GravityOverride), Added<GravityOverride>>,
+    mut removed: RemovedComponents<GravityOverride>,
+) {
+    for (entity, override_comp) in added.iter() {
+        commands
+            .entity(entity)
+            .insert(GravityScale(override_comp.strength_scale));
+    }
+    for entity in removed.read() {
+        commands.entity(entity).insert(GravityScale(1.0));
+    }
+}
+
 /// Plugin for gravity systems.
 pub struct GravityPlugin;
 
@@ -168,6 +191,9 @@ impl Plugin for GravityPlugin {
         app.init_resource::<GlobalGravity>()
             .add_systems(Update, gravity_transition_system)
             .add_systems(Update, gravity_zone_system);
+
+        #[cfg(feature = "physics")]
+        app.add_systems(Update, gravity_avian_sync_system.after(gravity_zone_system));
     }
 }
 

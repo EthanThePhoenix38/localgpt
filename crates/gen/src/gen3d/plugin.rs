@@ -570,59 +570,52 @@ fn process_gen_commands(
                 // when entity position/scale changes
                 if let GenResponse::Modified { .. } = &resp
                     && let Some(entity) = params.registry.get_entity(&cmd.name)
+                    && (cmd.position.is_some() || cmd.scale.is_some())
                 {
-                    if cmd.position.is_some() || cmd.scale.is_some() {
-                        let new_transform = params
-                            .transforms
-                            .get(entity)
-                            .copied()
-                            .unwrap_or_default();
-                        // Update behavior base_position/base_scale
-                        if let Ok(mut behaviors) = params.behaviors_query.get_mut(entity) {
-                            for bi in &mut behaviors.behaviors {
-                                if cmd.position.is_some() {
-                                    bi.base_position = new_transform.translation;
-                                }
-                                if cmd.scale.is_some() {
-                                    bi.base_scale = new_transform.scale;
-                                }
+                    let new_transform = params.transforms.get(entity).copied().unwrap_or_default();
+                    // Update behavior base_position/base_scale
+                    if let Ok(mut behaviors) = params.behaviors_query.get_mut(entity) {
+                        for bi in &mut behaviors.behaviors {
+                            if cmd.position.is_some() {
+                                bi.base_position = new_transform.translation;
+                            }
+                            if cmd.scale.is_some() {
+                                bi.base_scale = new_transform.scale;
                             }
                         }
-                        // Update NPC wander center / patrol waypoints
-                        if cmd.position.is_some() {
-                            if let Ok(mut npc_beh) = params.npc_behaviors.get_mut(entity) {
-                                match npc_beh.as_mut() {
-                                    crate::character::npc::NpcBehavior::Wander {
-                                        spawn_position,
-                                        target_position,
-                                        ..
-                                    } => {
-                                        *spawn_position = new_transform.translation;
-                                        *target_position = None; // reset target
+                    }
+                    // Update NPC wander center / patrol waypoints
+                    if cmd.position.is_some()
+                        && let Ok(mut npc_beh) = params.npc_behaviors.get_mut(entity)
+                    {
+                        match npc_beh.as_mut() {
+                            crate::character::npc::NpcBehavior::Wander {
+                                spawn_position,
+                                target_position,
+                                ..
+                            } => {
+                                *spawn_position = new_transform.translation;
+                                *target_position = None; // reset target
+                            }
+                            crate::character::npc::NpcBehavior::Patrol {
+                                points,
+                                current_index,
+                                ..
+                            } => {
+                                // Shift all patrol points by the position delta
+                                if let Some(new_pos) = cmd.position {
+                                    let delta = Vec3::from_array(new_pos)
+                                        - pre_snapshot
+                                            .as_ref()
+                                            .map(|s| Vec3::from_array(s.transform.position))
+                                            .unwrap_or(Vec3::ZERO);
+                                    for pt in points.iter_mut() {
+                                        *pt += delta;
                                     }
-                                    crate::character::npc::NpcBehavior::Patrol {
-                                        points,
-                                        current_index,
-                                        ..
-                                    } => {
-                                        // Shift all patrol points by the position delta
-                                        if let Some(new_pos) = cmd.position {
-                                            let delta = Vec3::from_array(new_pos)
-                                                - pre_snapshot
-                                                    .as_ref()
-                                                    .map(|s| {
-                                                        Vec3::from_array(s.transform.position)
-                                                    })
-                                                    .unwrap_or(Vec3::ZERO);
-                                            for pt in points.iter_mut() {
-                                                *pt += delta;
-                                            }
-                                            *current_index = 0;
-                                        }
-                                    }
-                                    _ => {}
+                                    *current_index = 0;
                                 }
                             }
+                            _ => {}
                         }
                     }
                 }
@@ -1655,10 +1648,16 @@ fn process_gen_commands(
                         }
                     }
                     crate::interaction::TriggerType::AreaEnter => {
-                        ec.insert(crate::interaction::AreaTrigger { is_enter: true });
+                        ec.insert((
+                            crate::interaction::AreaTrigger { is_enter: true },
+                            crate::interaction::AreaInsideTracker::default(),
+                        ));
                     }
                     crate::interaction::TriggerType::AreaExit => {
-                        ec.insert(crate::interaction::AreaTrigger { is_enter: false });
+                        ec.insert((
+                            crate::interaction::AreaTrigger { is_enter: false },
+                            crate::interaction::AreaInsideTracker::default(),
+                        ));
                     }
                     crate::interaction::TriggerType::Collision => {}
                 }
@@ -2092,8 +2091,8 @@ fn process_gen_commands(
                     let heights: Vec<[f32; 3]> = points
                         .iter()
                         .map(|[x, z]| {
-                            let y = terrain
-                                .sample_height(Vec3::new(*x, 0.0, *z), terrain_transform);
+                            let y =
+                                terrain.sample_height(Vec3::new(*x, 0.0, *z), terrain_transform);
                             [*x, y, *z]
                         })
                         .collect();
@@ -2373,6 +2372,8 @@ fn process_gen_commands(
                     restitution: p.restitution,
                     friction: p.friction,
                     gravity_scale: p.gravity_scale,
+                    linear_damping: p.linear_damping,
+                    angular_damping: p.angular_damping,
                 });
                 if p.lock_rotation {
                     commands
@@ -2397,6 +2398,8 @@ fn process_gen_commands(
                     .entity(entity)
                     .insert(crate::physics::ColliderConfig {
                         shape: p.shape,
+                        size: p.size.map(|s| Vec3::new(s.x, s.y, s.z)),
+                        offset: p.offset,
                         is_trigger: p.is_trigger,
                         visible_in_debug: p.visible_in_debug,
                     });
@@ -2440,6 +2443,9 @@ fn process_gen_commands(
                             anchor_a: p.anchor_a,
                             anchor_b: p.anchor_b,
                             axis: p.axis,
+                            limits: p.limits,
+                            stiffness: p.stiffness,
+                            damping: p.damping,
                         },
                     ))
                     .id();

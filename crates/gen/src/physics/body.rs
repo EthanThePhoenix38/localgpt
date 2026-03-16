@@ -5,6 +5,9 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "physics")]
+use avian3d::prelude::*;
+
 /// Body type for physics simulation.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Reflect)]
 #[serde(rename_all = "snake_case")]
@@ -92,6 +95,10 @@ pub struct PhysicsBody {
     pub friction: f32,
     /// Gravity scale.
     pub gravity_scale: f32,
+    /// Linear damping.
+    pub linear_damping: f32,
+    /// Angular damping.
+    pub angular_damping: f32,
 }
 
 /// Marker for rotation-locked bodies.
@@ -127,6 +134,8 @@ mod tests {
             restitution: 0.8,
             friction: 0.2,
             gravity_scale: 0.0,
+            linear_damping: 0.1,
+            angular_damping: 0.1,
         };
         assert!(matches!(body.body_type, BodyType::Kinematic));
         assert!((body.mass - 50.0).abs() < f32::EPSILON);
@@ -141,12 +150,48 @@ mod tests {
     }
 }
 
+/// System to convert PhysicsBody config into Avian physics components.
+///
+/// Runs on newly added PhysicsBody components and inserts the corresponding
+/// Avian RigidBody, material properties, damping, mass, and gravity scale.
+#[cfg(feature = "physics")]
+pub fn physics_body_setup_system(
+    mut commands: Commands,
+    query: Query<(Entity, &PhysicsBody, Option<&RotationLocked>), Added<PhysicsBody>>,
+) {
+    for (entity, body, rotation_locked) in query.iter() {
+        let rigid_body = match body.body_type {
+            BodyType::Dynamic => RigidBody::Dynamic,
+            BodyType::Static => RigidBody::Static,
+            BodyType::Kinematic => RigidBody::Kinematic,
+        };
+
+        commands.entity(entity).insert((
+            rigid_body,
+            Restitution::new(body.restitution),
+            Friction::new(body.friction),
+            LinearDamping(body.linear_damping),
+            AngularDamping(body.angular_damping),
+            GravityScale(body.gravity_scale),
+            Mass(body.mass),
+        ));
+
+        if rotation_locked.is_some() {
+            commands
+                .entity(entity)
+                .insert(LockedAxes::new().lock_rotation_x().lock_rotation_z());
+        }
+    }
+}
+
 /// Plugin for physics body systems.
 pub struct PhysicsBodyPlugin;
 
 impl Plugin for PhysicsBodyPlugin {
-    fn build(&self, _app: &mut App) {
-        // Physics body setup is handled by Avian integration
-        // This module provides component definitions
+    fn build(&self, app: &mut App) {
+        #[cfg(feature = "physics")]
+        app.add_systems(Update, physics_body_setup_system);
+
+        let _ = app; // suppress unused warning when physics feature is off
     }
 }

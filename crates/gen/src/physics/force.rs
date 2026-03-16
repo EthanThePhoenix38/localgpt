@@ -120,11 +120,65 @@ impl Default for ForceField {
 /// Marker for player entity.
 use crate::character::Player;
 
-/// System to apply force fields.
+#[cfg(feature = "physics")]
+use avian3d::prelude::*;
+
+/// System to apply force fields via Avian ExternalForce (physics mode).
 ///
-/// Without the `physics` feature (avian3d), forces are applied directly as
-/// translation offsets scaled by delta time. With avian3d, this would use
-/// `ExternalForce` / `ExternalImpulse` components instead.
+/// Queries dynamic rigid bodies within each ForceField's radius and applies
+/// directional/attract/repel/vortex forces using Avian's ExternalForce component.
+#[cfg(feature = "physics")]
+pub fn force_field_physics_system(
+    force_fields: Query<(Entity, &Transform, &ForceField)>,
+    mut body_query: Query<(Entity, &Transform, &mut ExternalForce), With<RigidBody>>,
+    player_query: Query<Entity, With<Player>>,
+) {
+    for (_field_entity, field_transform, field) in force_fields.iter() {
+        if !field.continuous {
+            continue;
+        }
+
+        for (body_entity, body_transform, mut ext_force) in body_query.iter_mut() {
+            if !field.affects_player && player_query.contains(body_entity) {
+                continue;
+            }
+
+            let distance = field_transform
+                .translation
+                .distance(body_transform.translation);
+
+            if distance > field.radius || distance < 0.001 {
+                continue;
+            }
+
+            let force_magnitude = match field.falloff {
+                FalloffType::None => field.strength,
+                FalloffType::Linear => field.strength * (1.0 - distance / field.radius),
+                FalloffType::Quadratic => field.strength * (1.0 - distance / field.radius).powi(2),
+            };
+
+            let force_direction = match field.force_type {
+                ForceType::Directional => field.direction,
+                ForceType::PointAttract => {
+                    (field_transform.translation - body_transform.translation).normalize_or_zero()
+                }
+                ForceType::PointRepel => {
+                    (body_transform.translation - field_transform.translation).normalize_or_zero()
+                }
+                ForceType::Vortex => {
+                    let to_field = field_transform.translation - body_transform.translation;
+                    Vec3::new(-to_field.z, 0.0, to_field.x).normalize_or_zero()
+                }
+                ForceType::Impulse => continue,
+            };
+
+            ext_force.apply_force(force_direction * force_magnitude);
+        }
+    }
+}
+
+/// System to apply force fields via direct translation (no physics engine).
+#[cfg(not(feature = "physics"))]
 pub fn force_field_system(
     time: Res<Time>,
     force_fields: Query<(Entity, &Transform, &ForceField)>,
@@ -191,6 +245,10 @@ pub struct ForceFieldPlugin;
 
 impl Plugin for ForceFieldPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "physics")]
+        app.add_systems(Update, force_field_physics_system);
+
+        #[cfg(not(feature = "physics"))]
         app.add_systems(Update, force_field_system);
     }
 }

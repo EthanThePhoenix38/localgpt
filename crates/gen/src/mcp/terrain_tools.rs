@@ -696,10 +696,10 @@ impl Tool for GenQueryTerrainHeightTool {
         }
 
         // Support single: {"x": 10, "z": 20}
-        if points.is_empty() {
-            if let (Some(x), Some(z)) = (args["x"].as_f64(), args["z"].as_f64()) {
-                points.push([x as f32, z as f32]);
-            }
+        if points.is_empty()
+            && let (Some(x), Some(z)) = (args["x"].as_f64(), args["z"].as_f64())
+        {
+            points.push([x as f32, z as f32]);
         }
 
         if points.is_empty() {
@@ -714,9 +714,7 @@ impl Tool for GenQueryTerrainHeightTool {
             GenResponse::TerrainHeights { heights } => {
                 let results: Vec<Value> = heights
                     .iter()
-                    .map(|[x, y, z]| {
-                        json!({"x": *x, "y": *y, "z": *z})
-                    })
+                    .map(|[x, y, z]| json!({"x": *x, "y": *y, "z": *z}))
                     .collect();
                 Ok(serde_json::to_string_pretty(&json!({"heights": results}))?)
             }

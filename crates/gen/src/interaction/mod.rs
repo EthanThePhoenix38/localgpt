@@ -180,8 +180,8 @@ pub struct ScoreChanged {
     pub delta: i32,
 }
 
-/// Message fired when a trigger fires.
-#[derive(Clone, Debug)]
+/// Message fired when a trigger activates.
+#[derive(Message, Clone, Debug)]
 pub struct TriggerFired {
     pub entity: Entity,
     pub trigger_type: TriggerType,
@@ -498,6 +498,7 @@ pub fn proximity_trigger_system(
         Option<&OnceTrigger>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
+    mut trigger_events: MessageWriter<TriggerFired>,
     mut commands: Commands,
 ) {
     let player_pos = if let Ok(player_transform) = player_query.single() {
@@ -517,6 +518,12 @@ pub fn proximity_trigger_system(
             continue;
         }
         trigger.last_triggered = now;
+
+        // Emit trigger event (for EntityLink chain reactions)
+        trigger_events.write(TriggerFired {
+            entity,
+            trigger_type: TriggerType::Proximity,
+        });
 
         // Execute actions
         if let Some(teleport_action) = teleport
@@ -563,6 +570,7 @@ pub fn click_trigger_system(
         Option<&OnceTrigger>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
+    mut trigger_events: MessageWriter<TriggerFired>,
     mut commands: Commands,
 ) {
     if !keyboard.just_pressed(KeyCode::KeyE) {
@@ -593,6 +601,12 @@ pub fn click_trigger_system(
     if let Ok((entity, _transform, _trigger, teleport, score, toggle, once)) =
         click_query.get(target_entity)
     {
+        // Emit trigger event (for EntityLink chain reactions)
+        trigger_events.write(TriggerFired {
+            entity,
+            trigger_type: TriggerType::Click,
+        });
+
         if let Some(teleport_action) = teleport
             && let Ok(mut pt) = player_query.single_mut()
         {
@@ -845,6 +859,182 @@ pub fn enable_disable_system(
     }
 }
 
+// ---------------------------------------------------------------------------
+// GAP-P2-01: EntityLink resolution system (chain reactions)
+// ---------------------------------------------------------------------------
+
+/// System: resolve entity links when triggers fire.
+///
+/// When a `TriggerFired` event is received, checks all `EntityLink` components on the
+/// source entity. For each link whose `source_event` matches the trigger type,
+/// resolves the `target_entity` name via `NameRegistry` and executes `target_action`.
+pub fn entity_link_system(
+    mut trigger_events: MessageReader<TriggerFired>,
+    link_query: Query<&EntityLink>,
+    registry: Res<crate::gen3d::registry::NameRegistry>,
+    mut commands: Commands,
+) {
+    for event in trigger_events.read() {
+        let trigger_name = match event.trigger_type {
+            TriggerType::Proximity => "proximity",
+            TriggerType::Click => "click",
+            TriggerType::AreaEnter => "area_enter",
+            TriggerType::AreaExit => "area_exit",
+            TriggerType::Collision => "collision",
+            TriggerType::Timer => "timer",
+        };
+
+        // Get all EntityLink components on the source entity
+        if let Ok(link) = link_query.get(event.entity) {
+            // Check if this link matches the trigger event
+            if link.source_event == trigger_name || link.source_event == "any" {
+                // Resolve target entity name
+                if let Some(target) = registry.get_entity(&link.target_entity) {
+                    match link.target_action.as_str() {
+                        "toggle_state" => {
+                            commands.entity(target).insert(EntityState::default());
+                        }
+                        "enable" => {
+                            commands.entity(target).insert(EnableAction);
+                        }
+                        "disable" => {
+                            commands.entity(target).insert(DisableAction);
+                        }
+                        "destroy" => {
+                            commands.entity(target).despawn();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GAP-P2-05: Area trigger sensor detection
+// ---------------------------------------------------------------------------
+
+/// Tracks whether the player is currently inside an area trigger zone.
+#[derive(Component, Default)]
+pub struct AreaInsideTracker {
+    pub was_inside: bool,
+}
+
+/// System: detect player entering/exiting area trigger zones.
+///
+/// Uses distance-based overlap detection (no physics required).
+/// Emits `TriggerFired` events with `AreaEnter` or `AreaExit` type.
+pub fn area_trigger_system(
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    mut area_query: Query<(
+        Entity,
+        &Transform,
+        &AreaTrigger,
+        &mut AreaInsideTracker,
+        Option<&ProximityTrigger>,
+    )>,
+    mut trigger_events: MessageWriter<TriggerFired>,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    for (entity, transform, area, mut tracker, prox) in area_query.iter_mut() {
+        // Use ProximityTrigger radius if available, otherwise default 3.0
+        let radius = prox.map_or(3.0, |p| p.radius);
+        let distance = player_pos.distance(transform.translation);
+        let is_inside = distance <= radius;
+
+        if is_inside && !tracker.was_inside {
+            // Player entered the area
+            if area.is_enter {
+                trigger_events.write(TriggerFired {
+                    entity,
+                    trigger_type: TriggerType::AreaEnter,
+                });
+            }
+        } else if !is_inside && tracker.was_inside {
+            // Player exited the area
+            if !area.is_enter {
+                trigger_events.write(TriggerFired {
+                    entity,
+                    trigger_type: TriggerType::AreaExit,
+                });
+            }
+        }
+
+        tracker.was_inside = is_inside;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GAP-P2-04: Click trigger prompt text rendering
+// ---------------------------------------------------------------------------
+
+/// Marker for prompt text child entities spawned by click triggers.
+#[derive(Component)]
+pub struct ClickPromptText {
+    pub parent_trigger: Entity,
+}
+
+/// System: show/hide floating prompt text near click triggers when player is in range.
+pub fn click_prompt_system(
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    trigger_query: Query<(Entity, &Transform, &ClickTrigger)>,
+    mut prompt_query: Query<(Entity, &ClickPromptText, &mut Visibility)>,
+    mut commands: Commands,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    for (trigger_entity, transform, trigger) in trigger_query.iter() {
+        let Some(ref prompt_text) = trigger.prompt_text else {
+            continue;
+        };
+
+        let distance = player_pos.distance(transform.translation);
+        let in_range = distance <= trigger.max_distance;
+
+        // Check if prompt child already exists
+        let mut found = false;
+        for (_prompt_entity, prompt, mut vis) in prompt_query.iter_mut() {
+            if prompt.parent_trigger == trigger_entity {
+                *vis = if in_range {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                };
+                found = true;
+            }
+        }
+
+        // Spawn prompt text if it doesn't exist and player is in range
+        if !found && in_range {
+            let text_entity = commands
+                .spawn((
+                    ClickPromptText {
+                        parent_trigger: trigger_entity,
+                    },
+                    Text2d::new(prompt_text.clone()),
+                    TextFont {
+                        font_size: 24.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                    Transform::from_translation(transform.translation + Vec3::new(0.0, 2.0, 0.0)),
+                    Visibility::Inherited,
+                ))
+                .id();
+            // Make it a child so it moves with the trigger entity
+            commands.entity(trigger_entity).add_child(text_entity);
+        }
+    }
+}
+
 /// Plugin for interaction systems.
 pub struct InteractionPlugin;
 
@@ -852,18 +1042,25 @@ impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ScoreBoard::default())
             .insert_resource(PlayerInventory::default())
+            .add_message::<TriggerFired>()
             .add_systems(
                 Update,
                 (
                     proximity_trigger_system,
                     click_trigger_system,
                     timer_trigger_system,
+                    area_trigger_system,
+                    entity_link_system
+                        .after(proximity_trigger_system)
+                        .after(click_trigger_system)
+                        .after(area_trigger_system),
                     door_system,
                     door_proximity_system,
                     collectible_system,
                     score_sync_system,
                     animate_action_system,
                     enable_disable_system,
+                    click_prompt_system,
                 ),
             );
     }
