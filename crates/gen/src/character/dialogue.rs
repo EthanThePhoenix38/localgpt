@@ -436,10 +436,7 @@ pub fn dialogue_ui_system(
 
         if !has_panel {
             // Spawn dialogue panel
-            let speaker = node
-                .speaker
-                .as_deref()
-                .unwrap_or(name.as_str());
+            let speaker = node.speaker.as_deref().unwrap_or(name.as_str());
 
             commands
                 .spawn((
@@ -639,8 +636,7 @@ impl Plugin for DialoguePlugin {
                 typewriter_system,
                 dialogue_ui_system,
                 dialogue_choice_system,
-                dialogue_movement_lock_system
-                    .after(super::player::player_input_system),
+                dialogue_movement_lock_system.after(super::player::player_input_system),
             ),
         );
     }

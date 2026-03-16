@@ -3320,17 +3320,14 @@ fn process_gen_commands(
                     match gen_ent.entity_type {
                         crate::gen3d::registry::GenEntityType::Primitive
                         | crate::gen3d::registry::GenEntityType::Mesh => {
-                            obstacles
-                                .push((tf.translation, tf.scale * 0.5));
+                            obstacles.push((tf.translation, tf.scale * 0.5));
                         }
                         _ => {}
                     }
                 }
 
                 // Determine world bounds from blockout or scene extents
-                let (world_min, world_max) = if let Some(ref blockout) =
-                    params.current_blockout
-                {
+                let (world_min, world_max) = if let Some(ref blockout) = params.current_blockout {
                     let mut min_x = f32::MAX;
                     let mut min_z = f32::MAX;
                     let mut max_x = f32::MIN;
@@ -3355,7 +3352,10 @@ fn process_gen_commands(
                     }
                 } else {
                     // Use scene bounds
-                    let (center, extent) = compute_scene_bounds_from_entities(&params.gen_entities, &params.transforms);
+                    let (center, extent) = compute_scene_bounds_from_entities(
+                        &params.gen_entities,
+                        &params.transforms,
+                    );
                     (
                         Vec2::new(center.x - extent, center.z - extent),
                         Vec2::new(center.x + extent, center.z + extent),
@@ -3370,9 +3370,7 @@ fn process_gen_commands(
                     .map(|(_, tf)| tf.translation.y)
                     .unwrap_or(0.0);
 
-                let terrain_height = |_x: f32, _z: f32| -> Option<f32> {
-                    Some(terrain_base_y)
-                };
+                let terrain_height = |_x: f32, _z: f32| -> Option<f32> { Some(terrain_base_y) };
 
                 let grid = crate::worldgen::navmesh::build_navgrid(
                     world_min,
@@ -3428,10 +3426,8 @@ fn process_gen_commands(
                             let to_v = Vec3::new(t[0], t[1], t[2]);
                             match grid.find_path(from_v, to_v) {
                                 Some(path) => {
-                                    let length: f32 = path
-                                        .windows(2)
-                                        .map(|w| (w[1] - w[0]).length())
-                                        .sum();
+                                    let length: f32 =
+                                        path.windows(2).map(|w| (w[1] - w[0]).length()).sum();
                                     result.path_found = Some(true);
                                     result.path_length = Some(length);
                                 }
@@ -3500,7 +3496,10 @@ fn process_gen_commands(
                         );
                         (
                             "block_area",
-                            format!("Blocked circle r={:.1} at [{:.1}, {:.1}, {:.1}]", radius, position[0], position[1], position[2]),
+                            format!(
+                                "Blocked circle r={:.1} at [{:.1}, {:.1}, {:.1}]",
+                                radius, position[0], position[1], position[2]
+                            ),
                         )
                     }
                     NavMeshEditAction::AllowArea { position, radius } => {
@@ -3515,7 +3514,10 @@ fn process_gen_commands(
                         );
                         (
                             "allow_area",
-                            format!("Allowed circle r={:.1} at [{:.1}, {:.1}, {:.1}]", radius, position[0], position[1], position[2]),
+                            format!(
+                                "Allowed circle r={:.1} at [{:.1}, {:.1}, {:.1}]",
+                                radius, position[0], position[1], position[2]
+                            ),
                         )
                     }
                     NavMeshEditAction::AddConnection {
@@ -3532,13 +3534,14 @@ fn process_gen_commands(
                         );
                         (
                             "add_connection",
-                            format!("Added connection from [{:.1},{:.1},{:.1}] to [{:.1},{:.1},{:.1}]",
-                                from[0], from[1], from[2], to[0], to[1], to[2]),
+                            format!(
+                                "Added connection from [{:.1},{:.1},{:.1}] to [{:.1},{:.1},{:.1}]",
+                                from[0], from[1], from[2], to[0], to[1], to[2]
+                            ),
                         )
                     }
                     NavMeshEditAction::RemoveConnection { from } => {
-                        let removed =
-                            params.navmesh_overrides.remove_connection_near(from, 2.0);
+                        let removed = params.navmesh_overrides.remove_connection_near(from, 2.0);
                         (
                             "remove_connection",
                             if removed {
@@ -3570,8 +3573,8 @@ fn process_gen_commands(
                         total_entities_removed: 0,
                         total_entities_estimated: 0,
                     };
-                    let json = serde_json::to_string_pretty(&preview)
-                        .unwrap_or_else(|_| "{}".to_string());
+                    let json =
+                        serde_json::to_string_pretty(&preview).unwrap_or_else(|_| "{}".to_string());
                     GenResponse::RegenerationPreview { preview_json: json }
                 } else {
                     GenResponse::Regenerated {
@@ -3689,11 +3692,8 @@ fn process_pending_screenshots(
                 match screenshot_req.camera_angle {
                     ScreenshotCameraAngle::TopDown => {
                         let height = scene_extent * 2.0 + 20.0;
-                        cam_tf.translation = Vec3::new(
-                            scene_center.x,
-                            scene_center.y + height,
-                            scene_center.z,
-                        );
+                        cam_tf.translation =
+                            Vec3::new(scene_center.x, scene_center.y + height, scene_center.z);
                         cam_tf.look_at(scene_center, Vec3::NEG_Z);
                     }
                     ScreenshotCameraAngle::Isometric => {
@@ -3707,11 +3707,8 @@ fn process_pending_screenshots(
                     }
                     ScreenshotCameraAngle::Front => {
                         let dist = scene_extent * 1.5 + 10.0;
-                        cam_tf.translation = Vec3::new(
-                            scene_center.x,
-                            scene_center.y + 2.0,
-                            scene_center.z + dist,
-                        );
+                        cam_tf.translation =
+                            Vec3::new(scene_center.x, scene_center.y + 2.0, scene_center.z + dist);
                         cam_tf.look_at(scene_center, Vec3::Y);
                     }
                     ScreenshotCameraAngle::EntityFocus => {

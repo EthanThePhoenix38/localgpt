@@ -175,20 +175,18 @@ impl Tool for GenScreenshotTool {
         let height = args["height"].as_u64().unwrap_or(600) as u32;
         let wait_frames = args["wait_frames"].as_u64().unwrap_or(3) as u32;
         let highlight_entity = args["highlight_entity"].as_str().map(String::from);
-        let highlight_color = args["highlight_color"]
-            .as_array()
-            .and_then(|arr| {
-                if arr.len() == 4 {
-                    Some([
-                        arr[0].as_f64()? as f32,
-                        arr[1].as_f64()? as f32,
-                        arr[2].as_f64()? as f32,
-                        arr[3].as_f64()? as f32,
-                    ])
-                } else {
-                    None
-                }
-            });
+        let highlight_color = args["highlight_color"].as_array().and_then(|arr| {
+            if arr.len() == 4 {
+                Some([
+                    arr[0].as_f64()? as f32,
+                    arr[1].as_f64()? as f32,
+                    arr[2].as_f64()? as f32,
+                    arr[3].as_f64()? as f32,
+                ])
+            } else {
+                None
+            }
+        });
         let camera_angle = args["camera_angle"]
             .as_str()
             .and_then(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok());

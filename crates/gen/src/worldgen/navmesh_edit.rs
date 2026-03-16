@@ -111,7 +111,7 @@ impl NavMeshOverrides {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::worldgen::navmesh::{CellState, NavGrid, build_navgrid, NavMeshSettings};
+    use crate::worldgen::navmesh::{CellState, NavGrid, NavMeshSettings, build_navgrid};
 
     #[test]
     fn test_block_override() {
@@ -155,7 +155,11 @@ mod tests {
             |_, _| Some(0.0),
             &[obstacle],
         );
-        let blocked_before = grid.cells.iter().filter(|c| **c == CellState::Blocked).count();
+        let blocked_before = grid
+            .cells
+            .iter()
+            .filter(|c| **c == CellState::Blocked)
+            .count();
 
         let mut overrides = NavMeshOverrides::default();
         overrides.add_override(NavMeshOverride {
@@ -165,7 +169,11 @@ mod tests {
         });
         overrides.apply_to_grid(&mut grid);
 
-        let blocked_after = grid.cells.iter().filter(|c| **c == CellState::Blocked).count();
+        let blocked_after = grid
+            .cells
+            .iter()
+            .filter(|c| **c == CellState::Blocked)
+            .count();
         assert!(blocked_after < blocked_before);
     }
 

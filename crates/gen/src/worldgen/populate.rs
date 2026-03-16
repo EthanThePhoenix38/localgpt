@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::blockout::{BlockoutSpec, RegionDef};
+use super::blockout::RegionDef;
 use super::tier::PlacementTier;
 
 /// Which population pass to run.
@@ -77,8 +77,8 @@ fn plan_hero_pass(region: &RegionDef) -> PopulationPlan {
         // Add terrain smoothing zone around hero
         plan.terrain_smooth_zones.push(TerrainSmoothZone {
             center: [x, z],
-            radius: 5.0,       // 5m flatten radius
-            blend_width: 3.0,  // 3m transition
+            radius: 5.0,      // 5m flatten radius
+            blend_width: 3.0, // 3m transition
         });
     }
 
@@ -218,7 +218,11 @@ mod tests {
         let region = make_region();
         let plan = plan_population(&region, PopulationPass::Hero);
         assert_eq!(plan.placements.len(), 2);
-        assert!(plan.placements.iter().all(|p| p.tier == PlacementTier::Hero));
+        assert!(
+            plan.placements
+                .iter()
+                .all(|p| p.tier == PlacementTier::Hero)
+        );
         assert_eq!(plan.terrain_smooth_zones.len(), 2);
     }
 
@@ -227,10 +231,11 @@ mod tests {
         let region = make_region();
         let plan = plan_population(&region, PopulationPass::Medium);
         assert!(!plan.placements.is_empty());
-        assert!(plan
-            .placements
-            .iter()
-            .all(|p| p.tier == PlacementTier::Medium));
+        assert!(
+            plan.placements
+                .iter()
+                .all(|p| p.tier == PlacementTier::Medium)
+        );
     }
 
     #[test]
@@ -238,10 +243,11 @@ mod tests {
         let region = make_region();
         let plan = plan_population(&region, PopulationPass::Decorative);
         assert!(!plan.placements.is_empty());
-        assert!(plan
-            .placements
-            .iter()
-            .all(|p| p.tier == PlacementTier::Decorative));
+        assert!(
+            plan.placements
+                .iter()
+                .all(|p| p.tier == PlacementTier::Decorative)
+        );
     }
 
     #[test]
@@ -249,15 +255,21 @@ mod tests {
         let region = make_region();
         let plan = plan_population(&region, PopulationPass::All);
         // Should have hero + medium + decorative
-        assert!(plan.placements.iter().any(|p| p.tier == PlacementTier::Hero));
-        assert!(plan
-            .placements
-            .iter()
-            .any(|p| p.tier == PlacementTier::Medium));
-        assert!(plan
-            .placements
-            .iter()
-            .any(|p| p.tier == PlacementTier::Decorative));
+        assert!(
+            plan.placements
+                .iter()
+                .any(|p| p.tier == PlacementTier::Hero)
+        );
+        assert!(
+            plan.placements
+                .iter()
+                .any(|p| p.tier == PlacementTier::Medium)
+        );
+        assert!(
+            plan.placements
+                .iter()
+                .any(|p| p.tier == PlacementTier::Decorative)
+        );
     }
 
     #[test]

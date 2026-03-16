@@ -301,11 +301,7 @@ impl NavGrid {
 
     /// Get walkable coverage as a fraction (0.0 - 1.0).
     pub fn walkable_coverage(&self) -> f32 {
-        let total_non_void = self
-            .cells
-            .iter()
-            .filter(|c| **c != CellState::Void)
-            .count();
+        let total_non_void = self.cells.iter().filter(|c| **c != CellState::Void).count();
         if total_non_void == 0 {
             return 0.0;
         }
@@ -448,8 +444,7 @@ impl NavGrid {
                 }
 
                 let idx = self.idx(col, row);
-                if self.cells[idx] != CellState::Blocked && self.cells[idx] != CellState::TooSteep
-                {
+                if self.cells[idx] != CellState::Blocked && self.cells[idx] != CellState::TooSteep {
                     continue;
                 }
                 if visited.contains(&(col, row)) {
@@ -466,8 +461,7 @@ impl NavGrid {
                         continue;
                     }
                     let i = self.idx(c, r);
-                    if self.cells[i] != CellState::Blocked && self.cells[i] != CellState::TooSteep
-                    {
+                    if self.cells[i] != CellState::Blocked && self.cells[i] != CellState::TooSteep {
                         continue;
                     }
                     cluster.push(self.grid_to_world(c, r));
@@ -734,10 +728,7 @@ mod tests {
             |_, _| Some(0.0),
             &[],
         );
-        assert!(grid.are_connected(
-            Vec3::new(1.0, 0.0, 1.0),
-            Vec3::new(8.0, 0.0, 8.0)
-        ));
+        assert!(grid.are_connected(Vec3::new(1.0, 0.0, 1.0), Vec3::new(8.0, 0.0, 8.0)));
     }
 
     #[test]

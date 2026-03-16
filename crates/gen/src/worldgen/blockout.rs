@@ -381,11 +381,9 @@ impl BlockoutSpec {
         // Terrain type inference
         let terrain_type = if lower.contains("flat") || lower.contains("plain") {
             TerrainType::Flat
-        } else if lower.contains("mountain") || lower.contains("peak") || lower.contains("alpine")
-        {
+        } else if lower.contains("mountain") || lower.contains("peak") || lower.contains("alpine") {
             TerrainType::Mountains
-        } else if lower.contains("canyon") || lower.contains("gorge") || lower.contains("ravine")
-        {
+        } else if lower.contains("canyon") || lower.contains("gorge") || lower.contains("ravine") {
             TerrainType::Canyon
         } else if lower.contains("island") || lower.contains("archipelago") {
             TerrainType::Island
@@ -444,8 +442,7 @@ impl BlockoutSpec {
             0.0
         } else if lower.contains("dawn") || lower.contains("sunrise") {
             0.25
-        } else if lower.contains("sunset") || lower.contains("dusk") || lower.contains("evening")
-        {
+        } else if lower.contains("sunset") || lower.contains("dusk") || lower.contains("evening") {
             0.75
         } else {
             0.6 // default: afternoon
@@ -608,8 +605,16 @@ impl BlockoutSpec {
     fn infer_accents(lower: &str) -> Vec<String> {
         let mut accents = Vec::new();
         let keywords = [
-            "stone", "flowers", "mushrooms", "rocks", "crystals", "ruins", "fences", "lanterns",
-            "barrels", "crates",
+            "stone",
+            "flowers",
+            "mushrooms",
+            "rocks",
+            "crystals",
+            "ruins",
+            "fences",
+            "lanterns",
+            "barrels",
+            "crates",
         ];
         for &kw in &keywords {
             if lower.contains(kw) {
@@ -637,10 +642,7 @@ impl BlockoutSpec {
         // Check path references
         for path in &self.paths {
             if !ids.contains(&path.from) {
-                return Err(format!(
-                    "Path references unknown region: '{}'",
-                    path.from
-                ));
+                return Err(format!("Path references unknown region: '{}'", path.from));
             }
             if !ids.contains(&path.to) {
                 return Err(format!("Path references unknown region: '{}'", path.to));
@@ -671,7 +673,8 @@ mod tests {
 
     #[test]
     fn test_blockout_spec_from_prompt_village() {
-        let spec = BlockoutSpec::from_prompt("a medieval village with a forest", [50.0, 50.0], None);
+        let spec =
+            BlockoutSpec::from_prompt("a medieval village with a forest", [50.0, 50.0], None);
         assert_eq!(spec.terrain.terrain_type, TerrainType::Hills);
         assert_eq!(spec.layout.style, LayoutStyle::Structured);
         assert_eq!(spec.palette.primary_biome, Biome::TemperateForest);
@@ -683,7 +686,8 @@ mod tests {
 
     #[test]
     fn test_blockout_spec_from_prompt_desert() {
-        let spec = BlockoutSpec::from_prompt("a sparse desert with sand dunes", [100.0, 100.0], Some(42));
+        let spec =
+            BlockoutSpec::from_prompt("a sparse desert with sand dunes", [100.0, 100.0], Some(42));
         assert_eq!(spec.terrain.terrain_type, TerrainType::Hills);
         assert_eq!(spec.palette.primary_biome, Biome::Desert);
         assert_eq!(spec.terrain.noise_seed, Some(42));
@@ -734,7 +738,8 @@ mod tests {
 
     #[test]
     fn test_blockout_spec_serde_roundtrip() {
-        let spec = BlockoutSpec::from_prompt("a village with forest and lake", [50.0, 50.0], Some(123));
+        let spec =
+            BlockoutSpec::from_prompt("a village with forest and lake", [50.0, 50.0], Some(123));
         let json = serde_json::to_string_pretty(&spec).unwrap();
         let parsed: BlockoutSpec = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.terrain.terrain_type, spec.terrain.terrain_type);

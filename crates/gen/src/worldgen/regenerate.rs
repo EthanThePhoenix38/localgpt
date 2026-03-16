@@ -4,7 +4,7 @@
 //! and in what order. Unchanged regions keep their entities.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Type of change that triggered dirty status.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,7 +144,9 @@ pub fn plan_regeneration(
             ChangeType::TerrainChanged => {
                 format!("{} entities will snap to new terrain height", entity_count)
             }
-            ChangeType::Added => format!("new region, ~{} entities will be generated", estimated_new),
+            ChangeType::Added => {
+                format!("new region, ~{} entities will be generated", estimated_new)
+            }
         };
 
         preview.total_entities_removed += entity_count;
@@ -163,7 +165,10 @@ pub fn plan_regeneration(
     preview.navmesh_rebuild = sorted_dirty.iter().any(|d| {
         matches!(
             d.change_type,
-            ChangeType::BoundsChanged | ChangeType::TerrainChanged | ChangeType::Removed | ChangeType::Added
+            ChangeType::BoundsChanged
+                | ChangeType::TerrainChanged
+                | ChangeType::Removed
+                | ChangeType::Added
         )
     });
 
@@ -174,15 +179,13 @@ pub fn plan_regeneration(
 /// Returns entity names that should be despawned.
 pub fn entities_to_remove(
     region_id: &str,
-    change_type: &ChangeType,
+    _change_type: &ChangeType,
     all_entities: &[(String, String, bool)], // (name, region_id, is_manual)
     preserve_manual: bool,
 ) -> Vec<String> {
     all_entities
         .iter()
-        .filter(|(_, rid, is_manual)| {
-            rid == region_id && !(preserve_manual && *is_manual)
-        })
+        .filter(|(_, rid, is_manual)| rid == region_id && !(preserve_manual && *is_manual))
         .map(|(name, _, _)| name.clone())
         .collect()
 }

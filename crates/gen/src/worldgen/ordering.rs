@@ -214,10 +214,7 @@ mod tests {
         let mut state = GenerationState::default();
         state.init_region("village");
         for layer in GenerationLayer::all() {
-            assert_eq!(
-                state.get_status("village", *layer),
-                LayerStatus::NotStarted
-            );
+            assert_eq!(state.get_status("village", *layer), LayerStatus::NotStarted);
         }
     }
 
@@ -245,10 +242,7 @@ mod tests {
     fn test_next_layer() {
         let mut state = GenerationState::default();
         state.init_region("village");
-        assert_eq!(
-            state.next_layer("village"),
-            Some(GenerationLayer::Ground)
-        );
+        assert_eq!(state.next_layer("village"), Some(GenerationLayer::Ground));
         state.set_status("village", GenerationLayer::Ground, LayerStatus::Complete);
         // Structure, Vegetation, and Lighting all have deps met now, but Structure comes first
         assert_eq!(

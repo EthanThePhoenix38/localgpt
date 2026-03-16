@@ -228,15 +228,9 @@ pub enum GenCommand {
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum NavMeshEditAction {
     /// Mark an area as non-walkable.
-    BlockArea {
-        position: [f32; 3],
-        radius: f32,
-    },
+    BlockArea { position: [f32; 3], radius: f32 },
     /// Force an area to be walkable.
-    AllowArea {
-        position: [f32; 3],
-        radius: f32,
-    },
+    AllowArea { position: [f32; 3], radius: f32 },
     /// Create a navigable connection between two points.
     AddConnection {
         from: [f32; 3],
@@ -244,9 +238,7 @@ pub enum NavMeshEditAction {
         bidirectional: bool,
     },
     /// Remove a connection near a point.
-    RemoveConnection {
-        from: [f32; 3],
-    },
+    RemoveConnection { from: [f32; 3] },
 }
 
 /// Actions for editing the blockout layout.

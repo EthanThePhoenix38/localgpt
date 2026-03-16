@@ -113,11 +113,7 @@ pub fn segment_mesh(
 
     // Sort components by size (largest first) and limit to 50
     let mut component_roots: Vec<_> = component_map.keys().copied().collect();
-    component_roots.sort_by(|a, b| {
-        component_map[b]
-            .len()
-            .cmp(&component_map[a].len())
-    });
+    component_roots.sort_by(|a, b| component_map[b].len().cmp(&component_map[a].len()));
     component_roots.truncate(50);
 
     // Build component meshes
@@ -389,7 +385,10 @@ mod tests {
             infer_role_from_name("tree_oak"),
             Some(SemanticRole::Vegetation)
         );
-        assert_eq!(infer_role_from_name("ground_plane"), Some(SemanticRole::Ground));
+        assert_eq!(
+            infer_role_from_name("ground_plane"),
+            Some(SemanticRole::Ground)
+        );
         assert_eq!(infer_role_from_name("random_thing"), None);
     }
 
@@ -402,11 +401,7 @@ mod tests {
             [10.0, 0.0, 10.0],
             [-10.0, 0.0, 10.0],
         ];
-        let role = infer_role_from_geometry(
-            &vertices,
-            &[-10.0, 0.0, -10.0],
-            &[10.0, 0.0, 10.0],
-        );
+        let role = infer_role_from_geometry(&vertices, &[-10.0, 0.0, -10.0], &[10.0, 0.0, 10.0]);
         assert_eq!(role, SemanticRole::Ground);
     }
 

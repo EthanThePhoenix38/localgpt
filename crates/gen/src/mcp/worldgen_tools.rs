@@ -1089,7 +1089,10 @@ impl Tool for GenEditNavMeshTool {
             GenResponse::NavMeshEdited {
                 action,
                 description,
-            } => Ok(format!("{}: {}. Rebuild navmesh with gen_build_navmesh to apply.", action, description)),
+            } => Ok(format!(
+                "{}: {}. Rebuild navmesh with gen_build_navmesh to apply.",
+                action, description
+            )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }
@@ -1146,13 +1149,11 @@ impl Tool for GenRegenerateTool {
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments).unwrap_or_default();
 
-        let region_ids = args["region_ids"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect::<Vec<_>>()
-            });
+        let region_ids = args["region_ids"].as_array().map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect::<Vec<_>>()
+        });
 
         let preview_only = args["preview_only"].as_bool().unwrap_or(false);
         let preserve_manual = args["preserve_manual"].as_bool().unwrap_or(true);

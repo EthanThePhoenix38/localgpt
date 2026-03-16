@@ -123,7 +123,11 @@ pub fn check_placement(
             break;
         }
 
-        let alt_center = [original[0] + offset[0], original[1], original[2] + offset[1]];
+        let alt_center = [
+            original[0] + offset[0],
+            original[1],
+            original[2] + offset[1],
+        ];
         let alt_half = [
             (proposed.max[0] - proposed.min[0]) * 0.5,
             (proposed.max[1] - proposed.min[1]) * 0.5,
@@ -135,7 +139,10 @@ pub fn check_placement(
             return PlacementResult::Adjusted {
                 original,
                 adjusted: alt_center,
-                reason: format!("Offset by [{:.1}, {:.1}] to avoid collision", offset[0], offset[1]),
+                reason: format!(
+                    "Offset by [{:.1}, {:.1}] to avoid collision",
+                    offset[0], offset[1]
+                ),
             };
         }
     }
@@ -212,7 +219,10 @@ mod tests {
         let existing: Vec<Aabb> = (-3..=3)
             .flat_map(|x| {
                 (-3..=3).map(move |z| {
-                    Aabb::new([5.0 + x as f32 * 2.0, 0.0, 5.0 + z as f32 * 2.0], [0.8, 1.0, 0.8])
+                    Aabb::new(
+                        [5.0 + x as f32 * 2.0, 0.0, 5.0 + z as f32 * 2.0],
+                        [0.8, 1.0, 0.8],
+                    )
                 })
             })
             .collect();
