@@ -450,12 +450,37 @@ mod tests {
     }
 }
 
+/// Hide/show the player mesh based on first-person mode.
+/// In first-person, the player capsule is inside the camera, so hide it.
+pub fn player_mesh_visibility_system(
+    camera_query: Query<&PlayerCamera>,
+    mut player_query: Query<&mut Visibility, With<Player>>,
+) {
+    let Ok(camera) = camera_query.single() else {
+        return;
+    };
+
+    for mut visibility in player_query.iter_mut() {
+        *visibility = if camera.mode == CameraPov::FirstPerson {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+    }
+}
+
 /// Plugin for camera systems.
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(MouseSensitivity::default())
-            .add_systems(Update, (camera_input_system, camera_follow_system));
+        app.insert_resource(MouseSensitivity::default()).add_systems(
+            Update,
+            (
+                camera_input_system,
+                camera_follow_system,
+                player_mesh_visibility_system,
+            ),
+        );
     }
 }
