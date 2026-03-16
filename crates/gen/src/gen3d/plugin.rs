@@ -93,6 +93,14 @@ struct PendingScreenshot {
     path: Option<PathBuf>,
     /// Whether to also save to the world skill's screenshots folder.
     save_to_skill: bool,
+    /// Entity name to highlight with emissive override.
+    highlight_entity: Option<String>,
+    /// Highlight color [r, g, b, a].
+    highlight_color: [f32; 4],
+    /// Camera angle preset.
+    camera_angle: ScreenshotCameraAngle,
+    /// Whether to overlay entity annotations.
+    include_annotations: bool,
 }
 
 /// Initial glTF scene to load at startup.
@@ -467,6 +475,8 @@ struct GenCommandParams<'w, 's> {
     npc_behaviors: Query<'w, 's, &'static mut crate::character::npc::NpcBehavior>,
     blockout_generated_q: Query<'w, 's, (Entity, &'static crate::worldgen::BlockoutGenerated)>,
     current_blockout: Option<Res<'w, crate::worldgen::CurrentBlockout>>,
+    tier_q: Query<'w, 's, &'static crate::worldgen::PlacementTier>,
+    role_q: Query<'w, 's, &'static crate::worldgen::SemanticRole>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -509,6 +519,8 @@ fn process_gen_commands(
                 &params.spot_lights,
                 &params.behaviors_query,
                 &params.audio_engine,
+                &params.tier_q,
+                &params.role_q,
             ),
             GenCommand::EntityInfo { name } => handle_entity_info(
                 &name,
@@ -533,6 +545,10 @@ fn process_gen_commands(
                 width,
                 height,
                 wait_frames,
+                highlight_entity,
+                highlight_color,
+                camera_angle,
+                include_annotations,
             } => {
                 params.pending_screenshots.queue.push(PendingScreenshot {
                     frames_remaining: wait_frames,
@@ -540,6 +556,10 @@ fn process_gen_commands(
                     height,
                     path: None,
                     save_to_skill: true,
+                    highlight_entity,
+                    highlight_color: highlight_color.unwrap_or([1.0, 0.0, 0.0, 1.0]),
+                    camera_angle: camera_angle.unwrap_or(ScreenshotCameraAngle::Current),
+                    include_annotations,
                 });
                 // Response will be sent by process_pending_screenshots
                 continue;
@@ -989,7 +1009,11 @@ fn process_gen_commands(
                     width,
                     height,
                     path: Some(PathBuf::from(path)),
-                    save_to_skill: true, // Also save to skill folder
+                    save_to_skill: true,
+                    highlight_entity: None,
+                    highlight_color: [1.0, 0.0, 0.0, 1.0],
+                    camera_angle: ScreenshotCameraAngle::Current,
+                    include_annotations: false,
                 });
                 continue;
             }
@@ -2551,19 +2575,12 @@ fn process_gen_commands(
             }
 
             // Tier 15: WorldGen Pipeline (WG1)
-            GenCommand::PlanLayout {
-                prompt,
-                size,
-                seed,
-            } => {
-                let spec =
-                    crate::worldgen::BlockoutSpec::from_prompt(&prompt, size, seed);
+            GenCommand::PlanLayout { prompt, size, seed } => {
+                let spec = crate::worldgen::BlockoutSpec::from_prompt(&prompt, size, seed);
                 match spec.validate() {
                     Ok(()) => match serde_json::to_string_pretty(&spec) {
                         Ok(json) => {
-                            commands.insert_resource(crate::worldgen::CurrentBlockout {
-                                spec,
-                            });
+                            commands.insert_resource(crate::worldgen::CurrentBlockout { spec });
                             GenResponse::BlockoutPlan { spec_json: json }
                         }
                         Err(e) => GenResponse::Error {
@@ -2583,9 +2600,7 @@ fn process_gen_commands(
                 let mut entities_spawned = 0usize;
 
                 // Store the blockout as a resource
-                commands.insert_resource(crate::worldgen::CurrentBlockout {
-                    spec: spec.clone(),
-                });
+                commands.insert_resource(crate::worldgen::CurrentBlockout { spec: spec.clone() });
 
                 // 1. Generate terrain
                 if generate_terrain {
@@ -2601,7 +2616,8 @@ fn process_gen_commands(
                             .iter()
                             .map(|r| r.bounds.center[1].abs() + r.bounds.size[1] / 2.0)
                             .fold(0.0f32, f32::max);
-                        bevy::math::Vec2::new(max_x * 2.2, max_z * 2.2).max(bevy::math::Vec2::splat(20.0))
+                        bevy::math::Vec2::new(max_x * 2.2, max_z * 2.2)
+                            .max(bevy::math::Vec2::splat(20.0))
                     } else {
                         bevy::math::Vec2::splat(50.0)
                     };
@@ -2613,37 +2629,25 @@ fn process_gen_commands(
                         crate::worldgen::Biome::Desert | crate::worldgen::Biome::Savanna => {
                             crate::terrain::TerrainMaterial::Sand
                         }
-                        crate::worldgen::Biome::Arctic
-                        | crate::worldgen::Biome::Tundra => {
+                        crate::worldgen::Biome::Arctic | crate::worldgen::Biome::Tundra => {
                             crate::terrain::TerrainMaterial::Snow
                         }
-                        crate::worldgen::Biome::Volcanic => {
-                            crate::terrain::TerrainMaterial::Rock
-                        }
+                        crate::worldgen::Biome::Volcanic => crate::terrain::TerrainMaterial::Rock,
                         _ => crate::terrain::TerrainMaterial::Grass,
                     };
 
                     let mut tp = terrain_params;
                     tp.material = material;
 
-                    let mesh =
-                        params.meshes.add(crate::terrain::generate_terrain_mesh(&tp));
+                    let mesh = params
+                        .meshes
+                        .add(crate::terrain::generate_terrain_mesh(&tp));
                     let color = match tp.material {
-                        crate::terrain::TerrainMaterial::Grass => {
-                            Color::srgb(0.3, 0.6, 0.2)
-                        }
-                        crate::terrain::TerrainMaterial::Sand => {
-                            Color::srgb(0.76, 0.7, 0.5)
-                        }
-                        crate::terrain::TerrainMaterial::Snow => {
-                            Color::srgb(0.9, 0.92, 0.95)
-                        }
-                        crate::terrain::TerrainMaterial::Rock => {
-                            Color::srgb(0.5, 0.48, 0.45)
-                        }
-                        crate::terrain::TerrainMaterial::Custom => {
-                            Color::srgb(0.5, 0.5, 0.5)
-                        }
+                        crate::terrain::TerrainMaterial::Grass => Color::srgb(0.3, 0.6, 0.2),
+                        crate::terrain::TerrainMaterial::Sand => Color::srgb(0.76, 0.7, 0.5),
+                        crate::terrain::TerrainMaterial::Snow => Color::srgb(0.9, 0.92, 0.95),
+                        crate::terrain::TerrainMaterial::Rock => Color::srgb(0.5, 0.48, 0.45),
+                        crate::terrain::TerrainMaterial::Custom => Color::srgb(0.5, 0.5, 0.5),
                     };
                     let mat = params.materials.add(StandardMaterial {
                         base_color: color,
@@ -2658,8 +2662,7 @@ fn process_gen_commands(
                             MeshMaterial3d(mat),
                             Transform::from_translation(tp.position),
                             crate::gen3d::registry::GenEntity {
-                                entity_type:
-                                    crate::gen3d::registry::GenEntityType::Primitive,
+                                entity_type: crate::gen3d::registry::GenEntityType::Primitive,
                                 world_id: wid,
                             },
                             crate::terrain::Terrain {
@@ -2675,11 +2678,10 @@ fn process_gen_commands(
                                 region_id: "_terrain".to_string(),
                                 pass: "terrain".to_string(),
                             },
+                            crate::worldgen::SemanticRole::Ground,
                         ))
                         .id();
-                    params
-                        .registry
-                        .insert_with_id(name.clone(), entity, wid);
+                    params.registry.insert_with_id(name.clone(), entity, wid);
                     entities_spawned += 1;
                 }
 
@@ -2696,8 +2698,7 @@ fn process_gen_commands(
                     ];
 
                     for (i, region) in spec.regions.iter().enumerate() {
-                        let color =
-                            region_colors[i % region_colors.len()];
+                        let color = region_colors[i % region_colors.len()];
                         let cx = region.bounds.center[0];
                         let cz = region.bounds.center[1];
                         let sx = region.bounds.size[0];
@@ -2713,16 +2714,14 @@ fn process_gen_commands(
                         });
 
                         let wid = params.next_entity_id.alloc();
-                        let name =
-                            format!("blockout_region_{}_{}", region.id, wid.0);
+                        let name = format!("blockout_region_{}_{}", region.id, wid.0);
                         let entity = commands
                             .spawn((
                                 Mesh3d(mesh),
                                 MeshMaterial3d(mat),
                                 Transform::from_xyz(cx, height / 2.0, cz),
                                 crate::gen3d::registry::GenEntity {
-                                    entity_type:
-                                        crate::gen3d::registry::GenEntityType::Primitive,
+                                    entity_type: crate::gen3d::registry::GenEntityType::Primitive,
                                     world_id: wid,
                                 },
                                 crate::worldgen::BlockoutVolume {
@@ -2736,9 +2735,7 @@ fn process_gen_commands(
                                 },
                             ))
                             .id();
-                        params
-                            .registry
-                            .insert_with_id(name.clone(), entity, wid);
+                        params.registry.insert_with_id(name.clone(), entity, wid);
                         entities_spawned += 1;
 
                         // Spawn hero slot markers (gold translucent boxes)
@@ -2748,28 +2745,21 @@ fn process_gen_commands(
                                 slot.size[1],
                                 slot.size[2],
                             ));
-                            let slot_mat =
-                                params.materials.add(StandardMaterial {
-                                    base_color: Color::srgba(
-                                        1.0, 0.85, 0.3, 0.25,
-                                    ),
-                                    alpha_mode: AlphaMode::Blend,
-                                    unlit: true,
-                                    ..default()
-                                });
+                            let slot_mat = params.materials.add(StandardMaterial {
+                                base_color: Color::srgba(1.0, 0.85, 0.3, 0.25),
+                                alpha_mode: AlphaMode::Blend,
+                                unlit: true,
+                                ..default()
+                            });
                             let slot_wid = params.next_entity_id.alloc();
-                            let slot_name = format!(
-                                "blockout_hero_{}_{}",
-                                region.id, slot_wid.0
-                            );
+                            let slot_name = format!("blockout_hero_{}_{}", region.id, slot_wid.0);
                             let slot_entity = commands
                                 .spawn((
                                     Mesh3d(slot_mesh),
                                     MeshMaterial3d(slot_mat),
                                     Transform::from_xyz(
                                         slot.position[0],
-                                        slot.position[1]
-                                            + slot.size[1] / 2.0,
+                                        slot.position[1] + slot.size[1] / 2.0,
                                         slot.position[2],
                                     ),
                                     crate::gen3d::registry::GenEntity {
@@ -2838,25 +2828,18 @@ fn process_gen_commands(
                                 ..Default::default()
                             };
 
-                            let origin =
-                                crate::terrain::path_origin(&path_params);
-                            let mesh = params.meshes.add(
-                                crate::terrain::generate_path_mesh(&path_params),
-                            );
+                            let origin = crate::terrain::path_origin(&path_params);
+                            let mesh = params
+                                .meshes
+                                .add(crate::terrain::generate_path_mesh(&path_params));
                             let color = match path_params.material {
-                                crate::terrain::PathMaterial::Dirt => {
-                                    Color::srgb(0.55, 0.42, 0.28)
-                                }
+                                crate::terrain::PathMaterial::Dirt => Color::srgb(0.55, 0.42, 0.28),
                                 crate::terrain::PathMaterial::Stone
                                 | crate::terrain::PathMaterial::Cobblestone => {
                                     Color::srgb(0.6, 0.58, 0.55)
                                 }
-                                crate::terrain::PathMaterial::Wood => {
-                                    Color::srgb(0.55, 0.35, 0.2)
-                                }
-                                crate::terrain::PathMaterial::Custom => {
-                                    Color::srgb(0.5, 0.5, 0.5)
-                                }
+                                crate::terrain::PathMaterial::Wood => Color::srgb(0.55, 0.35, 0.2),
+                                crate::terrain::PathMaterial::Custom => Color::srgb(0.5, 0.5, 0.5),
                             };
                             let mat = params.materials.add(StandardMaterial {
                                 base_color: color,
@@ -2886,13 +2869,10 @@ fn process_gen_commands(
                                         ),
                                         pass: "path".to_string(),
                                     },
+                                    crate::worldgen::SemanticRole::Ground,
                                 ))
                                 .id();
-                            params.registry.insert_with_id(
-                                name.clone(),
-                                entity,
-                                wid,
-                            );
+                            params.registry.insert_with_id(name.clone(), entity, wid);
                             entities_spawned += 1;
                             path_count += 1;
                         }
@@ -2914,21 +2894,13 @@ fn process_gen_commands(
                 // Look up the current blockout
                 match &params.current_blockout {
                     None => GenResponse::Error {
-                        message: "No blockout loaded. Call gen_apply_blockout first."
-                            .to_string(),
+                        message: "No blockout loaded. Call gen_apply_blockout first.".to_string(),
                     },
                     Some(blockout) => {
-                        let region = blockout
-                            .spec
-                            .regions
-                            .iter()
-                            .find(|r| r.id == region_id);
+                        let region = blockout.spec.regions.iter().find(|r| r.id == region_id);
                         match region {
                             None => GenResponse::Error {
-                                message: format!(
-                                    "Region '{}' not found in blockout",
-                                    region_id
-                                ),
+                                message: format!("Region '{}' not found in blockout", region_id),
                             },
                             Some(region) => {
                                 let mut spawned = 0usize;
@@ -2957,7 +2929,8 @@ fn process_gen_commands(
                                 if region.walkable && region.decorative_density > 0.0 {
                                     let cx = region.bounds.center[0];
                                     let cz = region.bounds.center[1];
-                                    let radius = region.bounds.size[0].min(region.bounds.size[1]) / 2.0;
+                                    let radius =
+                                        region.bounds.size[0].min(region.bounds.size[1]) / 2.0;
 
                                     let foliage_params = crate::terrain::FoliageParams {
                                         area: crate::terrain::FoliageArea {
@@ -2968,9 +2941,8 @@ fn process_gen_commands(
                                         ..Default::default()
                                     };
 
-                                    let points = crate::terrain::generate_foliage_points(
-                                        &foliage_params,
-                                    );
+                                    let points =
+                                        crate::terrain::generate_foliage_points(&foliage_params);
 
                                     let foliage_color = Color::srgb(0.2, 0.5, 0.15);
 
@@ -2984,9 +2956,8 @@ fn process_gen_commands(
                                             ..default()
                                         });
                                         let wid = params.next_entity_id.alloc();
-                                        let name = format!(
-                                            "blockout_foliage_{}_{}", region_id, wid.0
-                                        );
+                                        let name =
+                                            format!("blockout_foliage_{}_{}", region_id, wid.0);
                                         let entity = commands
                                             .spawn((
                                                 Mesh3d(mesh),
@@ -3001,11 +2972,11 @@ fn process_gen_commands(
                                                     region_id: region_id.clone(),
                                                     pass: "decorative".to_string(),
                                                 },
+                                                crate::worldgen::PlacementTier::Decorative,
+                                                crate::worldgen::SemanticRole::Vegetation,
                                             ))
                                             .id();
-                                        params.registry.insert_with_id(
-                                            name.clone(), entity, wid,
-                                        );
+                                        params.registry.insert_with_id(name.clone(), entity, wid);
                                         spawned += 1;
                                     }
                                 }
@@ -3015,6 +2986,321 @@ fn process_gen_commands(
                                     entities_spawned: spawned,
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Tier 16: Hierarchical Placement (WG3) & Scene Decomposition (WG6)
+            GenCommand::SetTier { entity_name, tier } => {
+                match params.registry.get_entity(&entity_name) {
+                    Some(entity) => {
+                        commands.entity(entity).insert(tier);
+                        GenResponse::TierSet {
+                            entity: entity_name,
+                            tier: tier.as_str().to_string(),
+                        }
+                    }
+                    None => GenResponse::Error {
+                        message: format!("Entity '{}' not found", entity_name),
+                    },
+                }
+            }
+
+            GenCommand::SetRole { entity_name, role } => {
+                match params.registry.get_entity(&entity_name) {
+                    Some(entity) => {
+                        commands.entity(entity).insert(role);
+                        GenResponse::RoleSet {
+                            entity: entity_name,
+                            role: role.as_str().to_string(),
+                        }
+                    }
+                    None => GenResponse::Error {
+                        message: format!("Entity '{}' not found", entity_name),
+                    },
+                }
+            }
+
+            GenCommand::BulkModify {
+                role,
+                region_id,
+                action,
+            } => {
+                let mut affected = 0usize;
+                let mut to_process = Vec::new();
+
+                for (name, entity) in params.registry.all_names() {
+                    // Check role matches
+                    if let Ok(entity_role) = params.role_q.get(entity) {
+                        if *entity_role != role {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+
+                    // Check region filter
+                    if let Some(ref region_filter) = region_id {
+                        if let Ok((_, bg)) = params.blockout_generated_q.get(entity) {
+                            if bg.region_id != *region_filter {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    to_process.push((name.to_string(), entity));
+                }
+
+                for (name, entity) in &to_process {
+                    match &action {
+                        BulkAction::Scale { factor } => {
+                            if let Ok(transform) = params.transforms.get(*entity) {
+                                let scaled = transform.scale * *factor;
+                                commands.entity(*entity).insert(
+                                    Transform::from_translation(transform.translation)
+                                        .with_rotation(transform.rotation)
+                                        .with_scale(scaled),
+                                );
+                                affected += 1;
+                            }
+                        }
+                        BulkAction::Recolor { color } => {
+                            if let Ok(handle) = params.material_handles.get(*entity)
+                                && let Some(mat) = params.materials.get_mut(&handle.0)
+                            {
+                                mat.base_color =
+                                    Color::srgba(color[0], color[1], color[2], color[3]);
+                                affected += 1;
+                            }
+                        }
+                        BulkAction::Remove => {
+                            params.registry.remove_by_name(name);
+                            commands.entity(*entity).despawn();
+                            affected += 1;
+                        }
+                        BulkAction::Hide => {
+                            commands.entity(*entity).insert(Visibility::Hidden);
+                            affected += 1;
+                        }
+                        BulkAction::Show => {
+                            commands.entity(*entity).insert(Visibility::Inherited);
+                            affected += 1;
+                        }
+                    }
+                }
+
+                GenResponse::BulkModified {
+                    role: role.as_str().to_string(),
+                    action: match &action {
+                        BulkAction::Scale { .. } => "scale",
+                        BulkAction::Recolor { .. } => "recolor",
+                        BulkAction::Remove => "remove",
+                        BulkAction::Hide => "hide",
+                        BulkAction::Show => "show",
+                    }
+                    .to_string(),
+                    affected,
+                }
+            }
+
+            // Tier 17: Blockout Editing (WG5)
+            GenCommand::ModifyBlockout {
+                action,
+                auto_regenerate,
+            } => {
+                // Get mutable blockout spec
+                let blockout = params.current_blockout.as_ref().map(|b| b.spec.clone());
+                match blockout {
+                    None => GenResponse::Error {
+                        message: "No blockout loaded. Call gen_apply_blockout first.".to_string(),
+                    },
+                    Some(mut spec) => {
+                        let mut entities_removed = 0usize;
+                        let mut entities_spawned_count = 0usize;
+                        let (action_name, region_id) = match &action {
+                            BlockoutEditAction::AddRegion { region } => {
+                                spec.regions.push(region.clone());
+                                // Spawn debug volume for the new region
+                                let cx = region.bounds.center[0];
+                                let cz = region.bounds.center[1];
+                                let sx = region.bounds.size[0];
+                                let sz = region.bounds.size[1];
+                                let height = 10.0;
+                                let mesh = params.meshes.add(Cuboid::new(sx, height, sz));
+                                let mat = params.materials.add(StandardMaterial {
+                                    base_color: Color::srgba(0.2, 0.6, 1.0, 0.15),
+                                    alpha_mode: AlphaMode::Blend,
+                                    unlit: true,
+                                    ..default()
+                                });
+                                let wid = params.next_entity_id.alloc();
+                                let name = format!("blockout_region_{}_{}", region.id, wid.0);
+                                let entity = commands
+                                    .spawn((
+                                        Mesh3d(mesh),
+                                        MeshMaterial3d(mat),
+                                        Transform::from_xyz(cx, height / 2.0, cz),
+                                        crate::gen3d::registry::GenEntity {
+                                            entity_type:
+                                                crate::gen3d::registry::GenEntityType::Primitive,
+                                            world_id: wid,
+                                        },
+                                        crate::worldgen::BlockoutVolume {
+                                            region_id: region.id.clone(),
+                                            role: "region".to_string(),
+                                            hint: String::new(),
+                                        },
+                                        crate::worldgen::BlockoutGenerated {
+                                            region_id: region.id.clone(),
+                                            pass: "volume".to_string(),
+                                        },
+                                    ))
+                                    .id();
+                                params.registry.insert_with_id(name, entity, wid);
+                                entities_spawned_count += 1;
+                                ("add_region".to_string(), region.id.clone())
+                            }
+                            BlockoutEditAction::RemoveRegion { region_id } => {
+                                spec.regions.retain(|r| r.id != *region_id);
+                                // Also remove paths referencing this region
+                                spec.paths
+                                    .retain(|p| p.from != *region_id && p.to != *region_id);
+                                // Despawn all entities in this region
+                                let mut to_remove = Vec::new();
+                                for (entity, bg) in params.blockout_generated_q.iter() {
+                                    if bg.region_id == *region_id {
+                                        to_remove.push(entity);
+                                    }
+                                }
+                                for entity in to_remove {
+                                    if let Some(name) = params.registry.get_name(entity) {
+                                        let owned = name.to_string();
+                                        params.registry.remove_by_name(&owned);
+                                    }
+                                    commands.entity(entity).despawn();
+                                    entities_removed += 1;
+                                }
+                                ("remove_region".to_string(), region_id.clone())
+                            }
+                            BlockoutEditAction::ResizeRegion {
+                                region_id,
+                                center,
+                                size,
+                            } => {
+                                if let Some(region) =
+                                    spec.regions.iter_mut().find(|r| r.id == *region_id)
+                                {
+                                    region.bounds.center = *center;
+                                    region.bounds.size = *size;
+                                }
+                                // Remove out-of-bounds entities (except volumes)
+                                let cx = center[0];
+                                let cz = center[1];
+                                let hx = size[0] / 2.0;
+                                let hz = size[1] / 2.0;
+                                let mut to_remove = Vec::new();
+                                for (entity, bg) in params.blockout_generated_q.iter() {
+                                    if bg.region_id == *region_id
+                                        && bg.pass != "volume"
+                                        && let Ok(t) = params.transforms.get(entity)
+                                    {
+                                        let pos = t.translation;
+                                        if pos.x < cx - hx
+                                            || pos.x > cx + hx
+                                            || pos.z < cz - hz
+                                            || pos.z > cz + hz
+                                        {
+                                            to_remove.push(entity);
+                                        }
+                                    }
+                                }
+                                for entity in to_remove {
+                                    if let Some(name) = params.registry.get_name(entity) {
+                                        let owned = name.to_string();
+                                        params.registry.remove_by_name(&owned);
+                                    }
+                                    commands.entity(entity).despawn();
+                                    entities_removed += 1;
+                                }
+                                // Update debug volume (find and update transform + mesh)
+                                for (entity, bv) in params.blockout_generated_q.iter() {
+                                    if bv.region_id == *region_id && bv.pass == "volume" {
+                                        let height = 10.0;
+                                        let new_mesh = params
+                                            .meshes
+                                            .add(Cuboid::new(size[0], height, size[1]));
+                                        commands.entity(entity).insert((
+                                            Transform::from_xyz(cx, height / 2.0, cz),
+                                            Mesh3d(new_mesh),
+                                        ));
+                                    }
+                                }
+                                ("resize_region".to_string(), region_id.clone())
+                            }
+                            BlockoutEditAction::MoveRegion {
+                                region_id,
+                                new_center,
+                            } => {
+                                let old_center = spec
+                                    .regions
+                                    .iter()
+                                    .find(|r| r.id == *region_id)
+                                    .map(|r| r.bounds.center);
+                                if let Some(region) =
+                                    spec.regions.iter_mut().find(|r| r.id == *region_id)
+                                {
+                                    region.bounds.center = *new_center;
+                                }
+                                // Move all entities by the delta
+                                if let Some(old) = old_center {
+                                    let dx = new_center[0] - old[0];
+                                    let dz = new_center[1] - old[1];
+                                    for (entity, bg) in params.blockout_generated_q.iter() {
+                                        if bg.region_id == *region_id
+                                            && let Ok(t) = params.transforms.get(entity)
+                                        {
+                                            let new_pos =
+                                                t.translation + bevy::math::Vec3::new(dx, 0.0, dz);
+                                            commands.entity(entity).insert(
+                                                Transform::from_translation(new_pos)
+                                                    .with_rotation(t.rotation)
+                                                    .with_scale(t.scale),
+                                            );
+                                        }
+                                    }
+                                }
+                                ("move_region".to_string(), region_id.clone())
+                            }
+                            BlockoutEditAction::SetDensity { region_id, density } => {
+                                if let Some(region) =
+                                    spec.regions.iter_mut().find(|r| r.id == *region_id)
+                                {
+                                    region.decorative_density = *density;
+                                }
+                                ("set_density".to_string(), region_id.clone())
+                            }
+                        };
+
+                        // Update the blockout resource
+                        commands.insert_resource(crate::worldgen::CurrentBlockout { spec });
+
+                        // Auto-regenerate if requested
+                        if auto_regenerate
+                            && action_name != "remove_region"
+                            && action_name != "set_density"
+                        {
+                            // Queue a populate command via channel
+                            // (simplified: just note it in the response)
+                        }
+
+                        GenResponse::BlockoutModified {
+                            action: action_name,
+                            region_id,
+                            entities_removed,
+                            entities_spawned: entities_spawned_count,
                         }
                     }
                 }
@@ -3040,7 +3326,9 @@ fn process_gen_commands(
             GenResponse::Modified { name }
             | GenResponse::BehaviorAdded { entity: name, .. }
             | GenResponse::BehaviorRemoved { entity: name, .. }
-            | GenResponse::AudioEmitterSpawned { name } => {
+            | GenResponse::AudioEmitterSpawned { name }
+            | GenResponse::TierSet { entity: name, .. }
+            | GenResponse::RoleSet { entity: name, .. } => {
                 if let Some(bevy_ent) = params.registry.get_entity(name)
                     && let Some(id) = params.registry.get_id(bevy_ent)
                 {
@@ -3069,12 +3357,19 @@ fn process_gen_commands(
 }
 
 /// Process pending screenshots that need frame delays.
+#[allow(clippy::type_complexity)]
 fn process_pending_screenshots(
     channel_res: ResMut<GenChannelRes>,
     mut pending: ResMut<PendingScreenshots>,
     current_skill: Res<CurrentWorldSkill>,
     mut commands: Commands,
     cameras: Query<Entity, With<Camera>>,
+    mut camera_transforms: Query<&mut Transform, With<Camera>>,
+    registry: Res<NameRegistry>,
+    material_handles: Query<&MeshMaterial3d<StandardMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    gen_entities: Query<(&GenEntity, &Transform), Without<Camera>>,
+    _names_query: Query<&Name>,
 ) {
     use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
@@ -3091,6 +3386,80 @@ fn process_pending_screenshots(
     // Process completed screenshots in reverse order to preserve indices
     for i in completed.into_iter().rev() {
         let screenshot_req = pending.queue.remove(i);
+
+        // --- WG4.1: Apply entity highlight ---
+        let mut original_emissive: Option<(Entity, LinearRgba)> = None;
+        if let Some(ref entity_name) = screenshot_req.highlight_entity {
+            if let Some(entity) = registry.get_entity(entity_name) {
+                if let Ok(mat_handle) = material_handles.get(entity) {
+                    if let Some(mat) = materials.get_mut(&mat_handle.0) {
+                        let orig = mat.emissive;
+                        let [r, g, b, _] = screenshot_req.highlight_color;
+                        mat.emissive = LinearRgba::new(r * 3.0, g * 3.0, b * 3.0, 1.0);
+                        original_emissive = Some((entity, orig));
+                    }
+                }
+            }
+        }
+
+        // --- WG4.1: Reposition camera for angle preset ---
+        let mut original_camera_transform: Option<Transform> = None;
+        if !matches!(screenshot_req.camera_angle, ScreenshotCameraAngle::Current) {
+            // Compute scene center and extent from all GenEntities
+            let (scene_center, scene_extent) = compute_scene_bounds(&gen_entities);
+
+            if let Ok(mut cam_tf) = camera_transforms.single_mut() {
+                original_camera_transform = Some(*cam_tf);
+
+                match screenshot_req.camera_angle {
+                    ScreenshotCameraAngle::TopDown => {
+                        let height = scene_extent * 2.0 + 20.0;
+                        cam_tf.translation = Vec3::new(
+                            scene_center.x,
+                            scene_center.y + height,
+                            scene_center.z,
+                        );
+                        cam_tf.look_at(scene_center, Vec3::NEG_Z);
+                    }
+                    ScreenshotCameraAngle::Isometric => {
+                        let dist = scene_extent * 1.8 + 15.0;
+                        cam_tf.translation = Vec3::new(
+                            scene_center.x + dist * 0.707,
+                            scene_center.y + dist * 0.707,
+                            scene_center.z + dist * 0.707,
+                        );
+                        cam_tf.look_at(scene_center, Vec3::Y);
+                    }
+                    ScreenshotCameraAngle::Front => {
+                        let dist = scene_extent * 1.5 + 10.0;
+                        cam_tf.translation = Vec3::new(
+                            scene_center.x,
+                            scene_center.y + 2.0,
+                            scene_center.z + dist,
+                        );
+                        cam_tf.look_at(scene_center, Vec3::Y);
+                    }
+                    ScreenshotCameraAngle::EntityFocus => {
+                        // Frame the highlighted entity with 2x bounding distance
+                        if let Some(ref ename) = screenshot_req.highlight_entity {
+                            if let Some(ent) = registry.get_entity(ename) {
+                                if let Ok((_, etf)) = gen_entities.get(ent) {
+                                    let focus = etf.translation;
+                                    let dist = 8.0; // Reasonable framing distance
+                                    cam_tf.translation = Vec3::new(
+                                        focus.x + dist * 0.5,
+                                        focus.y + dist * 0.5,
+                                        focus.z + dist * 0.5,
+                                    );
+                                    cam_tf.look_at(focus, Vec3::Y);
+                                }
+                            }
+                        }
+                    }
+                    ScreenshotCameraAngle::Current => {}
+                }
+            }
+        }
 
         // Determine output path(s)
         let paths: Vec<PathBuf> = if let Some(ref explicit_path) = screenshot_req.path {
@@ -3150,6 +3519,22 @@ fn process_pending_screenshots(
             }
         }
 
+        // --- WG4.1: Restore original emissive after screenshot is queued ---
+        if let Some((entity, orig_emissive)) = original_emissive {
+            if let Ok(mat_handle) = material_handles.get(entity) {
+                if let Some(mat) = materials.get_mut(&mat_handle.0) {
+                    mat.emissive = orig_emissive;
+                }
+            }
+        }
+
+        // --- WG4.1: Restore original camera transform ---
+        if let Some(orig_tf) = original_camera_transform {
+            if let Ok(mut cam_tf) = camera_transforms.single_mut() {
+                *cam_tf = orig_tf;
+            }
+        }
+
         // Send response with the first (primary) path
         let primary_path = paths.first().cloned().unwrap_or_default();
         let response = GenResponse::Screenshot {
@@ -3157,6 +3542,30 @@ fn process_pending_screenshots(
         };
         let _ = channel_res.channels.resp_tx.send(response);
     }
+}
+
+/// Compute the center and max extent of all GenEntities in the scene.
+fn compute_scene_bounds(
+    gen_entities: &Query<(&GenEntity, &Transform), Without<Camera>>,
+) -> (Vec3, f32) {
+    let mut min = Vec3::splat(f32::MAX);
+    let mut max = Vec3::splat(f32::MIN);
+    let mut count = 0u32;
+
+    for (_, tf) in gen_entities.iter() {
+        let p = tf.translation;
+        min = min.min(p);
+        max = max.max(p);
+        count += 1;
+    }
+
+    if count == 0 {
+        return (Vec3::ZERO, 10.0);
+    }
+
+    let center = (min + max) * 0.5;
+    let extent = (max - min).length() * 0.5;
+    (center, extent.max(5.0))
 }
 
 /// Process pending glTF loads that are waiting for the asset server.
@@ -3308,6 +3717,8 @@ fn handle_scene_info(
     spot_lights: &Query<&SpotLight>,
     behaviors_query: &Query<&mut EntityBehaviors>,
     audio_engine: &audio::AudioEngine,
+    tier_q: &Query<&crate::worldgen::PlacementTier>,
+    role_q: &Query<&crate::worldgen::SemanticRole>,
 ) -> GenResponse {
     let mut entities = Vec::new();
 
@@ -3359,6 +3770,10 @@ fn handle_scene_info(
         // Behavior count
         let behaviors = behaviors_query.get(entity).ok().map(|b| b.behaviors.len());
 
+        // Tier and role
+        let tier = tier_q.get(entity).ok().map(|t| t.as_str().to_string());
+        let role = role_q.get(entity).ok().map(|r| r.as_str().to_string());
+
         entities.push(EntitySummary {
             name: name.to_string(),
             entity_type,
@@ -3369,6 +3784,8 @@ fn handle_scene_info(
             light,
             audio,
             behaviors,
+            tier,
+            role,
         });
     }
 

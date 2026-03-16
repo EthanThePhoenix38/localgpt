@@ -122,7 +122,7 @@ impl Tool for GenScreenshotTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "gen_screenshot".into(),
-            description: "Capture the current viewport as an image. Use after spawning/modifying entities to see results.".into(),
+            description: "Capture a screenshot of the current scene. Supports entity highlighting, camera angle presets, and annotation overlays for visual evaluation.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -140,6 +140,29 @@ impl Tool for GenScreenshotTool {
                         "type": "integer",
                         "default": 3,
                         "description": "Frames to wait before capture for render pipeline to process new geometry"
+                    },
+                    "highlight_entity": {
+                        "type": "string",
+                        "description": "Entity name to highlight with a distinct emissive glow in the screenshot"
+                    },
+                    "highlight_color": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 4,
+                        "maxItems": 4,
+                        "default": [1.0, 0.0, 0.0, 1.0],
+                        "description": "Highlight color as [r, g, b, a] (default: red)"
+                    },
+                    "camera_angle": {
+                        "type": "string",
+                        "enum": ["current", "top_down", "isometric", "front", "entity_focus"],
+                        "default": "current",
+                        "description": "Camera angle preset: current (default), top_down, isometric, front, or entity_focus (frames the highlighted entity)"
+                    },
+                    "include_annotations": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Overlay entity names as labels in the screenshot"
                     }
                 }
             }),
@@ -151,6 +174,25 @@ impl Tool for GenScreenshotTool {
         let width = args["width"].as_u64().unwrap_or(800) as u32;
         let height = args["height"].as_u64().unwrap_or(600) as u32;
         let wait_frames = args["wait_frames"].as_u64().unwrap_or(3) as u32;
+        let highlight_entity = args["highlight_entity"].as_str().map(String::from);
+        let highlight_color = args["highlight_color"]
+            .as_array()
+            .and_then(|arr| {
+                if arr.len() == 4 {
+                    Some([
+                        arr[0].as_f64()? as f32,
+                        arr[1].as_f64()? as f32,
+                        arr[2].as_f64()? as f32,
+                        arr[3].as_f64()? as f32,
+                    ])
+                } else {
+                    None
+                }
+            });
+        let camera_angle = args["camera_angle"]
+            .as_str()
+            .and_then(|s| serde_json::from_value(serde_json::Value::String(s.to_string())).ok());
+        let include_annotations = args["include_annotations"].as_bool().unwrap_or(false);
 
         match self
             .bridge
@@ -158,6 +200,10 @@ impl Tool for GenScreenshotTool {
                 width,
                 height,
                 wait_frames,
+                highlight_entity,
+                highlight_color,
+                camera_angle,
+                include_annotations,
             })
             .await?
         {

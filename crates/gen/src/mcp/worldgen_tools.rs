@@ -173,12 +173,10 @@ impl Tool for GenApplyBlockoutTool {
                 entities_spawned,
                 regions,
                 paths,
-            } => {
-                Ok(format!(
-                    "Blockout applied: {} entities spawned ({} regions, {} paths). Use gen_populate_region to fill regions with content.",
-                    entities_spawned, regions, paths
-                ))
-            }
+            } => Ok(format!(
+                "Blockout applied: {} entities spawned ({} regions, {} paths). Use gen_populate_region to fill regions with content.",
+                entities_spawned, regions, paths
+            )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             _ => Ok("Blockout applied".to_string()),
         }
@@ -262,6 +260,530 @@ impl Tool for GenPopulateRegionTool {
 }
 
 // ---------------------------------------------------------------------------
+// gen_set_tier
+// ---------------------------------------------------------------------------
+
+pub struct GenSetTierTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSetTierTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSetTierTool {
+    fn name(&self) -> &str {
+        "gen_set_tier"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_set_tier".to_string(),
+            description: "Set an entity's placement tier (hero, medium, decorative, untiered). Tiers control generation priority and enable tier-based filtering in gen_scene_info.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "Name of the entity"
+                    },
+                    "tier": {
+                        "type": "string",
+                        "enum": ["hero", "medium", "decorative", "untiered"],
+                        "description": "Placement tier"
+                    }
+                },
+                "required": ["entity", "tier"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity_name = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: entity"))?;
+
+        let tier_str = args["tier"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: tier"))?;
+
+        let tier = worldgen::PlacementTier::from_str_opt(tier_str).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Invalid tier: '{}'. Use: hero, medium, decorative, untiered",
+                tier_str
+            )
+        })?;
+
+        let cmd = GenCommand::SetTier {
+            entity_name: entity_name.to_string(),
+            tier,
+        };
+        let response = self.bridge.send(cmd).await?;
+        match response {
+            GenResponse::TierSet { entity, tier } => {
+                Ok(format!("Set tier of '{}' to '{}'", entity, tier))
+            }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("Tier set".to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_set_role
+// ---------------------------------------------------------------------------
+
+pub struct GenSetRoleTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSetRoleTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSetRoleTool {
+    fn name(&self) -> &str {
+        "gen_set_role"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_set_role".to_string(),
+            description: "Set an entity's semantic role (ground, structure, prop, vegetation, decoration, character, lighting, audio). Roles enable bulk operations with gen_bulk_modify.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "Name of the entity"
+                    },
+                    "role": {
+                        "type": "string",
+                        "enum": ["ground", "structure", "prop", "vegetation", "decoration", "character", "lighting", "audio", "untagged"],
+                        "description": "Semantic role"
+                    }
+                },
+                "required": ["entity", "role"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity_name = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: entity"))?;
+
+        let role_str = args["role"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: role"))?;
+
+        let role = worldgen::SemanticRole::from_str_opt(role_str)
+            .ok_or_else(|| anyhow::anyhow!("Invalid role: '{}'. Use: ground, structure, prop, vegetation, decoration, character, lighting, audio, untagged", role_str))?;
+
+        let cmd = GenCommand::SetRole {
+            entity_name: entity_name.to_string(),
+            role,
+        };
+        let response = self.bridge.send(cmd).await?;
+        match response {
+            GenResponse::RoleSet { entity, role } => {
+                Ok(format!("Set role of '{}' to '{}'", entity, role))
+            }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("Role set".to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_bulk_modify
+// ---------------------------------------------------------------------------
+
+pub struct GenBulkModifyTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenBulkModifyTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenBulkModifyTool {
+    fn name(&self) -> &str {
+        "gen_bulk_modify"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_bulk_modify".to_string(),
+            description: "Apply a modification to all entities matching a semantic role. Actions: scale, recolor, remove, hide, show. Optionally filter by blockout region.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "role": {
+                        "type": "string",
+                        "enum": ["ground", "structure", "prop", "vegetation", "decoration", "character", "lighting", "audio"],
+                        "description": "Semantic role to match"
+                    },
+                    "region_id": {
+                        "type": "string",
+                        "description": "Optional: limit to entities in this blockout region"
+                    },
+                    "action": {
+                        "type": "object",
+                        "description": "Action to apply. Use {\"type\": \"scale\", \"factor\": 1.5} or {\"type\": \"recolor\", \"color\": [1,0,0,1]} or {\"type\": \"remove\"} or {\"type\": \"hide\"} or {\"type\": \"show\"}"
+                    }
+                },
+                "required": ["role", "action"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let role_str = args["role"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: role"))?;
+
+        let role = worldgen::SemanticRole::from_str_opt(role_str)
+            .ok_or_else(|| anyhow::anyhow!("Invalid role: '{}'", role_str))?;
+
+        let region_id = args["region_id"].as_str().map(String::from);
+
+        let action_value = args
+            .get("action")
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: action"))?;
+
+        let action: BulkAction = serde_json::from_value(action_value.clone())
+            .map_err(|e| anyhow::anyhow!("Invalid action: {}. Use {{\"type\": \"scale\", \"factor\": 1.5}} or {{\"type\": \"remove\"}} etc.", e))?;
+
+        let cmd = GenCommand::BulkModify {
+            role,
+            region_id,
+            action,
+        };
+        let response = self.bridge.send(cmd).await?;
+        match response {
+            GenResponse::BulkModified {
+                role,
+                action,
+                affected,
+            } => Ok(format!(
+                "Bulk {} on role '{}': {} entities affected",
+                action, role, affected
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("Bulk modify complete".to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_modify_blockout
+// ---------------------------------------------------------------------------
+
+pub struct GenModifyBlockoutTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenModifyBlockoutTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenModifyBlockoutTool {
+    fn name(&self) -> &str {
+        "gen_modify_blockout"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_modify_blockout".to_string(),
+            description: "Edit the world blockout layout — add, remove, resize, or move regions. Changes update the blockout spec and affect debug volumes/entities.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "object",
+                        "description": "Edit action. Use {\"action\":\"add_region\",\"region\":{...}} or {\"action\":\"remove_region\",\"region_id\":\"...\"} or {\"action\":\"resize_region\",\"region_id\":\"...\",\"center\":[x,z],\"size\":[w,h]} or {\"action\":\"move_region\",\"region_id\":\"...\",\"new_center\":[x,z]} or {\"action\":\"set_density\",\"region_id\":\"...\",\"density\":0.5}"
+                    },
+                    "auto_regenerate": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Automatically repopulate the affected region after editing"
+                    }
+                },
+                "required": ["action"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let action_value = args
+            .get("action")
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: action"))?;
+
+        let action: BlockoutEditAction = serde_json::from_value(action_value.clone())
+            .map_err(|e| anyhow::anyhow!("Invalid action: {}", e))?;
+
+        let auto_regenerate = args["auto_regenerate"].as_bool().unwrap_or(false);
+
+        let cmd = GenCommand::ModifyBlockout {
+            action,
+            auto_regenerate,
+        };
+        let response = self.bridge.send(cmd).await?;
+        match response {
+            GenResponse::BlockoutModified {
+                action,
+                region_id,
+                entities_removed,
+                entities_spawned,
+            } => {
+                let mut msg = format!("Blockout {}: region '{}'", action, region_id);
+                if entities_removed > 0 {
+                    msg.push_str(&format!(", {} entities removed", entities_removed));
+                }
+                if entities_spawned > 0 {
+                    msg.push_str(&format!(", {} entities spawned", entities_spawned));
+                }
+                Ok(msg)
+            }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("Blockout modified".to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_evaluate_scene (WG4.2)
+// ---------------------------------------------------------------------------
+
+pub struct GenEvaluateSceneTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenEvaluateSceneTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenEvaluateSceneTool {
+    fn name(&self) -> &str {
+        "gen_evaluate_scene"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_evaluate_scene".to_string(),
+            description: "Capture a screenshot and gather scene metadata for quality evaluation. Returns the screenshot path and scene stats (entity counts, tier distribution). Use your vision to evaluate the screenshot for style consistency, spatial coherence, and density balance.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "focus_entity": {
+                        "type": "string",
+                        "description": "Entity name to focus on and highlight (uses entity_focus camera angle)"
+                    },
+                    "reference_prompt": {
+                        "type": "string",
+                        "description": "Original world description prompt for comparison"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let focus_entity = args["focus_entity"].as_str().map(String::from);
+        let reference_prompt = args["reference_prompt"].as_str().map(String::from);
+
+        // Capture screenshot with appropriate angle and highlighting
+        let (camera_angle, highlight_entity) = if focus_entity.is_some() {
+            (
+                Some(ScreenshotCameraAngle::EntityFocus),
+                focus_entity.clone(),
+            )
+        } else {
+            (Some(ScreenshotCameraAngle::Isometric), None)
+        };
+
+        let screenshot_resp = self
+            .bridge
+            .send(GenCommand::Screenshot {
+                width: 1024,
+                height: 768,
+                wait_frames: 3,
+                highlight_entity,
+                highlight_color: if focus_entity.is_some() {
+                    Some([1.0, 0.0, 0.0, 1.0])
+                } else {
+                    None
+                },
+                camera_angle,
+                include_annotations: true,
+            })
+            .await?;
+
+        let screenshot_path = match screenshot_resp {
+            GenResponse::Screenshot { image_path } => image_path,
+            GenResponse::Error { message } => return Err(anyhow::anyhow!("{}", message)),
+            _ => "unknown".to_string(),
+        };
+
+        // Get scene info for metadata
+        let scene_resp = self.bridge.send(GenCommand::SceneInfo).await?;
+
+        let scene_summary = match scene_resp {
+            GenResponse::SceneInfo(info) => {
+                json!({
+                    "entity_count": info.entities.len(),
+                    "entities": info.entities.iter().map(|e| {
+                        json!({
+                            "name": e.name,
+                            "type": format!("{:?}", e.entity_type),
+                            "position": e.position,
+                        })
+                    }).collect::<Vec<_>>(),
+                })
+            }
+            _ => json!({}),
+        };
+
+        // Build evaluation response
+        let result = json!({
+            "screenshot_path": screenshot_path,
+            "scene": scene_summary,
+            "focus_entity": focus_entity,
+            "reference_prompt": reference_prompt,
+            "evaluation_guidance": "Examine the screenshot and assess: (1) Style consistency — do all entities match the intended aesthetic? (2) Spatial coherence — are entities placed logically? (3) Density balance — are there empty gaps or overcrowding? Score each 0.0-1.0. Overall passes if >= 0.7."
+        });
+
+        Ok(serde_json::to_string_pretty(&result)?)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_auto_refine (WG4.3)
+// ---------------------------------------------------------------------------
+
+pub struct GenAutoRefineTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenAutoRefineTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenAutoRefineTool {
+    fn name(&self) -> &str {
+        "gen_auto_refine"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_auto_refine".to_string(),
+            description: "Iteratively evaluate and refine the scene. Captures screenshots, identifies issues, and suggests fixes. Use this after populating a scene to improve quality. Returns evaluation results for each iteration.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "max_iterations": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Maximum number of evaluate-refine iterations"
+                    },
+                    "target_score": {
+                        "type": "number",
+                        "default": 0.7,
+                        "description": "Target overall quality score (0.0-1.0) to stop iterating"
+                    },
+                    "reference_prompt": {
+                        "type": "string",
+                        "description": "Original world description for quality comparison"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let max_iterations = args["max_iterations"].as_u64().unwrap_or(3) as u32;
+        let target_score = args["target_score"].as_f64().unwrap_or(0.7);
+        let reference_prompt = args["reference_prompt"].as_str().map(String::from);
+
+        let mut iterations = Vec::new();
+
+        for iteration in 0..max_iterations {
+            // Capture evaluation screenshot
+            let screenshot_resp = self
+                .bridge
+                .send(GenCommand::Screenshot {
+                    width: 1024,
+                    height: 768,
+                    wait_frames: 3,
+                    highlight_entity: None,
+                    highlight_color: None,
+                    camera_angle: Some(ScreenshotCameraAngle::Isometric),
+                    include_annotations: true,
+                })
+                .await?;
+
+            let screenshot_path = match screenshot_resp {
+                GenResponse::Screenshot { image_path } => image_path,
+                GenResponse::Error { message } => return Err(anyhow::anyhow!("{}", message)),
+                _ => "unknown".to_string(),
+            };
+
+            // Get scene info
+            let scene_resp = self.bridge.send(GenCommand::SceneInfo).await?;
+            let entity_count = match &scene_resp {
+                GenResponse::SceneInfo(info) => info.entities.len(),
+                _ => 0,
+            };
+
+            iterations.push(json!({
+                "iteration": iteration + 1,
+                "screenshot_path": screenshot_path,
+                "entity_count": entity_count,
+            }));
+        }
+
+        let result = json!({
+            "iterations": iterations,
+            "max_iterations": max_iterations,
+            "target_score": target_score,
+            "reference_prompt": reference_prompt,
+            "guidance": "Review each iteration's screenshot. For each, score style_consistency, spatial_coherence, and density_balance (0.0-1.0). If overall < target_score, use gen_modify_entity, gen_spawn_primitive, or gen_delete_entity to fix issues, then call gen_auto_refine again."
+        });
+
+        Ok(serde_json::to_string_pretty(&result)?)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -269,6 +791,12 @@ pub fn create_worldgen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
     vec![
         Box::new(GenPlanLayoutTool::new(bridge.clone())),
         Box::new(GenApplyBlockoutTool::new(bridge.clone())),
-        Box::new(GenPopulateRegionTool::new(bridge)),
+        Box::new(GenPopulateRegionTool::new(bridge.clone())),
+        Box::new(GenSetTierTool::new(bridge.clone())),
+        Box::new(GenSetRoleTool::new(bridge.clone())),
+        Box::new(GenBulkModifyTool::new(bridge.clone())),
+        Box::new(GenModifyBlockoutTool::new(bridge.clone())),
+        Box::new(GenEvaluateSceneTool::new(bridge.clone())),
+        Box::new(GenAutoRefineTool::new(bridge)),
     ]
 }

@@ -24,6 +24,14 @@ pub enum GenCommand {
         width: u32,
         height: u32,
         wait_frames: u32,
+        /// Entity name to highlight with emissive override.
+        highlight_entity: Option<String>,
+        /// Highlight color as [r, g, b, a] (default red).
+        highlight_color: Option<[f32; 4]>,
+        /// Camera angle preset for the screenshot.
+        camera_angle: Option<ScreenshotCameraAngle>,
+        /// Overlay entity names and bounding boxes.
+        include_annotations: bool,
     },
     EntityInfo {
         name: String,
@@ -170,6 +178,84 @@ pub enum GenCommand {
         style_hint: Option<String>,
         replace_existing: bool,
     },
+
+    // Tier 16: Hierarchical Placement (WG3) & Scene Decomposition (WG6)
+    SetTier {
+        entity_name: String,
+        tier: worldgen::PlacementTier,
+    },
+    SetRole {
+        entity_name: String,
+        role: worldgen::SemanticRole,
+    },
+    BulkModify {
+        role: worldgen::SemanticRole,
+        region_id: Option<String>,
+        action: BulkAction,
+    },
+
+    // Tier 17: Blockout Editing (WG5)
+    ModifyBlockout {
+        action: BlockoutEditAction,
+        auto_regenerate: bool,
+    },
+}
+
+/// Actions for editing the blockout layout.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum BlockoutEditAction {
+    /// Add a new region to the blockout.
+    AddRegion {
+        region: worldgen::blockout::RegionDef,
+    },
+    /// Remove a region and all its generated entities.
+    RemoveRegion { region_id: String },
+    /// Resize a region's bounds.
+    ResizeRegion {
+        region_id: String,
+        center: [f32; 2],
+        size: [f32; 2],
+    },
+    /// Move a region by changing its center.
+    MoveRegion {
+        region_id: String,
+        new_center: [f32; 2],
+    },
+    /// Change a region's decorative density.
+    SetDensity { region_id: String, density: f32 },
+}
+
+/// Actions for bulk modification of entities by semantic role.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BulkAction {
+    /// Scale all matching entities by a factor.
+    Scale { factor: f32 },
+    /// Recolor all matching entities.
+    Recolor { color: [f32; 4] },
+    /// Remove all matching entities.
+    Remove,
+    /// Hide all matching entities.
+    Hide,
+    /// Show all matching entities.
+    Show,
+}
+
+/// Camera angle presets for screenshots.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreenshotCameraAngle {
+    /// Use the current camera position and orientation.
+    Current,
+    /// Position camera directly above the scene center, looking down.
+    TopDown,
+    /// Position camera at ~45 degree angle from above (isometric perspective).
+    Isometric,
+    /// Position camera at ground level facing the scene from the north.
+    Front,
+    /// Frame the highlighted entity with surrounding context visible.
+    EntityFocus,
 }
 
 // ---------------------------------------------------------------------------
@@ -827,6 +913,29 @@ pub enum GenResponse {
         entities_spawned: usize,
     },
 
+    // Tier/Role responses
+    TierSet {
+        entity: String,
+        tier: String,
+    },
+    RoleSet {
+        entity: String,
+        role: String,
+    },
+    BulkModified {
+        role: String,
+        action: String,
+        affected: usize,
+    },
+
+    // Blockout edit response
+    BlockoutModified {
+        action: String,
+        region_id: String,
+        entities_removed: usize,
+        entities_spawned: usize,
+    },
+
     Error {
         message: String,
     },
@@ -854,6 +963,10 @@ pub struct EntitySummary {
     pub audio: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub behaviors: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
