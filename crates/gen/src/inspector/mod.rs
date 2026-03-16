@@ -309,6 +309,11 @@ fn ws_bridge_system(
                         outliner_cache.pending_focus = Some(entity);
                     }
                 }
+                protocol::ClientMessage::RequestSceneSnapshot => {
+                    // TODO: integrate with gltf_export pipeline to generate GLB
+                    // and send as binary WebSocket frame
+                    warn!("Scene snapshot export not yet implemented");
+                }
                 protocol::ClientMessage::Subscribe { .. } => {
                     // Handled in ws_server connection handler
                 }

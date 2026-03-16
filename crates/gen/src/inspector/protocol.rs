@@ -28,6 +28,9 @@ pub enum ClientMessage {
     ToggleVisibility { entity_id: u64 },
     /// Focus the Bevy camera on an entity.
     FocusEntity { entity_id: u64 },
+    /// Request a GLB binary snapshot of the full scene.
+    /// Server responds with a binary WebSocket frame containing GLB data.
+    RequestSceneSnapshot,
 }
 
 // ---------------------------------------------------------------------------
