@@ -101,6 +101,8 @@ pub struct InspectorQueries<'w, 's> {
     pub behavior_state: Res<'w, BehaviorState>,
     pub audio_engine: Option<Res<'w, AudioEngine>>,
     pub current_world: Res<'w, CurrentWorld>,
+    pub mesh_handles: Query<'w, 's, &'static Mesh3d>,
+    pub mesh_assets: Res<'w, Assets<Mesh>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -310,9 +312,23 @@ fn ws_bridge_system(
                     }
                 }
                 protocol::ClientMessage::RequestSceneSnapshot => {
-                    // TODO: integrate with gltf_export pipeline to generate GLB
-                    // and send as binary WebSocket frame
-                    warn!("Scene snapshot export not yet implemented");
+                    match crate::gen3d::gltf_export::build_glb_bytes(
+                        &registry,
+                        &params.transforms,
+                        &params.gen_entities,
+                        &params.parent_q,
+                        &params.material_handles,
+                        params.materials.as_ref(),
+                        &params.mesh_handles,
+                        params.mesh_assets.as_ref(),
+                    ) {
+                        Ok(glb_bytes) => {
+                            bridge.send_binary(glb_bytes);
+                        }
+                        Err(e) => {
+                            warn!("Scene snapshot export failed: {}", e);
+                        }
+                    }
                 }
                 protocol::ClientMessage::Subscribe { .. } => {
                     // Handled in ws_server connection handler

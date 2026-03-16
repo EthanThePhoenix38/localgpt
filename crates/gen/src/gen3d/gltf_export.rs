@@ -407,11 +407,9 @@ fn build_gltf_data(
     (root, bin_data, entity_to_node)
 }
 
-/// Export all mesh entities from the scene to a GLB file at the given path.
-/// Returns Ok(()) on success, Err(message) on failure.
+/// Build GLB binary data in memory (no file I/O).
 #[allow(clippy::too_many_arguments)]
-pub fn export_glb(
-    output_path: &Path,
+pub fn build_glb_bytes(
     registry: &NameRegistry,
     transforms: &Query<&Transform>,
     gen_entities: &Query<&GenEntity>,
@@ -420,7 +418,7 @@ pub fn export_glb(
     material_assets: &Assets<StandardMaterial>,
     mesh_handles: &Query<&Mesh3d>,
     mesh_assets: &Assets<Mesh>,
-) -> Result<(), String> {
+) -> Result<Vec<u8>, String> {
     use gltf_json::validation::USize64;
 
     let (mut root, mut bin_data, _) = build_gltf_data(
@@ -444,7 +442,6 @@ pub fn export_glb(
         });
     }
 
-    // Serialize to GLB
     let json_string = serde_json::to_string(&root).map_err(|e| format!("JSON error: {}", e))?;
     let mut json_bytes = json_string.into_bytes();
     while !json_bytes.len().is_multiple_of(4) {
@@ -457,22 +454,44 @@ pub fn export_glb(
     let total_length = 12 + 8 + json_bytes.len() + 8 + bin_data.len();
     let mut glb = Vec::with_capacity(total_length);
 
-    // Header
     glb.extend_from_slice(b"glTF");
     glb.extend_from_slice(&2u32.to_le_bytes());
     glb.extend_from_slice(&(total_length as u32).to_le_bytes());
 
-    // JSON chunk
     glb.extend_from_slice(&(json_bytes.len() as u32).to_le_bytes());
     glb.extend_from_slice(&0x4E4F534Au32.to_le_bytes());
     glb.extend_from_slice(&json_bytes);
 
-    // BIN chunk
     glb.extend_from_slice(&(bin_data.len() as u32).to_le_bytes());
     glb.extend_from_slice(&0x004E4942u32.to_le_bytes());
     glb.extend_from_slice(&bin_data);
 
-    // Ensure parent directory exists
+    Ok(glb)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn export_glb(
+    output_path: &Path,
+    registry: &NameRegistry,
+    transforms: &Query<&Transform>,
+    gen_entities: &Query<&GenEntity>,
+    parent_query: &Query<&ChildOf>,
+    material_handles: &Query<&MeshMaterial3d<StandardMaterial>>,
+    material_assets: &Assets<StandardMaterial>,
+    mesh_handles: &Query<&Mesh3d>,
+    mesh_assets: &Assets<Mesh>,
+) -> Result<(), String> {
+    let glb = build_glb_bytes(
+        registry,
+        transforms,
+        gen_entities,
+        parent_query,
+        material_handles,
+        material_assets,
+        mesh_handles,
+        mesh_assets,
+    )?;
+
     if let Some(parent) = output_path.parent()
         && !parent.exists()
     {

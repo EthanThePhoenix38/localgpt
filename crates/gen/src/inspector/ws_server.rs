@@ -38,17 +38,33 @@ pub struct InspectorWsBridge {
     pub tx: BevyToWsTx,
     /// Receive client messages from remote inspector clients.
     pub rx: Arc<Mutex<WsToBevyRx>>,
+    /// Send raw binary data (e.g. GLB snapshots) to all connected clients.
+    binary_tx: mpsc::UnboundedSender<Vec<u8>>,
+}
+
+impl InspectorWsBridge {
+    /// Send binary data (GLB scene snapshot) to all connected clients.
+    pub fn send_binary(&self, data: Vec<u8>) {
+        let _ = self.binary_tx.send(data);
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Server state
 // ---------------------------------------------------------------------------
 
+/// Payload that can be broadcast to clients.
+#[derive(Clone)]
+enum BroadcastPayload {
+    Text(String),
+    Binary(Vec<u8>),
+}
+
 /// Shared state for the Axum WebSocket server.
 #[derive(Clone)]
 struct ServerState {
     /// Broadcast channel for server → client messages.
-    broadcast_tx: broadcast::Sender<String>,
+    broadcast_tx: broadcast::Sender<BroadcastPayload>,
     /// Channel for client → Bevy messages.
     client_to_bevy: WsToBevyTx,
 }
@@ -64,10 +80,12 @@ const DEFAULT_PORT: u16 = 9877;
 pub fn start_ws_server(app: &mut App) {
     let (bevy_to_ws_tx, mut bevy_to_ws_rx) = mpsc::unbounded_channel::<ServerMessage>();
     let (ws_to_bevy_tx, ws_to_bevy_rx) = mpsc::unbounded_channel::<ClientMessage>();
+    let (binary_tx, mut binary_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
     // Broadcast channel for fan-out to all connected clients
-    let (broadcast_tx, _) = broadcast::channel::<String>(256);
+    let (broadcast_tx, _) = broadcast::channel::<BroadcastPayload>(256);
     let broadcast_tx_clone = broadcast_tx.clone();
+    let broadcast_tx_binary = broadcast_tx.clone();
 
     let state = ServerState {
         broadcast_tx: broadcast_tx.clone(),
@@ -83,13 +101,20 @@ pub fn start_ws_server(app: &mut App) {
             .expect("Failed to create tokio runtime for inspector WS");
 
         rt.block_on(async move {
-            // Bridge: forward bevy_to_ws messages to broadcast channel
+            // Bridge: forward bevy_to_ws JSON messages to broadcast channel
             let bridge_broadcast_tx = broadcast_tx_clone;
             tokio::spawn(async move {
                 while let Some(msg) = bevy_to_ws_rx.recv().await {
                     if let Ok(json) = serde_json::to_string(&msg) {
-                        let _ = bridge_broadcast_tx.send(json);
+                        let _ = bridge_broadcast_tx.send(BroadcastPayload::Text(json));
                     }
+                }
+            });
+
+            // Bridge: forward binary data (GLB snapshots) to broadcast channel
+            tokio::spawn(async move {
+                while let Some(data) = binary_rx.recv().await {
+                    let _ = broadcast_tx_binary.send(BroadcastPayload::Binary(data));
                 }
             });
 
@@ -121,6 +146,7 @@ pub fn start_ws_server(app: &mut App) {
     app.insert_resource(InspectorWsBridge {
         tx: bevy_to_ws_tx,
         rx: Arc::new(Mutex::new(ws_to_bevy_rx)),
+        binary_tx,
     });
 }
 
@@ -158,12 +184,20 @@ async fn handle_ws_connection(socket: WebSocket, state: ServerState) {
     let sender_clone = sender.clone();
     let topics_clone = topics.clone();
     let send_task = tokio::spawn(async move {
-        while let Ok(json) = broadcast_rx.recv().await {
-            // Check topic filter
-            if should_send_to_client(&json, &topics_clone).await
-                && send_text(&sender_clone, &json).await.is_err()
-            {
-                break;
+        while let Ok(payload) = broadcast_rx.recv().await {
+            match payload {
+                BroadcastPayload::Text(json) => {
+                    if should_send_to_client(&json, &topics_clone).await
+                        && send_text(&sender_clone, &json).await.is_err()
+                    {
+                        break;
+                    }
+                }
+                BroadcastPayload::Binary(data) => {
+                    if send_binary(&sender_clone, data).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
     });
@@ -223,6 +257,16 @@ async fn send_text(
 ) -> Result<(), axum::Error> {
     let mut s = sender.lock().await;
     s.send(Message::text(text))
+        .await
+        .map_err(|_| axum::Error::new("send failed"))
+}
+
+async fn send_binary(
+    sender: &Arc<Mutex<SplitSink<WebSocket, Message>>>,
+    data: Vec<u8>,
+) -> Result<(), axum::Error> {
+    let mut s = sender.lock().await;
+    s.send(Message::binary(data))
         .await
         .map_err(|_| axum::Error::new("send failed"))
 }
