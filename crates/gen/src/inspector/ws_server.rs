@@ -101,11 +101,20 @@ pub fn start_ws_server(app: &mut App) {
             let addr = SocketAddr::from(([0, 0, 0, 0], DEFAULT_PORT));
             info!("Inspector WebSocket server listening on ws://{}/ws", addr);
 
-            let listener = tokio::net::TcpListener::bind(addr)
-                .await
-                .expect("Failed to bind inspector WS port");
+            let listener = match tokio::net::TcpListener::bind(addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    warn!(
+                        "Inspector WS server failed to bind port {}: {}",
+                        DEFAULT_PORT, e
+                    );
+                    return;
+                }
+            };
 
-            axum::serve(listener, router).await.unwrap();
+            if let Err(e) = axum::serve(listener, router).await {
+                warn!("Inspector WS server error: {}", e);
+            }
         });
     });
 
@@ -134,6 +143,10 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<ServerState>) -> i
 async fn handle_ws_connection(socket: WebSocket, state: ServerState) {
     let (sender, mut receiver) = socket.split();
     let sender = Arc::new(Mutex::new(sender));
+
+    // Auto-request scene tree + world info so the client gets initial state
+    let _ = state.client_to_bevy.send(ClientMessage::RequestSceneTree);
+    let _ = state.client_to_bevy.send(ClientMessage::RequestWorldInfo);
 
     // Subscribe to broadcast channel for server→client messages
     let mut broadcast_rx = state.broadcast_tx.subscribe();

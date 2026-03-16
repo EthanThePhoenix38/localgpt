@@ -30,6 +30,8 @@ pub struct OutlinerCache {
     pub collapsed: HashSet<Entity>,
     /// Entities whose visibility should be toggled (processed by inspector_ui).
     pub pending_visibility_toggles: Vec<Entity>,
+    /// Entity to focus the camera on (set by double-click, processed by inspector_ui).
+    pub pending_focus: Option<Entity>,
     pub(super) last_entity_count: usize,
 }
 
@@ -40,6 +42,7 @@ impl Default for OutlinerCache {
             search_text: String::new(),
             collapsed: HashSet::new(),
             pending_visibility_toggles: Vec::new(),
+            pending_focus: None,
             last_entity_count: usize::MAX, // Force rebuild on first frame
         }
     }
@@ -277,7 +280,11 @@ pub fn draw_outliner(
                             };
 
                             let response = ui.selectable_label(is_selected, label);
-                            if response.clicked() {
+                            if response.double_clicked() {
+                                // Double-click: select + focus camera
+                                selection.entity = Some(node.entity);
+                                cache.pending_focus = Some(node.entity);
+                            } else if response.clicked() {
                                 selection.entity = Some(node.entity);
                             }
 

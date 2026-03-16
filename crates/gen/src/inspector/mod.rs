@@ -53,6 +53,32 @@ pub struct InspectorSelection {
 #[derive(Resource)]
 pub struct UiHovered;
 
+/// When set, the camera system should fly to focus on this entity's position.
+#[derive(Resource, Default)]
+pub struct PendingFocusEntity {
+    pub target: Option<Entity>,
+}
+
+/// Tracks last known registry count and selected entity transform for change detection.
+#[derive(Resource)]
+pub struct WsBridgeState {
+    last_registry_count: usize,
+    last_transform_push: f64,
+    last_transform_pos: Option<[f32; 3]>,
+    last_transform_rot: Option<[f32; 3]>,
+}
+
+impl Default for WsBridgeState {
+    fn default() -> Self {
+        Self {
+            last_registry_count: usize::MAX,
+            last_transform_push: 0.0,
+            last_transform_pos: None,
+            last_transform_rot: None,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SystemParam for component queries
 // ---------------------------------------------------------------------------
@@ -92,6 +118,8 @@ impl Plugin for InspectorPlugin {
             .init_resource::<InspectorState>()
             .init_resource::<InspectorSelection>()
             .init_resource::<outliner::OutlinerCache>()
+            .init_resource::<WsBridgeState>()
+            .init_resource::<PendingFocusEntity>()
             .add_systems(
                 Update,
                 (
@@ -99,6 +127,7 @@ impl Plugin for InspectorPlugin {
                     inspector_ui,
                     selection::highlight_selected,
                     ws_bridge_system,
+                    focus_camera_system,
                 )
                     .chain(),
             )
@@ -116,14 +145,26 @@ pub fn not_ui_hovered(hovered: Option<Res<UiHovered>>) -> bool {
 // Systems
 // ---------------------------------------------------------------------------
 
-/// F1 cycles through inspector modes.
-fn inspector_toggle(keys: Res<ButtonInput<KeyCode>>, mut state: ResMut<InspectorState>) {
+/// F1 cycles through inspector modes. Escape deselects the current entity.
+fn inspector_toggle(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut state: ResMut<InspectorState>,
+    mut selection: ResMut<InspectorSelection>,
+) {
     if keys.just_pressed(KeyCode::F1) {
         state.mode = match state.mode {
             InspectorMode::Hidden => InspectorMode::OutlinerOnly,
             InspectorMode::OutlinerOnly => InspectorMode::Full,
             InspectorMode::Full => InspectorMode::Hidden,
         };
+    }
+
+    // Escape clears selection (only when inspector is visible)
+    if keys.just_pressed(KeyCode::Escape)
+        && state.mode != InspectorMode::Hidden
+        && selection.entity.is_some()
+    {
+        selection.entity = None;
     }
 }
 
@@ -192,6 +233,13 @@ fn inspector_ui(
         outliner_cache.last_entity_count = usize::MAX;
     }
 
+    // --- Process pending focus request from outliner double-click ---
+    if let Some(focus_entity) = outliner_cache.pending_focus.take() {
+        commands.insert_resource(PendingFocusEntity {
+            target: Some(focus_entity),
+        });
+    }
+
     // --- Update UiHovered resource ---
     if ctx.is_pointer_over_area() {
         commands.insert_resource(UiHovered);
@@ -204,15 +252,17 @@ fn inspector_ui(
 // WebSocket bridge system
 // ---------------------------------------------------------------------------
 
-/// Processes inbound client messages and pushes selection/state changes to WS clients.
+/// Processes inbound client messages, detects scene changes, and streams transforms.
 fn ws_bridge_system(
     bridge: Res<ws_server::InspectorWsBridge>,
     mut selection: ResMut<InspectorSelection>,
     registry: Res<NameRegistry>,
     params: InspectorQueries,
     mut outliner_cache: ResMut<outliner::OutlinerCache>,
+    mut ws_state: ResMut<WsBridgeState>,
+    time: Res<Time>,
 ) {
-    // Process inbound messages (non-blocking)
+    // --- Process inbound messages (non-blocking) ---
     let rx = bridge.rx.clone();
     if let Ok(mut rx_guard) = rx.try_lock() {
         while let Ok(msg) = rx_guard.try_recv() {
@@ -254,8 +304,10 @@ fn ws_bridge_system(
                         outliner_cache.pending_visibility_toggles.push(entity);
                     }
                 }
-                protocol::ClientMessage::FocusEntity { entity_id: _ } => {
-                    // TODO: implement camera focus
+                protocol::ClientMessage::FocusEntity { entity_id } => {
+                    if let Some(entity) = registry.get_entity_by_id(&wt::EntityId(entity_id)) {
+                        outliner_cache.pending_focus = Some(entity);
+                    }
                 }
                 protocol::ClientMessage::Subscribe { .. } => {
                     // Handled in ws_server connection handler
@@ -264,7 +316,17 @@ fn ws_bridge_system(
         }
     }
 
-    // Push selection changes to WS clients when selection changes locally
+    // --- Detect scene changes (entity added/removed) ---
+    let current_count = registry.len();
+    if current_count != ws_state.last_registry_count {
+        if ws_state.last_registry_count != usize::MAX {
+            // Not the first frame — something changed
+            let _ = bridge.tx.send(protocol::ServerMessage::SceneChanged);
+        }
+        ws_state.last_registry_count = current_count;
+    }
+
+    // --- Push selection changes to WS clients ---
     if selection.is_changed() {
         match selection.entity {
             Some(entity) => {
@@ -273,11 +335,47 @@ fn ws_bridge_system(
                         entity_id: gen_e.world_id.0,
                     });
                 }
+                // Reset transform tracking for new selection
+                ws_state.last_transform_pos = None;
+                ws_state.last_transform_rot = None;
             }
             None => {
                 let _ = bridge.tx.send(protocol::ServerMessage::SelectionCleared);
+                ws_state.last_transform_pos = None;
+                ws_state.last_transform_rot = None;
             }
         }
+    }
+
+    // --- Stream selected entity transform at ≤10 Hz ---
+    let now = time.elapsed_secs_f64();
+    if now - ws_state.last_transform_push >= 0.1 {
+        if let Some(entity) = selection.entity
+            && let Ok(gen_e) = params.gen_entities.get(entity)
+            && let Ok(transform) = params.transforms.get(entity)
+        {
+            let pos: [f32; 3] = transform.translation.into();
+            let (axis, angle) = transform.rotation.to_axis_angle();
+            let deg = angle.to_degrees();
+            let rot = [axis.x * deg, axis.y * deg, axis.z * deg];
+
+            // Only send if transform actually changed
+            let pos_changed = ws_state.last_transform_pos.as_ref() != Some(&pos);
+            let rot_changed = ws_state.last_transform_rot.as_ref() != Some(&rot);
+
+            if pos_changed || rot_changed {
+                let _ = bridge
+                    .tx
+                    .send(protocol::ServerMessage::EntityTransformUpdated {
+                        entity_id: gen_e.world_id.0,
+                        position: pos,
+                        rotation_degrees: rot,
+                    });
+                ws_state.last_transform_pos = Some(pos);
+                ws_state.last_transform_rot = Some(rot);
+            }
+        }
+        ws_state.last_transform_push = now;
     }
 }
 
@@ -482,7 +580,21 @@ fn build_entity_detail(
         material,
         light,
         behaviors,
-        audio: None, // TODO: extract from AudioEngine
+        audio: params.audio_engine.as_ref().and_then(|engine| {
+            // Find emitter attached to this entity by name
+            let name_str = name.to_string();
+            engine
+                .emitter_meta
+                .values()
+                .find(|meta| meta.attached_to.as_deref() == Some(&name_str))
+                .map(|meta| protocol::AudioSection {
+                    sound_type: meta.sound_type.clone(),
+                    volume: meta.base_volume,
+                    radius: meta.radius,
+                    attached_to: meta.attached_to.clone(),
+                    position: meta.position,
+                })
+        }),
         mesh_asset,
         hierarchy: protocol::HierarchySection { parent, children },
     })
@@ -506,6 +618,36 @@ fn build_world_info(registry: &NameRegistry, params: &InspectorQueries) -> proto
                 ambience_layers: engine.ambience_layer_names.clone(),
             }),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Camera focus system
+// ---------------------------------------------------------------------------
+
+/// When a PendingFocusEntity is set, teleport the camera to look at the target entity.
+fn focus_camera_system(
+    mut pending: ResMut<PendingFocusEntity>,
+    mut camera_q: Query<&mut Transform, With<crate::gen3d::plugin::FlyCam>>,
+    target_transforms: Query<&Transform, Without<crate::gen3d::plugin::FlyCam>>,
+) {
+    let Some(target_entity) = pending.target.take() else {
+        return;
+    };
+
+    let Ok(target_transform) = target_transforms.get(target_entity) else {
+        return;
+    };
+
+    let Ok(mut camera_transform) = camera_q.single_mut() else {
+        return;
+    };
+
+    // Position camera at a reasonable distance from the target, looking at it
+    let target_pos = target_transform.translation;
+    let offset = Vec3::new(3.0, 2.0, 3.0); // Slightly above and to the side
+    let camera_pos = target_pos + offset;
+
+    *camera_transform = Transform::from_translation(camera_pos).looking_at(target_pos, Vec3::Y);
 }
 
 // ---------------------------------------------------------------------------

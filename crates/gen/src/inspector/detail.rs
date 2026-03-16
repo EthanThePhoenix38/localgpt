@@ -458,7 +458,14 @@ fn draw_audio_section(ui: &mut egui::Ui, entity_name: &str, audio_engine: Option
         return;
     };
 
-    let Some(meta) = engine.emitter_meta.get(entity_name) else {
+    // Try direct key lookup first, then search by attached_to
+    let meta = engine.emitter_meta.get(entity_name).or_else(|| {
+        engine
+            .emitter_meta
+            .values()
+            .find(|m| m.attached_to.as_deref() == Some(entity_name))
+    });
+    let Some(meta) = meta else {
         return;
     };
 
