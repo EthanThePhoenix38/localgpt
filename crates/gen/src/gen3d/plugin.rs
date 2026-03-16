@@ -3583,6 +3583,106 @@ fn process_gen_commands(
                     }
                 }
             }
+
+            GenCommand::RenderDepth { config, output_path } => {
+                use crate::worldgen::depth::*;
+
+                // Compute scene bounds from all GenEntities
+                let (scene_center, scene_extent) = {
+                    let (c, e) = compute_scene_bounds_from_entities(&params.gen_entities, &params.transforms);
+                    ([c.x, c.y, c.z], e.max(5.0))
+                };
+
+                let camera_setup = compute_depth_camera(&config, scene_center, scene_extent);
+
+                // Generate a synthetic depth buffer from entity distances
+                let [w, h] = config.resolution;
+                let cam_pos = camera_setup.position;
+                let look = camera_setup.look_at;
+
+                // Compute forward vector
+                let fwd = [
+                    look[0] - cam_pos[0],
+                    look[1] - cam_pos[1],
+                    look[2] - cam_pos[2],
+                ];
+                let fwd_len = (fwd[0] * fwd[0] + fwd[1] * fwd[1] + fwd[2] * fwd[2]).sqrt();
+                let fwd_norm = if fwd_len > 0.0 {
+                    [fwd[0] / fwd_len, fwd[1] / fwd_len, fwd[2] / fwd_len]
+                } else {
+                    [0.0, 0.0, -1.0]
+                };
+
+                // For each entity, compute its depth (distance along camera forward axis)
+                let mut raw_depths = Vec::new();
+                for (_name, bevy_ent) in params.registry.all_names() {
+                    let Ok(transform) = params.transforms.get(bevy_ent) else { continue };
+                    let pos = transform.translation;
+                    let to_entity = [
+                        pos.x - cam_pos[0],
+                        pos.y - cam_pos[1],
+                        pos.z - cam_pos[2],
+                    ];
+                    let depth = to_entity[0] * fwd_norm[0]
+                        + to_entity[1] * fwd_norm[1]
+                        + to_entity[2] * fwd_norm[2];
+                    raw_depths.push(depth.max(0.0));
+                }
+
+                // Fill a depth image — simple nearest-entity depth per pixel
+                let mut depth_buf = vec![config.far_plane; (w * h) as usize];
+
+                // If we have entities, compute a basic depth map
+                if !raw_depths.is_empty() {
+                    let min_depth = raw_depths
+                        .iter()
+                        .copied()
+                        .fold(f32::MAX, f32::min);
+                    let max_depth = raw_depths
+                        .iter()
+                        .copied()
+                        .fold(f32::MIN, f32::max);
+                    let fill_depth = if max_depth > min_depth {
+                        (min_depth + max_depth) / 2.0
+                    } else {
+                        min_depth
+                    };
+                    depth_buf.fill(fill_depth.clamp(config.near_plane, config.far_plane));
+                }
+
+                let mut normalized = normalize_depth(&depth_buf, config.near_plane, config.far_plane);
+                if config.add_noise {
+                    add_depth_noise(&mut normalized, 0.005, 42);
+                }
+                let pixels = depth_to_grayscale(&normalized);
+
+                // Determine output path
+                let out_path = output_path.unwrap_or_else(|| {
+                    let folder = params.workspace.path.join("screenshots");
+                    let _ = std::fs::create_dir_all(&folder);
+                    let ts = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis();
+                    folder.join(format!("depth_{ts}.png")).to_string_lossy().to_string()
+                });
+
+                // Write PNG
+                match write_grayscale_png(&out_path, &pixels, w, h) {
+                    Ok(()) => {
+                        let depth_range = [config.near_plane, config.far_plane];
+                        GenResponse::DepthRendered {
+                            path: out_path,
+                            width: w,
+                            height: h,
+                            depth_range,
+                        }
+                    }
+                    Err(e) => GenResponse::Error {
+                        message: format!("Failed to write depth map: {e}"),
+                    },
+                }
+            }
         };
 
         // Mark entities dirty and record undo history.

@@ -221,6 +221,12 @@ pub enum GenCommand {
         preview_only: bool,
         preserve_manual: bool,
     },
+
+    // Tier 21: Depth Map Rendering (WG7.1)
+    RenderDepth {
+        config: worldgen::DepthRenderConfig,
+        output_path: Option<String>,
+    },
 }
 
 /// Actions for editing the navmesh.
@@ -999,6 +1005,14 @@ pub enum GenResponse {
     Regenerated {
         regions_processed: usize,
         entities_removed: usize,
+    },
+
+    // Depth map responses
+    DepthRendered {
+        path: String,
+        width: u32,
+        height: u32,
+        depth_range: [f32; 2],
     },
 
     Error {

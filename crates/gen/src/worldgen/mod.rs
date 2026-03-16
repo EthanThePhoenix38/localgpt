@@ -10,6 +10,7 @@
 
 pub mod blockout;
 pub mod collision_check;
+pub mod depth;
 pub mod navmesh;
 pub mod navmesh_edit;
 pub mod ordering;
@@ -20,6 +21,7 @@ pub mod tier;
 
 pub use blockout::*;
 pub use collision_check::*;
+pub use depth::*;
 pub use navmesh::*;
 pub use navmesh_edit::*;
 pub use ordering::*;

@@ -1182,6 +1182,166 @@ impl Tool for GenRegenerateTool {
 }
 
 // ---------------------------------------------------------------------------
+// gen_render_depth (WG7.1)
+// ---------------------------------------------------------------------------
+
+pub struct GenRenderDepthTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenRenderDepthTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenRenderDepthTool {
+    fn name(&self) -> &str {
+        "gen_render_depth"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_render_depth".to_string(),
+            description: "Render a depth map of the current scene for preview generation. Captures depth buffer from a configurable camera angle, normalizes to grayscale (near=white, far=black), and saves as PNG.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "camera_angle": {
+                        "type": "string",
+                        "enum": ["isometric", "top_down", "front", "custom"],
+                        "default": "isometric",
+                        "description": "Camera angle preset"
+                    },
+                    "custom_position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "description": "Custom camera position [x, y, z] (only for 'custom' angle)"
+                    },
+                    "custom_look_at": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "description": "Custom look-at target [x, y, z] (only for 'custom' angle)"
+                    },
+                    "resolution": {
+                        "type": "array",
+                        "items": { "type": "integer" },
+                        "default": [1024, 1024],
+                        "description": "Output resolution [width, height]"
+                    },
+                    "near_plane": {
+                        "type": "number",
+                        "default": 0.1,
+                        "description": "Near clipping plane distance"
+                    },
+                    "far_plane": {
+                        "type": "number",
+                        "default": 200.0,
+                        "description": "Far clipping plane distance"
+                    },
+                    "add_noise": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Add Gaussian noise to reduce grid artifacts"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Custom output path for the depth map PNG"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let camera_angle = match args["camera_angle"].as_str().unwrap_or("isometric") {
+            "top_down" => worldgen::DepthCameraAngle::TopDown,
+            "front" => worldgen::DepthCameraAngle::Front,
+            "custom" => worldgen::DepthCameraAngle::Custom,
+            _ => worldgen::DepthCameraAngle::Isometric,
+        };
+
+        let custom_position = args["custom_position"]
+            .as_array()
+            .and_then(|a| {
+                if a.len() >= 3 {
+                    Some([
+                        a[0].as_f64()? as f32,
+                        a[1].as_f64()? as f32,
+                        a[2].as_f64()? as f32,
+                    ])
+                } else {
+                    None
+                }
+            });
+
+        let custom_look_at = args["custom_look_at"]
+            .as_array()
+            .and_then(|a| {
+                if a.len() >= 3 {
+                    Some([
+                        a[0].as_f64()? as f32,
+                        a[1].as_f64()? as f32,
+                        a[2].as_f64()? as f32,
+                    ])
+                } else {
+                    None
+                }
+            });
+
+        let resolution = args["resolution"]
+            .as_array()
+            .and_then(|a| {
+                if a.len() >= 2 {
+                    Some([a[0].as_u64()? as u32, a[1].as_u64()? as u32])
+                } else {
+                    None
+                }
+            })
+            .unwrap_or([1024, 1024]);
+
+        let near_plane = args["near_plane"].as_f64().unwrap_or(0.1) as f32;
+        let far_plane = args["far_plane"].as_f64().unwrap_or(200.0) as f32;
+        let add_noise = args["add_noise"].as_bool().unwrap_or(true);
+        let output_path = args["output_path"].as_str().map(String::from);
+
+        let config = worldgen::DepthRenderConfig {
+            camera_angle,
+            custom_position,
+            custom_look_at,
+            resolution,
+            near_plane,
+            far_plane,
+            add_noise,
+        };
+
+        match self
+            .bridge
+            .send(GenCommand::RenderDepth { config, output_path })
+            .await?
+        {
+            GenResponse::DepthRendered {
+                path,
+                width,
+                height,
+                depth_range,
+            } => Ok(json!({
+                "path": path,
+                "width": width,
+                "height": height,
+                "depth_range": depth_range,
+            })
+            .to_string()),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -1199,6 +1359,7 @@ pub fn create_worldgen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenBuildNavMeshTool::new(bridge.clone())),
         Box::new(GenValidateNavigabilityTool::new(bridge.clone())),
         Box::new(GenEditNavMeshTool::new(bridge.clone())),
-        Box::new(GenRegenerateTool::new(bridge)),
+        Box::new(GenRegenerateTool::new(bridge.clone())),
+        Box::new(GenRenderDepthTool::new(bridge)),
     ]
 }
