@@ -784,6 +784,189 @@ impl Tool for GenAutoRefineTool {
 }
 
 // ---------------------------------------------------------------------------
+// gen_build_navmesh (WG2.1)
+// ---------------------------------------------------------------------------
+
+pub struct GenBuildNavMeshTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenBuildNavMeshTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenBuildNavMeshTool {
+    fn name(&self) -> &str {
+        "gen_build_navmesh"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_build_navmesh".to_string(),
+            description: "Generate a navigation mesh from current scene geometry. The navmesh defines walkable surfaces and is used for traversability validation.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "agent_radius": {
+                        "type": "number",
+                        "default": 0.3,
+                        "description": "Agent collision radius in meters"
+                    },
+                    "agent_height": {
+                        "type": "number",
+                        "default": 1.8,
+                        "description": "Agent height in meters"
+                    },
+                    "max_slope": {
+                        "type": "number",
+                        "default": 45.0,
+                        "description": "Maximum walkable slope in degrees"
+                    },
+                    "step_height": {
+                        "type": "number",
+                        "default": 0.4,
+                        "description": "Maximum step-up height in meters"
+                    },
+                    "cell_size": {
+                        "type": "number",
+                        "default": 0.5,
+                        "description": "Grid cell size in meters (smaller = more detail, slower)"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+
+        let settings = crate::worldgen::NavMeshSettings {
+            agent_radius: args["agent_radius"].as_f64().unwrap_or(0.3) as f32,
+            agent_height: args["agent_height"].as_f64().unwrap_or(1.8) as f32,
+            max_slope: args["max_slope"].as_f64().unwrap_or(45.0) as f32,
+            step_height: args["step_height"].as_f64().unwrap_or(0.4) as f32,
+            cell_size: args["cell_size"].as_f64().unwrap_or(0.5) as f32,
+        };
+
+        match self
+            .bridge
+            .send(GenCommand::BuildNavMesh { settings })
+            .await?
+        {
+            GenResponse::NavMeshBuilt {
+                walkable_coverage,
+                component_count,
+                cell_count,
+            } => Ok(format!(
+                "Navmesh built: {:.1}% walkable coverage, {} connected regions, {} cells. Use gen_validate_navigability to check traversability.",
+                walkable_coverage, component_count, cell_count
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_validate_navigability (WG2.2)
+// ---------------------------------------------------------------------------
+
+pub struct GenValidateNavigabilityTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenValidateNavigabilityTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenValidateNavigabilityTool {
+    fn name(&self) -> &str {
+        "gen_validate_navigability"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_validate_navigability".to_string(),
+            description: "Check if the scene is traversable between points or overall. Returns walkable coverage, path connectivity, disconnected regions, and warnings.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Start point [x, y, z]. If omitted, checks general connectivity."
+                    },
+                    "to": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "End point [x, y, z]. If omitted, checks general connectivity."
+                    },
+                    "check_all_regions": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Check connectivity between all blockout regions"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+
+        let from = args["from"].as_array().and_then(|arr| {
+            if arr.len() == 3 {
+                Some([
+                    arr[0].as_f64()? as f32,
+                    arr[1].as_f64()? as f32,
+                    arr[2].as_f64()? as f32,
+                ])
+            } else {
+                None
+            }
+        });
+
+        let to = args["to"].as_array().and_then(|arr| {
+            if arr.len() == 3 {
+                Some([
+                    arr[0].as_f64()? as f32,
+                    arr[1].as_f64()? as f32,
+                    arr[2].as_f64()? as f32,
+                ])
+            } else {
+                None
+            }
+        });
+
+        let check_all_regions = args["check_all_regions"].as_bool().unwrap_or(false);
+
+        match self
+            .bridge
+            .send(GenCommand::ValidateNavigability {
+                from,
+                to,
+                check_all_regions,
+            })
+            .await?
+        {
+            GenResponse::NavigabilityResult { result_json } => Ok(result_json),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -797,6 +980,8 @@ pub fn create_worldgen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenBulkModifyTool::new(bridge.clone())),
         Box::new(GenModifyBlockoutTool::new(bridge.clone())),
         Box::new(GenEvaluateSceneTool::new(bridge.clone())),
-        Box::new(GenAutoRefineTool::new(bridge)),
+        Box::new(GenAutoRefineTool::new(bridge.clone())),
+        Box::new(GenBuildNavMeshTool::new(bridge.clone())),
+        Box::new(GenValidateNavigabilityTool::new(bridge)),
     ]
 }

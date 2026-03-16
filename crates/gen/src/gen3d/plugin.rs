@@ -224,6 +224,7 @@ pub fn setup_gen_app(
         .init_resource::<PendingScreenshots>()
         .init_resource::<PendingGltfLoads>()
         .init_resource::<PendingWorldSetup>()
+        .init_resource::<crate::worldgen::NavMeshResource>()
         .init_resource::<AvatarConfig>()
         .init_resource::<WorldTours>()
         .init_resource::<CurrentWorldSkill>()
@@ -477,6 +478,7 @@ struct GenCommandParams<'w, 's> {
     current_blockout: Option<Res<'w, crate::worldgen::CurrentBlockout>>,
     tier_q: Query<'w, 's, &'static crate::worldgen::PlacementTier>,
     role_q: Query<'w, 's, &'static crate::worldgen::SemanticRole>,
+    navmesh_resource: Option<Res<'w, crate::worldgen::NavMeshResource>>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -3305,6 +3307,180 @@ fn process_gen_commands(
                     }
                 }
             }
+
+            // Tier 18: Navmesh Infrastructure (WG2)
+            GenCommand::BuildNavMesh { settings } => {
+                // Collect obstacles from static entities
+                let mut obstacles = Vec::new();
+                for (gen_ent, tf) in params.gen_entities.iter().zip(params.transforms.iter()) {
+                    // Only include primitives and meshes as obstacles
+                    match gen_ent.entity_type {
+                        crate::gen3d::registry::GenEntityType::Primitive
+                        | crate::gen3d::registry::GenEntityType::Mesh => {
+                            obstacles
+                                .push((tf.translation, tf.scale * 0.5));
+                        }
+                        _ => {}
+                    }
+                }
+
+                // Determine world bounds from blockout or scene extents
+                let (world_min, world_max) = if let Some(ref blockout) =
+                    params.current_blockout
+                {
+                    let mut min_x = f32::MAX;
+                    let mut min_z = f32::MAX;
+                    let mut max_x = f32::MIN;
+                    let mut max_z = f32::MIN;
+                    for region in &blockout.spec.regions {
+                        let cx = region.bounds.center[0];
+                        let cz = region.bounds.center[1];
+                        let hx = region.bounds.size[0] / 2.0;
+                        let hz = region.bounds.size[1] / 2.0;
+                        min_x = min_x.min(cx - hx);
+                        min_z = min_z.min(cz - hz);
+                        max_x = max_x.max(cx + hx);
+                        max_z = max_z.max(cz + hz);
+                    }
+                    if min_x < max_x {
+                        (
+                            Vec2::new(min_x - 5.0, min_z - 5.0),
+                            Vec2::new(max_x + 5.0, max_z + 5.0),
+                        )
+                    } else {
+                        (Vec2::new(-50.0, -50.0), Vec2::new(50.0, 50.0))
+                    }
+                } else {
+                    // Use scene bounds
+                    let (center, extent) = compute_scene_bounds_from_entities(&params.gen_entities, &params.transforms);
+                    (
+                        Vec2::new(center.x - extent, center.z - extent),
+                        Vec2::new(center.x + extent, center.z + extent),
+                    )
+                };
+
+                // Get terrain height function from terrain query
+                let terrain_base_y: f32 = params
+                    .terrain_q
+                    .iter()
+                    .next()
+                    .map(|(_, tf)| tf.translation.y)
+                    .unwrap_or(0.0);
+
+                let terrain_height = |_x: f32, _z: f32| -> Option<f32> {
+                    Some(terrain_base_y)
+                };
+
+                let grid = crate::worldgen::navmesh::build_navgrid(
+                    world_min,
+                    world_max,
+                    &settings,
+                    terrain_height,
+                    &obstacles,
+                );
+
+                let coverage = grid.walkable_coverage();
+                let component_count = grid.component_count;
+                let cell_count = grid.cells.len();
+
+                // Store the navmesh
+                commands.insert_resource(crate::worldgen::NavMeshResource {
+                    grid: Some(grid),
+                    settings,
+                    dirty: false,
+                });
+
+                GenResponse::NavMeshBuilt {
+                    walkable_coverage: coverage * 100.0,
+                    component_count,
+                    cell_count,
+                }
+            }
+
+            GenCommand::ValidateNavigability {
+                from,
+                to,
+                check_all_regions,
+            } => {
+                let navmesh = params.navmesh_resource.as_ref();
+                match navmesh.and_then(|n| n.grid.as_ref()) {
+                    None => GenResponse::Error {
+                        message: "No navmesh built. Call gen_build_navmesh first.".to_string(),
+                    },
+                    Some(grid) => {
+                        let mut result = crate::worldgen::navmesh::NavigabilityResult {
+                            navigable: true,
+                            coverage_percent: grid.walkable_coverage() * 100.0,
+                            path_found: None,
+                            path_length: None,
+                            disconnected_regions: Vec::new(),
+                            blocked_areas: Vec::new(),
+                            component_count: grid.component_count,
+                            warnings: Vec::new(),
+                        };
+
+                        // Point-to-point check
+                        if let (Some(f), Some(t)) = (from, to) {
+                            let from_v = Vec3::new(f[0], f[1], f[2]);
+                            let to_v = Vec3::new(t[0], t[1], t[2]);
+                            match grid.find_path(from_v, to_v) {
+                                Some(path) => {
+                                    let length: f32 = path
+                                        .windows(2)
+                                        .map(|w| (w[1] - w[0]).length())
+                                        .sum();
+                                    result.path_found = Some(true);
+                                    result.path_length = Some(length);
+                                }
+                                None => {
+                                    result.path_found = Some(false);
+                                    result.navigable = false;
+                                }
+                            }
+                        }
+
+                        // Region connectivity check
+                        if check_all_regions {
+                            if let Some(ref blockout) = params.current_blockout {
+                                let regions = &blockout.spec.regions;
+                                for i in 0..regions.len() {
+                                    for j in (i + 1)..regions.len() {
+                                        let ci = regions[i].bounds.center;
+                                        let cj = regions[j].bounds.center;
+                                        let a = Vec3::new(ci[0], 0.0, ci[1]);
+                                        let b = Vec3::new(cj[0], 0.0, cj[1]);
+                                        if !grid.are_connected(a, b) {
+                                            result.disconnected_regions.push(format!(
+                                                "{} <-> {}",
+                                                regions[i].id, regions[j].id
+                                            ));
+                                            result.navigable = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // General warnings
+                        if grid.component_count > 1 {
+                            result.warnings.push(format!(
+                                "Scene has {} disconnected walkable regions",
+                                grid.component_count
+                            ));
+                        }
+                        if result.coverage_percent < 30.0 {
+                            result.warnings.push(format!(
+                                "Low walkable coverage: {:.1}% — scene may be too cluttered",
+                                result.coverage_percent
+                            ));
+                        }
+
+                        let json = serde_json::to_string_pretty(&result)
+                            .unwrap_or_else(|_| "{}".to_string());
+                        GenResponse::NavigabilityResult { result_json: json }
+                    }
+                }
+            }
         };
 
         // Mark entities dirty and record undo history.
@@ -3566,6 +3742,40 @@ fn compute_scene_bounds(
     let center = (min + max) * 0.5;
     let extent = (max - min).length() * 0.5;
     (center, extent.max(5.0))
+}
+
+/// Compute scene bounds from separate GenEntity and Transform queries.
+fn compute_scene_bounds_from_entities(
+    gen_entities: &Query<&GenEntity>,
+    transforms: &Query<&Transform>,
+) -> (Vec3, f32) {
+    let mut min = Vec3::splat(f32::MAX);
+    let mut max = Vec3::splat(f32::MIN);
+    let mut count = 0u32;
+
+    for entity in gen_entities.iter() {
+        let _ = entity; // Just need to iterate entities with GenEntity
+    }
+    // Use the transform query to get positions
+    for (entity, _gen) in gen_entities.iter().enumerate() {
+        let _ = entity;
+    }
+
+    // Simplified: iterate all transforms (GenEntity has same entities)
+    for tf in transforms.iter() {
+        let p = tf.translation;
+        min = min.min(p);
+        max = max.max(p);
+        count += 1;
+    }
+
+    if count == 0 {
+        return (Vec3::ZERO, 50.0);
+    }
+
+    let center = (min + max) * 0.5;
+    let extent = (max - min).length() * 0.5;
+    (center, extent.max(10.0))
 }
 
 /// Process pending glTF loads that are waiting for the asset server.

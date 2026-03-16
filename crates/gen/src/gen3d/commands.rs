@@ -199,6 +199,16 @@ pub enum GenCommand {
         action: BlockoutEditAction,
         auto_regenerate: bool,
     },
+
+    // Tier 18: Navmesh Infrastructure (WG2)
+    BuildNavMesh {
+        settings: worldgen::NavMeshSettings,
+    },
+    ValidateNavigability {
+        from: Option<[f32; 3]>,
+        to: Option<[f32; 3]>,
+        check_all_regions: bool,
+    },
 }
 
 /// Actions for editing the blockout layout.
@@ -934,6 +944,16 @@ pub enum GenResponse {
         region_id: String,
         entities_removed: usize,
         entities_spawned: usize,
+    },
+
+    // Navmesh responses
+    NavMeshBuilt {
+        walkable_coverage: f32,
+        component_count: u32,
+        cell_count: usize,
+    },
+    NavigabilityResult {
+        result_json: String,
     },
 
     Error {
