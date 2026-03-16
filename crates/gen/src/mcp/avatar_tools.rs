@@ -613,13 +613,335 @@ impl Tool for GenSetCameraModeTool {
     }
 }
 
-/// Create all P1 character tools (player, spawn points, NPCs, dialogue, camera).
+// ---------------------------------------------------------------------------
+// gen_set_npc_brain (AI2.1)
+// ---------------------------------------------------------------------------
+
+/// Tool: Attach an AI brain to an NPC for autonomous behavior.
+pub struct GenSetNpcBrainTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSetNpcBrainTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSetNpcBrainTool {
+    fn name(&self) -> &str {
+        "gen_set_npc_brain"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_set_npc_brain".to_string(),
+            description: "Attach an AI brain to an NPC for autonomous decision-making. The brain uses a local SLM to decide actions at configurable tick rates.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "NPC entity name"
+                    },
+                    "personality": {
+                        "type": "string",
+                        "default": "a friendly villager",
+                        "description": "Personality description for the NPC brain"
+                    },
+                    "model": {
+                        "type": "string",
+                        "default": "llama3.2:3b",
+                        "description": "Ollama model name for the brain"
+                    },
+                    "tick_rate": {
+                        "type": "number",
+                        "default": 2.0,
+                        "description": "Seconds between brain decisions"
+                    },
+                    "perception_radius": {
+                        "type": "number",
+                        "default": 15.0,
+                        "description": "How far the NPC can perceive (meters)"
+                    },
+                    "goals": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "default": [],
+                        "description": "List of goals for the NPC"
+                    },
+                    "knowledge": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "default": [],
+                        "description": "Facts the NPC knows"
+                    }
+                },
+                "required": ["entity"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("entity is required"))?
+            .to_string();
+
+        let config = crate::character::npc_brain::NpcBrainConfig {
+            personality: args["personality"]
+                .as_str()
+                .unwrap_or("a friendly villager")
+                .to_string(),
+            model: args["model"]
+                .as_str()
+                .unwrap_or("llama3.2:3b")
+                .to_string(),
+            tick_rate: args["tick_rate"].as_f64().unwrap_or(2.0) as f32,
+            perception_radius: args["perception_radius"].as_f64().unwrap_or(15.0) as f32,
+            goals: args["goals"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            knowledge: args["knowledge"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        };
+
+        let cmd = GenCommand::SetNpcBrain { entity, config };
+        let response = self.bridge.send(cmd).await?;
+
+        match response {
+            GenResponse::NpcBrainSet {
+                entity,
+                model,
+                tick_rate,
+            } => Ok(format!(
+                "Set brain for NPC '{}' (model: {}, tick_rate: {}s)",
+                entity, model, tick_rate
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("NPC brain set successfully".to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_npc_observe (AI2.2)
+// ---------------------------------------------------------------------------
+
+/// Tool: Make an NPC observe/perceive the scene from its point of view.
+pub struct GenNpcObserveTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenNpcObserveTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenNpcObserveTool {
+    fn name(&self) -> &str {
+        "gen_npc_observe"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_npc_observe".to_string(),
+            description: "Make an NPC observe the scene from its perspective. Optionally ask a question about what it sees.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "NPC entity name"
+                    },
+                    "question": {
+                        "type": "string",
+                        "description": "Optional question about what the NPC sees"
+                    },
+                    "fov": {
+                        "type": "number",
+                        "default": 90.0,
+                        "description": "Field of view in degrees"
+                    },
+                    "resolution": {
+                        "type": "array",
+                        "items": { "type": "integer" },
+                        "default": [512, 512],
+                        "description": "Render resolution [width, height]"
+                    }
+                },
+                "required": ["entity"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("entity is required"))?
+            .to_string();
+
+        let question = args["question"].as_str().map(|s| s.to_string());
+
+        let fov = args["fov"].as_f64().unwrap_or(90.0) as f32;
+
+        let resolution = args["resolution"]
+            .as_array()
+            .map(|a| {
+                [
+                    a[0].as_u64().unwrap_or(512) as u32,
+                    a[1].as_u64().unwrap_or(512) as u32,
+                ]
+            })
+            .unwrap_or([512, 512]);
+
+        let cmd = GenCommand::NpcObserve {
+            entity,
+            question,
+            fov,
+            resolution,
+        };
+        let response = self.bridge.send(cmd).await?;
+
+        match response {
+            GenResponse::NpcObservation {
+                entity,
+                description,
+            } => Ok(format!("NPC '{}': {}", entity, description)),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("NPC observation completed".to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_set_npc_memory (AI2.3)
+// ---------------------------------------------------------------------------
+
+/// Tool: Configure persistent memory for an NPC.
+pub struct GenSetNpcMemoryTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSetNpcMemoryTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSetNpcMemoryTool {
+    fn name(&self) -> &str {
+        "gen_set_npc_memory"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_set_npc_memory".to_string(),
+            description: "Configure persistent memory for an NPC. Memories persist across save/load and influence brain decisions.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity": {
+                        "type": "string",
+                        "description": "NPC entity name"
+                    },
+                    "capacity": {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Maximum number of memories to retain"
+                    },
+                    "initial_memories": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "default": [],
+                        "description": "Seed memories to give the NPC"
+                    },
+                    "auto_memorize": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether to automatically create memories from interactions"
+                    }
+                },
+                "required": ["entity"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let entity = args["entity"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("entity is required"))?
+            .to_string();
+
+        let capacity = args["capacity"].as_u64().unwrap_or(50) as usize;
+
+        let initial_memories: Vec<String> = args["initial_memories"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let auto_memorize = args["auto_memorize"].as_bool().unwrap_or(true);
+
+        let cmd = GenCommand::SetNpcMemory {
+            entity,
+            capacity,
+            initial_memories,
+            auto_memorize,
+        };
+        let response = self.bridge.send(cmd).await?;
+
+        match response {
+            GenResponse::NpcMemorySet {
+                entity,
+                capacity,
+                initial_count,
+            } => Ok(format!(
+                "Set memory for NPC '{}' (capacity: {}, initial memories: {})",
+                entity, capacity, initial_count
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            _ => Ok("NPC memory configured successfully".to_string()),
+        }
+    }
+}
+
+/// Create all P1 character tools (player, spawn points, NPCs, dialogue, camera)
+/// plus AI2 NPC intelligence tools (brain, observe, memory).
 pub fn create_character_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
     vec![
         Box::new(GenSpawnPlayerTool::new(bridge.clone())),
         Box::new(GenSetSpawnPointTool::new(bridge.clone())),
         Box::new(GenAddNpcTool::new(bridge.clone())),
         Box::new(GenSetNpcDialogueTool::new(bridge.clone())),
-        Box::new(GenSetCameraModeTool::new(bridge)),
+        Box::new(GenSetCameraModeTool::new(bridge.clone())),
+        // AI2 NPC Intelligence
+        Box::new(GenSetNpcBrainTool::new(bridge.clone())),
+        Box::new(GenNpcObserveTool::new(bridge.clone())),
+        Box::new(GenSetNpcMemoryTool::new(bridge)),
     ]
 }
