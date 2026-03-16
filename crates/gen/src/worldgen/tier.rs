@@ -1,24 +1,40 @@
-//! Placement tier and semantic role components for world-generation entities.
+//! Placement tiers and semantic roles for hierarchical scene composition.
+//!
+//! PlacementTier controls generation order (hero → medium → decorative).
+//! SemanticRole enables bulk operations by category (vegetation, structure, etc.).
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Placement importance tier — controls generation order and collision behavior.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+/// Placement tier — controls generation priority and visual hierarchy.
+#[derive(
+    Component, Reflect, Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize,
+)]
+#[reflect(Component)]
+#[serde(rename_all = "lowercase")]
 pub enum PlacementTier {
-    /// Focal-point entities placed first at hero slots.
+    /// Major landmarks, buildings, focal points. Placed first.
     Hero,
-    /// Mid-importance entities with collision checks.
+    /// Trees, walls, bridges, fences, medium structures. Placed second.
     Medium,
-    /// Small scatter elements filling residual space.
+    /// Flowers, rocks, grass, small props, ground clutter. Placed last.
     Decorative,
-    /// Not yet assigned a tier.
+    /// Manually placed entities not part of hierarchical generation.
+    #[default]
     Untiered,
 }
 
 impl PlacementTier {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Hero => "hero",
+            Self::Medium => "medium",
+            Self::Decorative => "decorative",
+            Self::Untiered => "untiered",
+        }
+    }
+
     /// Parse from a string, returning `None` for unrecognized values.
     pub fn from_str_opt(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
@@ -29,16 +45,6 @@ impl PlacementTier {
             _ => None,
         }
     }
-
-    /// Return the canonical string representation.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Hero => "hero",
-            Self::Medium => "medium",
-            Self::Decorative => "decorative",
-            Self::Untiered => "untiered",
-        }
-    }
 }
 
 impl fmt::Display for PlacementTier {
@@ -47,22 +53,49 @@ impl fmt::Display for PlacementTier {
     }
 }
 
-/// Semantic role — what purpose an entity serves in the scene.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+/// Semantic role — categorizes entities by function for bulk operations.
+#[derive(
+    Component, Reflect, Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize,
+)]
+#[reflect(Component)]
+#[serde(rename_all = "lowercase")]
 pub enum SemanticRole {
+    /// Terrain, floors, ground planes, paths.
     Ground,
+    /// Buildings, walls, bridges, fences, stairs.
     Structure,
+    /// Furniture, crates, barrels, vehicles, functional objects.
     Prop,
+    /// Trees, bushes, grass, flowers.
     Vegetation,
+    /// Small visual details, particles, ambient effects.
     Decoration,
+    /// NPCs, player.
     Character,
+    /// Light sources.
     Lighting,
+    /// Sound emitters.
     Audio,
+    /// Default for manually placed entities.
+    #[default]
     Untagged,
 }
 
 impl SemanticRole {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Ground => "ground",
+            Self::Structure => "structure",
+            Self::Prop => "prop",
+            Self::Vegetation => "vegetation",
+            Self::Decoration => "decoration",
+            Self::Character => "character",
+            Self::Lighting => "lighting",
+            Self::Audio => "audio",
+            Self::Untagged => "untagged",
+        }
+    }
+
     /// Parse from a string, returning `None` for unrecognized values.
     pub fn from_str_opt(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
@@ -78,25 +111,90 @@ impl SemanticRole {
             _ => None,
         }
     }
-
-    /// Return the canonical string representation.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Ground => "ground",
-            Self::Structure => "structure",
-            Self::Prop => "prop",
-            Self::Vegetation => "vegetation",
-            Self::Decoration => "decoration",
-            Self::Character => "character",
-            Self::Lighting => "lighting",
-            Self::Audio => "audio",
-            Self::Untagged => "untagged",
-        }
-    }
 }
 
 impl fmt::Display for SemanticRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tier_roundtrip() {
+        let tier = PlacementTier::Hero;
+        let json = serde_json::to_string(&tier).unwrap();
+        assert_eq!(json, "\"hero\"");
+        let back: PlacementTier = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, tier);
+    }
+
+    #[test]
+    fn role_roundtrip() {
+        let role = SemanticRole::Vegetation;
+        let json = serde_json::to_string(&role).unwrap();
+        assert_eq!(json, "\"vegetation\"");
+        let back: SemanticRole = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, role);
+    }
+
+    #[test]
+    fn tier_from_str() {
+        assert_eq!(
+            PlacementTier::from_str_opt("hero"),
+            Some(PlacementTier::Hero)
+        );
+        assert_eq!(
+            PlacementTier::from_str_opt("decorative"),
+            Some(PlacementTier::Decorative)
+        );
+        assert_eq!(PlacementTier::from_str_opt("invalid"), None);
+    }
+
+    #[test]
+    fn role_from_str() {
+        assert_eq!(
+            SemanticRole::from_str_opt("ground"),
+            Some(SemanticRole::Ground)
+        );
+        assert_eq!(
+            SemanticRole::from_str_opt("structure"),
+            Some(SemanticRole::Structure)
+        );
+        assert_eq!(SemanticRole::from_str_opt("invalid"), None);
+    }
+
+    #[test]
+    fn all_tiers_roundtrip() {
+        for tier in [
+            PlacementTier::Hero,
+            PlacementTier::Medium,
+            PlacementTier::Decorative,
+            PlacementTier::Untiered,
+        ] {
+            let s = tier.as_str();
+            assert_eq!(PlacementTier::from_str_opt(s), Some(tier));
+        }
+    }
+
+    #[test]
+    fn all_roles_roundtrip() {
+        for role in [
+            SemanticRole::Ground,
+            SemanticRole::Structure,
+            SemanticRole::Prop,
+            SemanticRole::Vegetation,
+            SemanticRole::Decoration,
+            SemanticRole::Character,
+            SemanticRole::Lighting,
+            SemanticRole::Audio,
+            SemanticRole::Untagged,
+        ] {
+            let s = role.as_str();
+            assert_eq!(SemanticRole::from_str_opt(s), Some(role));
+        }
     }
 }
