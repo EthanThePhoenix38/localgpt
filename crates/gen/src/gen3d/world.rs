@@ -18,6 +18,8 @@
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
+
+use crate::gen3d::plugin::resolve_gltf_path;
 use localgpt_world_types as wt;
 
 use super::audio::AudioEngine;

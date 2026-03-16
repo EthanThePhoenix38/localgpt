@@ -28,7 +28,9 @@ pub struct OutlinerCache {
     pub nodes: Vec<TreeNode>,
     pub search_text: String,
     pub collapsed: HashSet<Entity>,
-    last_entity_count: usize,
+    /// Entities whose visibility should be toggled (processed by inspector_ui).
+    pub pending_visibility_toggles: Vec<Entity>,
+    pub(super) last_entity_count: usize,
 }
 
 impl Default for OutlinerCache {
@@ -37,6 +39,7 @@ impl Default for OutlinerCache {
             nodes: Vec::new(),
             search_text: String::new(),
             collapsed: HashSet::new(),
+            pending_visibility_toggles: Vec::new(),
             last_entity_count: usize::MAX, // Force rebuild on first frame
         }
     }
@@ -292,9 +295,7 @@ pub fn draw_outliner(
                                         .on_hover_text("Toggle visibility")
                                         .clicked()
                                     {
-                                        // Visibility toggle is handled by the selection system
-                                        // For now, just select the entity
-                                        selection.entity = Some(node.entity);
+                                        cache.pending_visibility_toggles.push(node.entity);
                                     }
                                 },
                             );

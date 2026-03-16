@@ -381,9 +381,9 @@ fn emit_entity(js: &mut String, entity: &wt::WorldEntity, idx: usize) {
             js,
             "const {v}_geo = new THREE.BoxGeometry(1, 1, 1); \
              const {v}_mat = new THREE.MeshBasicMaterial({{ color: 0x888888, wireframe: true }}); \
-             const {v} = new THREE.Mesh({v}_geo, {v}_mat); // placeholder for imported mesh: {}",
+             const {v} = new THREE.Mesh({v}_geo, {v}_mat); // placeholder for imported mesh: {mesh}",
             v = var,
-            entity
+            mesh = entity
                 .mesh_asset
                 .as_ref()
                 .map(|a| a.path.as_str())
