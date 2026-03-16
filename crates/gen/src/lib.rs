@@ -6,6 +6,7 @@
 pub mod character;
 pub mod character_tools;
 pub mod gen3d;
+pub mod inspector;
 pub mod interaction;
 pub mod mcp;
 pub mod mcp_server;

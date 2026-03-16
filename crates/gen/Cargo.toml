@@ -32,6 +32,7 @@ clap = { version = "4.6", features = ["derive"] }
 
 # 3D generation via Bevy
 bevy = "0.18"
+bevy_egui = "0.39"
 image = "0.25"
 
 # glTF/GLB export

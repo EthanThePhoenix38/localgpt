@@ -241,15 +241,21 @@ pub fn setup_gen_app(
         .add_systems(Update, audio::spatial_audio_update)
         .add_systems(Update, audio::auto_infer_audio)
         .add_systems(Update, behaviors::behavior_tick)
-        // Avatar systems (run when camera is attached to avatar)
+        // Avatar systems (run when camera is attached to avatar and not hovering inspector)
         .add_systems(
             Update,
-            avatar::avatar_movement.run_if(avatar::in_attached_mode),
+            avatar::avatar_movement
+                .run_if(avatar::in_attached_mode.and(crate::inspector::not_ui_hovered)),
         )
-        .add_systems(Update, avatar::avatar_look.run_if(avatar::in_attached_mode))
         .add_systems(
             Update,
-            avatar::avatar_scroll_speed.run_if(avatar::in_attached_mode),
+            avatar::avatar_look
+                .run_if(avatar::in_attached_mode.and(crate::inspector::not_ui_hovered)),
+        )
+        .add_systems(
+            Update,
+            avatar::avatar_scroll_speed
+                .run_if(avatar::in_attached_mode.and(crate::inspector::not_ui_hovered)),
         )
         .add_systems(
             Update,
@@ -257,10 +263,20 @@ pub fn setup_gen_app(
                 .run_if(avatar::in_attached_mode)
                 .after(avatar::avatar_movement),
         )
-        // FreeFly systems (run when camera is detached)
-        .add_systems(Update, fly_cam_movement.run_if(avatar::in_freefly_mode))
-        .add_systems(Update, fly_cam_look.run_if(avatar::in_freefly_mode))
-        .add_systems(Update, fly_cam_scroll_speed.run_if(avatar::in_freefly_mode))
+        // FreeFly systems (run when camera is detached and not hovering inspector)
+        .add_systems(
+            Update,
+            fly_cam_movement.run_if(avatar::in_freefly_mode.and(crate::inspector::not_ui_hovered)),
+        )
+        .add_systems(
+            Update,
+            fly_cam_look.run_if(avatar::in_freefly_mode.and(crate::inspector::not_ui_hovered)),
+        )
+        .add_systems(
+            Update,
+            fly_cam_scroll_speed
+                .run_if(avatar::in_freefly_mode.and(crate::inspector::not_ui_hovered)),
+        )
         // Toggle systems
         .add_systems(
             Update,
@@ -292,7 +308,9 @@ pub fn setup_gen_app(
         .add_plugins(crate::physics::ForceFieldPlugin)
         .add_plugins(crate::physics::GravityPlugin)
         .add_plugins(crate::physics::ColliderPlugin)
-        .add_plugins(crate::physics::JointPlugin);
+        .add_plugins(crate::physics::JointPlugin)
+        // World Inspector Panel (egui overlay, F1 toggle)
+        .add_plugins(crate::inspector::InspectorPlugin);
 }
 
 /// Default scene: ground plane, camera, directional light, ambient light.
