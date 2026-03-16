@@ -225,6 +225,7 @@ pub fn setup_gen_app(
         .init_resource::<PendingGltfLoads>()
         .init_resource::<PendingWorldSetup>()
         .init_resource::<crate::worldgen::NavMeshResource>()
+        .init_resource::<crate::worldgen::GenerationState>()
         .init_resource::<AvatarConfig>()
         .init_resource::<WorldTours>()
         .init_resource::<CurrentWorldSkill>()
