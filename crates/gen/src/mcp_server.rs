@@ -62,7 +62,12 @@ fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<Box<d
     ));
 
     // WG1 tools: worldgen blockout pipeline
-    tools.extend(crate::mcp::worldgen_tools::create_worldgen_tools(bridge));
+    tools.extend(crate::mcp::worldgen_tools::create_worldgen_tools(
+        bridge.clone(),
+    ));
+
+    // AI1 tools: AI asset generation
+    tools.extend(crate::mcp::asset_gen_tools::create_asset_gen_tools(bridge));
 
     Ok(tools)
 }

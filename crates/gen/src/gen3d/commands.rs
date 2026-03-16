@@ -254,6 +254,24 @@ pub enum GenCommand {
         task_id: Option<String>,
         action: String, // "status", "cancel", "list"
     },
+
+    // Tier 24: AI NPC Intelligence (AI2)
+    SetNpcBrain {
+        entity: String,
+        config: character::npc_brain::NpcBrainConfig,
+    },
+    NpcObserve {
+        entity: String,
+        question: Option<String>,
+        fov: f32,
+        resolution: [u32; 2],
+    },
+    SetNpcMemory {
+        entity: String,
+        capacity: usize,
+        initial_memories: Vec<String>,
+        auto_memorize: bool,
+    },
 }
 
 /// Actions for editing the navmesh.
@@ -1062,6 +1080,22 @@ pub enum GenResponse {
     },
     GenerationStatusResult {
         status_json: String,
+    },
+
+    // AI NPC responses
+    NpcBrainSet {
+        entity: String,
+        model: String,
+        tick_rate: f32,
+    },
+    NpcObservation {
+        entity: String,
+        description: String,
+    },
+    NpcMemorySet {
+        entity: String,
+        capacity: usize,
+        initial_count: usize,
     },
 
     Error {

@@ -237,6 +237,7 @@ pub fn setup_gen_app(
         .init_resource::<avatar::CameraMode>()
         .init_resource::<avatar::PovState>()
         .init_resource::<avatar::AvatarMovementConfig>()
+        .init_resource::<crate::gen3d::asset_gen::AssetGenManager>()
         .add_systems(
             Startup,
             (
@@ -482,6 +483,7 @@ struct GenCommandParams<'w, 's> {
     role_q: Query<'w, 's, &'static crate::worldgen::SemanticRole>,
     navmesh_resource: Option<Res<'w, crate::worldgen::NavMeshResource>>,
     navmesh_overrides: ResMut<'w, crate::worldgen::NavMeshOverrides>,
+    asset_gen_manager: ResMut<'w, crate::gen3d::asset_gen::AssetGenManager>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -3715,6 +3717,116 @@ fn process_gen_commands(
                     path: out_path,
                     style: style_name,
                     depth_map_used: depth_map,
+                }
+            }
+
+            GenCommand::GenerateAsset { prompt, name, position, scale, model, quality, .. } => {
+                let task_id = params.asset_gen_manager.create_task(
+                    crate::gen3d::asset_gen::GenerationTaskType::Mesh,
+                    prompt.clone(),
+                    name.clone(),
+                    model,
+                    quality,
+                    position,
+                    scale,
+                );
+                let estimated = model.estimated_seconds(quality);
+                GenResponse::AssetGenerating {
+                    task_id,
+                    estimated_seconds: estimated,
+                    message: format!(
+                        "Generating '{}' with {} ({:?} quality). Will auto-spawn at [{}, {}, {}] when ready.",
+                        name, model.display_name(), quality, position[0], position[1], position[2]
+                    ),
+                }
+            }
+
+            GenCommand::GenerateTexture { entity, prompt, style, resolution } => {
+                let task_id = params.asset_gen_manager.create_task(
+                    crate::gen3d::asset_gen::GenerationTaskType::Texture,
+                    prompt.clone(),
+                    entity.clone(),
+                    crate::gen3d::asset_gen::GenerationModel::Hunyuan3d,
+                    crate::gen3d::asset_gen::GenerationQuality::Standard,
+                    [0.0, 0.0, 0.0],
+                    1.0,
+                );
+                GenResponse::TextureGenerating {
+                    task_id,
+                    estimated_seconds: 60,
+                    message: format!(
+                        "Generating {:?} textures for '{}' at {}px resolution.",
+                        style, entity, resolution
+                    ),
+                }
+            }
+
+            GenCommand::GenerationStatus { task_id, action } => {
+                let result = match action.as_str() {
+                    "cancel" => {
+                        if let Some(id) = &task_id {
+                            let cancelled = params.asset_gen_manager.cancel_task(id);
+                            serde_json::json!({ "cancelled": cancelled, "task_id": id }).to_string()
+                        } else {
+                            serde_json::json!({ "error": "task_id required for cancel" }).to_string()
+                        }
+                    }
+                    _ => {
+                        // "status" or "list"
+                        let active: Vec<_> = params.asset_gen_manager.active_tasks().into_iter().cloned().collect();
+                        let completed: Vec<_> = params.asset_gen_manager.completed_tasks().into_iter().cloned().collect();
+                        let failed: Vec<_> = params.asset_gen_manager.failed_tasks().into_iter().cloned().collect();
+                        serde_json::json!({
+                            "active": active,
+                            "completed": completed,
+                            "failed": failed,
+                            "queue_depth": active.len(),
+                            "model_server": params.asset_gen_manager.server_status,
+                        }).to_string()
+                    }
+                };
+                GenResponse::GenerationStatusResult { status_json: result }
+            }
+
+            // Tier 24: AI NPC Intelligence (AI2)
+            GenCommand::SetNpcBrain { entity, config } => {
+                let model = config.model.clone();
+                let tick_rate = config.tick_rate;
+                // In actual implementation, would spawn a brain task
+                GenResponse::NpcBrainSet {
+                    entity,
+                    model,
+                    tick_rate,
+                }
+            }
+
+            GenCommand::NpcObserve { entity, question, .. } => {
+                // Would render from NPC POV and send to VLM
+                let description = format!(
+                    "NPC '{}' observing scene{}",
+                    entity,
+                    question
+                        .map(|q| format!(" (question: {})", q))
+                        .unwrap_or_default()
+                );
+                GenResponse::NpcObservation {
+                    entity,
+                    description,
+                }
+            }
+
+            GenCommand::SetNpcMemory {
+                entity,
+                capacity,
+                initial_memories,
+                auto_memorize: _,
+            } => {
+                let initial_count = initial_memories.len();
+                // Would attach NpcMemory component to entity
+                GenResponse::NpcMemorySet {
+                    entity,
+                    capacity,
+                    initial_count,
                 }
             }
         };

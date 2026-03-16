@@ -3,6 +3,7 @@
 //! This module contains tool implementations that bridge the agent
 //! to Bevy scene manipulation.
 
+pub mod asset_gen_tools;
 pub mod avatar_tools;
 pub mod interaction_tools;
 pub mod physics_tools;
