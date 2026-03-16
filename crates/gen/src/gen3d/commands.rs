@@ -9,6 +9,7 @@ use crate::interaction;
 use crate::physics;
 use crate::terrain;
 use crate::ui;
+use crate::worldgen;
 
 // ---------------------------------------------------------------------------
 // Commands (agent → Bevy)
@@ -151,6 +152,24 @@ pub enum GenCommand {
     AddJoint(physics::JointParams),
     AddForce(physics::ForceParams),
     SetGravity(physics::GravityParams),
+
+    // Tier 15: WorldGen Pipeline (WG1)
+    PlanLayout {
+        prompt: String,
+        size: [f32; 2],
+        seed: Option<u32>,
+    },
+    ApplyBlockout {
+        spec: worldgen::BlockoutSpec,
+        show_debug_volumes: bool,
+        generate_terrain: bool,
+        generate_paths: bool,
+    },
+    PopulateRegion {
+        region_id: String,
+        style_hint: Option<String>,
+        replace_existing: bool,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -792,6 +811,20 @@ pub enum GenResponse {
     TerrainHeights {
         /// Results: [[x, y, z], ...] with y = sampled height
         heights: Vec<[f32; 3]>,
+    },
+
+    // WorldGen responses
+    BlockoutPlan {
+        spec_json: String,
+    },
+    BlockoutApplied {
+        entities_spawned: usize,
+        regions: usize,
+        paths: usize,
+    },
+    RegionPopulated {
+        region_id: String,
+        entities_spawned: usize,
     },
 
     Error {

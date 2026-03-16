@@ -57,7 +57,12 @@ fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<Box<d
         bridge.clone(),
     ));
     tools.extend(crate::mcp::ui_tools::create_ui_tools(bridge.clone()));
-    tools.extend(crate::mcp::physics_tools::create_physics_tools(bridge));
+    tools.extend(crate::mcp::physics_tools::create_physics_tools(
+        bridge.clone(),
+    ));
+
+    // WG1 tools: worldgen blockout pipeline
+    tools.extend(crate::mcp::worldgen_tools::create_worldgen_tools(bridge));
 
     Ok(tools)
 }

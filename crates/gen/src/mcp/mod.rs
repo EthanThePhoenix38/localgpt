@@ -8,6 +8,7 @@ pub mod interaction_tools;
 pub mod physics_tools;
 pub mod terrain_tools;
 pub mod ui_tools;
+pub mod worldgen_tools;
 
 // Re-export character tools from crate root module
 pub use crate::character_tools::create_avatar_tools;
