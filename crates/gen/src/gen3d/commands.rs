@@ -209,6 +209,44 @@ pub enum GenCommand {
         to: Option<[f32; 3]>,
         check_all_regions: bool,
     },
+
+    // Tier 19: Navmesh Editing (WG5.2)
+    EditNavMesh {
+        action: NavMeshEditAction,
+    },
+
+    // Tier 20: Incremental Regeneration (WG5.3)
+    Regenerate {
+        region_ids: Option<Vec<String>>,
+        preview_only: bool,
+        preserve_manual: bool,
+    },
+}
+
+/// Actions for editing the navmesh.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum NavMeshEditAction {
+    /// Mark an area as non-walkable.
+    BlockArea {
+        position: [f32; 3],
+        radius: f32,
+    },
+    /// Force an area to be walkable.
+    AllowArea {
+        position: [f32; 3],
+        radius: f32,
+    },
+    /// Create a navigable connection between two points.
+    AddConnection {
+        from: [f32; 3],
+        to: [f32; 3],
+        bidirectional: bool,
+    },
+    /// Remove a connection near a point.
+    RemoveConnection {
+        from: [f32; 3],
+    },
 }
 
 /// Actions for editing the blockout layout.
@@ -954,6 +992,21 @@ pub enum GenResponse {
     },
     NavigabilityResult {
         result_json: String,
+    },
+
+    // Navmesh edit responses
+    NavMeshEdited {
+        action: String,
+        description: String,
+    },
+
+    // Regeneration responses
+    RegenerationPreview {
+        preview_json: String,
+    },
+    Regenerated {
+        regions_processed: usize,
+        entities_removed: usize,
     },
 
     Error {

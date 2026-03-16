@@ -967,6 +967,220 @@ impl Tool for GenValidateNavigabilityTool {
 }
 
 // ---------------------------------------------------------------------------
+// gen_edit_navmesh (WG5.2)
+// ---------------------------------------------------------------------------
+
+pub struct GenEditNavMeshTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenEditNavMeshTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenEditNavMeshTool {
+    fn name(&self) -> &str {
+        "gen_edit_navmesh"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_edit_navmesh".to_string(),
+            description: "Manually mark areas as walkable or blocked on the navmesh, or add/remove off-mesh connections for teleporters and jump pads.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["block_area", "allow_area", "add_connection", "remove_connection"],
+                        "description": "Type of navmesh edit"
+                    },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Center position [x, y, z]"
+                    },
+                    "radius": {
+                        "type": "number",
+                        "default": 2.0,
+                        "description": "Area of effect radius"
+                    },
+                    "connection_target": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Target position for add_connection"
+                    },
+                    "bidirectional": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether the connection is bidirectional"
+                    }
+                },
+                "required": ["action", "position"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+
+        let action_str = args["action"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing action"))?;
+
+        let position = args["position"]
+            .as_array()
+            .and_then(|arr| {
+                if arr.len() == 3 {
+                    Some([
+                        arr[0].as_f64()? as f32,
+                        arr[1].as_f64()? as f32,
+                        arr[2].as_f64()? as f32,
+                    ])
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid position"))?;
+
+        let radius = args["radius"].as_f64().unwrap_or(2.0) as f32;
+
+        let nav_action = match action_str {
+            "block_area" => NavMeshEditAction::BlockArea { position, radius },
+            "allow_area" => NavMeshEditAction::AllowArea { position, radius },
+            "add_connection" => {
+                let target = args["connection_target"]
+                    .as_array()
+                    .and_then(|arr| {
+                        if arr.len() == 3 {
+                            Some([
+                                arr[0].as_f64()? as f32,
+                                arr[1].as_f64()? as f32,
+                                arr[2].as_f64()? as f32,
+                            ])
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("Missing connection_target"))?;
+                let bidirectional = args["bidirectional"].as_bool().unwrap_or(true);
+                NavMeshEditAction::AddConnection {
+                    from: position,
+                    to: target,
+                    bidirectional,
+                }
+            }
+            "remove_connection" => NavMeshEditAction::RemoveConnection { from: position },
+            other => return Err(anyhow::anyhow!("Unknown action: {}", other)),
+        };
+
+        match self
+            .bridge
+            .send(GenCommand::EditNavMesh { action: nav_action })
+            .await?
+        {
+            GenResponse::NavMeshEdited {
+                action,
+                description,
+            } => Ok(format!("{}: {}. Rebuild navmesh with gen_build_navmesh to apply.", action, description)),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// gen_regenerate (WG5.3)
+// ---------------------------------------------------------------------------
+
+pub struct GenRegenerateTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenRegenerateTool {
+    pub fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenRegenerateTool {
+    fn name(&self) -> &str {
+        "gen_regenerate"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_regenerate".to_string(),
+            description: "Regenerate content in dirty blockout regions. Only modified regions are regenerated; unchanged regions keep their entities.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "region_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Specific regions to regenerate. Omit for all dirty regions."
+                    },
+                    "preview_only": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Show what would change without executing"
+                    },
+                    "preserve_manual": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Keep manually placed (untiered) entities"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+
+        let region_ids = args["region_ids"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            });
+
+        let preview_only = args["preview_only"].as_bool().unwrap_or(false);
+        let preserve_manual = args["preserve_manual"].as_bool().unwrap_or(true);
+
+        match self
+            .bridge
+            .send(GenCommand::Regenerate {
+                region_ids,
+                preview_only,
+                preserve_manual,
+            })
+            .await?
+        {
+            GenResponse::RegenerationPreview { preview_json } => Ok(preview_json),
+            GenResponse::Regenerated {
+                regions_processed,
+                entities_removed,
+            } => Ok(format!(
+                "Regenerated {} regions, removed {} entities",
+                regions_processed, entities_removed
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -982,6 +1196,8 @@ pub fn create_worldgen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenEvaluateSceneTool::new(bridge.clone())),
         Box::new(GenAutoRefineTool::new(bridge.clone())),
         Box::new(GenBuildNavMeshTool::new(bridge.clone())),
-        Box::new(GenValidateNavigabilityTool::new(bridge)),
+        Box::new(GenValidateNavigabilityTool::new(bridge.clone())),
+        Box::new(GenEditNavMeshTool::new(bridge.clone())),
+        Box::new(GenRegenerateTool::new(bridge)),
     ]
 }

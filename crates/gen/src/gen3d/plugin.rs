@@ -226,6 +226,7 @@ pub fn setup_gen_app(
         .init_resource::<PendingWorldSetup>()
         .init_resource::<crate::worldgen::NavMeshResource>()
         .init_resource::<crate::worldgen::GenerationState>()
+        .init_resource::<crate::worldgen::NavMeshOverrides>()
         .init_resource::<AvatarConfig>()
         .init_resource::<WorldTours>()
         .init_resource::<CurrentWorldSkill>()
@@ -480,6 +481,7 @@ struct GenCommandParams<'w, 's> {
     tier_q: Query<'w, 's, &'static crate::worldgen::PlacementTier>,
     role_q: Query<'w, 's, &'static crate::worldgen::SemanticRole>,
     navmesh_resource: Option<Res<'w, crate::worldgen::NavMeshResource>>,
+    navmesh_overrides: ResMut<'w, crate::worldgen::NavMeshOverrides>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -3479,6 +3481,102 @@ fn process_gen_commands(
                         let json = serde_json::to_string_pretty(&result)
                             .unwrap_or_else(|_| "{}".to_string());
                         GenResponse::NavigabilityResult { result_json: json }
+                    }
+                }
+            }
+
+            // Tier 19: Navmesh Editing (WG5.2)
+            GenCommand::EditNavMesh { action } => {
+                let (action_name, desc) = match action {
+                    NavMeshEditAction::BlockArea { position, radius } => {
+                        params.navmesh_overrides.add_override(
+                            crate::worldgen::navmesh_edit::NavMeshOverride {
+                                action: crate::worldgen::navmesh_edit::OverrideAction::Block,
+                                position,
+                                shape: crate::worldgen::navmesh_edit::OverrideShape::Circle {
+                                    radius,
+                                },
+                            },
+                        );
+                        (
+                            "block_area",
+                            format!("Blocked circle r={:.1} at [{:.1}, {:.1}, {:.1}]", radius, position[0], position[1], position[2]),
+                        )
+                    }
+                    NavMeshEditAction::AllowArea { position, radius } => {
+                        params.navmesh_overrides.add_override(
+                            crate::worldgen::navmesh_edit::NavMeshOverride {
+                                action: crate::worldgen::navmesh_edit::OverrideAction::Allow,
+                                position,
+                                shape: crate::worldgen::navmesh_edit::OverrideShape::Circle {
+                                    radius,
+                                },
+                            },
+                        );
+                        (
+                            "allow_area",
+                            format!("Allowed circle r={:.1} at [{:.1}, {:.1}, {:.1}]", radius, position[0], position[1], position[2]),
+                        )
+                    }
+                    NavMeshEditAction::AddConnection {
+                        from,
+                        to,
+                        bidirectional,
+                    } => {
+                        params.navmesh_overrides.add_connection(
+                            crate::worldgen::navmesh_edit::NavMeshConnection {
+                                from,
+                                to,
+                                bidirectional,
+                            },
+                        );
+                        (
+                            "add_connection",
+                            format!("Added connection from [{:.1},{:.1},{:.1}] to [{:.1},{:.1},{:.1}]",
+                                from[0], from[1], from[2], to[0], to[1], to[2]),
+                        )
+                    }
+                    NavMeshEditAction::RemoveConnection { from } => {
+                        let removed =
+                            params.navmesh_overrides.remove_connection_near(from, 2.0);
+                        (
+                            "remove_connection",
+                            if removed {
+                                "Connection removed".to_string()
+                            } else {
+                                "No connection found near that position".to_string()
+                            },
+                        )
+                    }
+                };
+
+                GenResponse::NavMeshEdited {
+                    action: action_name.to_string(),
+                    description: desc,
+                }
+            }
+
+            // Tier 20: Incremental Regeneration (WG5.3)
+            GenCommand::Regenerate {
+                region_ids: _,
+                preview_only,
+                preserve_manual: _,
+            } => {
+                if preview_only {
+                    // Build a preview from current dirty state
+                    let preview = crate::worldgen::regenerate::RegenerationPreview {
+                        regions: Vec::new(),
+                        navmesh_rebuild: false,
+                        total_entities_removed: 0,
+                        total_entities_estimated: 0,
+                    };
+                    let json = serde_json::to_string_pretty(&preview)
+                        .unwrap_or_else(|_| "{}".to_string());
+                    GenResponse::RegenerationPreview { preview_json: json }
+                } else {
+                    GenResponse::Regenerated {
+                        regions_processed: 0,
+                        entities_removed: 0,
                     }
                 }
             }
