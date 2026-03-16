@@ -158,6 +158,7 @@ pub fn spawn_npc(
 }
 
 /// System for NPC idle behavior - face nearby player.
+#[allow(clippy::type_complexity)]
 pub fn npc_idle_system(
     player_query: Query<&Transform, With<Player>>,
     mut npc_query: Query<(&mut Transform, &NpcBehavior), (With<Npc>, Without<Player>)>,

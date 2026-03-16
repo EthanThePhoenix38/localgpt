@@ -385,6 +385,247 @@ mod tests {
     }
 }
 
+// ---------------------------------------------------------------------------
+// GAP-P1-02: Dialogue UI Panel
+// ---------------------------------------------------------------------------
+
+/// Marker component for the root dialogue UI panel entity.
+#[derive(Component)]
+pub struct DialoguePanel;
+
+/// Marker for the speaker name text entity.
+#[derive(Component)]
+pub struct DialogueSpeakerText;
+
+/// Marker for the dialogue body text entity.
+#[derive(Component)]
+pub struct DialogueBodyText;
+
+/// Marker for choice button entities, storing choice index.
+#[derive(Component)]
+pub struct DialogueChoiceButton {
+    pub index: usize,
+}
+
+/// System: spawn, update, and despawn the dialogue UI panel.
+///
+/// When `DialogueState.active_npc` is Some and no panel exists, spawns the UI.
+/// When dialogue ends (active_npc is None), despawns the panel.
+/// While active, updates the text content with typewriter effect.
+pub fn dialogue_ui_system(
+    dialogue_state: Res<DialogueState>,
+    npc_query: Query<(&Name, &DialogueTree), With<Npc>>,
+    panel_query: Query<Entity, With<DialoguePanel>>,
+    mut body_query: Query<&mut Text, (With<DialogueBodyText>, Without<DialogueSpeakerText>)>,
+    mut commands: Commands,
+) {
+    let has_panel = !panel_query.is_empty();
+
+    if let Some(npc_entity) = dialogue_state.active_npc {
+        let Some(node_id) = &dialogue_state.current_node else {
+            return;
+        };
+
+        let Ok((name, tree)) = npc_query.get(npc_entity) else {
+            return;
+        };
+
+        let Some(node) = tree.get_node(node_id) else {
+            return;
+        };
+
+        if !has_panel {
+            // Spawn dialogue panel
+            let speaker = node
+                .speaker
+                .as_deref()
+                .unwrap_or(name.as_str());
+
+            commands
+                .spawn((
+                    DialoguePanel,
+                    Node {
+                        width: Val::Percent(80.0),
+                        height: Val::Auto,
+                        min_height: Val::Px(120.0),
+                        position_type: PositionType::Absolute,
+                        bottom: Val::Px(20.0),
+                        left: Val::Percent(10.0),
+                        flex_direction: FlexDirection::Column,
+                        padding: UiRect::all(Val::Px(16.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.75)),
+                    ZIndex(50),
+                ))
+                .with_children(|parent| {
+                    // Speaker name
+                    parent.spawn((
+                        DialogueSpeakerText,
+                        Text::new(speaker.to_string()),
+                        TextFont {
+                            font_size: 20.0,
+                            ..default()
+                        },
+                        TextColor(Color::srgb(1.0, 0.85, 0.3)),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(8.0)),
+                            ..default()
+                        },
+                    ));
+                    // Dialogue body text
+                    parent.spawn((
+                        DialogueBodyText,
+                        Text::new(String::new()),
+                        TextFont {
+                            font_size: 16.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(12.0)),
+                            ..default()
+                        },
+                    ));
+                    // Choice buttons
+                    for (i, choice) in node.choices.iter().enumerate() {
+                        parent.spawn((
+                            DialogueChoiceButton { index: i },
+                            Text::new(format!("[{}] {}", i + 1, choice.text)),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.7, 0.9, 1.0)),
+                            Node {
+                                margin: UiRect::bottom(Val::Px(4.0)),
+                                ..default()
+                            },
+                        ));
+                    }
+                    // If no choices, show "[E] Continue"
+                    if node.choices.is_empty() {
+                        parent.spawn((
+                            DialogueChoiceButton { index: 0 },
+                            Text::new("[E] Continue".to_string()),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.7, 0.9, 1.0)),
+                        ));
+                    }
+                });
+        } else {
+            // Update text with typewriter effect
+            let full_text = &node.text;
+            let visible_chars =
+                (dialogue_state.typewriter_progress * full_text.len() as f32) as usize;
+            let display_text: String = full_text.chars().take(visible_chars).collect();
+
+            for mut text in body_query.iter_mut() {
+                **text = display_text.clone();
+            }
+        }
+    } else if has_panel {
+        // Dialogue ended — despawn panel
+        for entity in panel_query.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+/// System: handle player choice selection via number keys or E to continue.
+pub fn dialogue_choice_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut dialogue_state: ResMut<DialogueState>,
+    npc_query: Query<&DialogueTree, With<Npc>>,
+    panel_query: Query<Entity, With<DialoguePanel>>,
+    mut commands: Commands,
+) {
+    let Some(npc_entity) = dialogue_state.active_npc else {
+        return;
+    };
+    let Some(node_id) = dialogue_state.current_node.clone() else {
+        return;
+    };
+
+    // Wait for typewriter to finish
+    if dialogue_state.typewriter_progress < 1.0 {
+        // Allow skipping typewriter with E
+        if keyboard.just_pressed(KeyCode::KeyE) {
+            dialogue_state.typewriter_progress = 1.0;
+        }
+        return;
+    }
+
+    let Ok(tree) = npc_query.get(npc_entity) else {
+        return;
+    };
+    let Some(node) = tree.get_node(&node_id) else {
+        return;
+    };
+
+    // Determine selected choice
+    let selected = if node.choices.is_empty() {
+        // No choices — E or any number to continue/end
+        if keyboard.just_pressed(KeyCode::KeyE) || keyboard.just_pressed(KeyCode::Digit1) {
+            Some(None) // End dialogue
+        } else {
+            None
+        }
+    } else {
+        // Map number keys to choices
+        let choice_keys = [
+            KeyCode::Digit1,
+            KeyCode::Digit2,
+            KeyCode::Digit3,
+            KeyCode::Digit4,
+            KeyCode::Digit5,
+        ];
+        choice_keys
+            .iter()
+            .enumerate()
+            .find(|(i, key)| *i < node.choices.len() && keyboard.just_pressed(**key))
+            .map(|(i, _)| node.choices[i].next_node_id.clone())
+    };
+
+    if let Some(next_node_id) = selected {
+        // Despawn current panel so it rebuilds with new content
+        for entity in panel_query.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        if let Some(next_id) = next_node_id {
+            // Advance to next node
+            dialogue_state.current_node = Some(next_id);
+            dialogue_state.typewriter_progress = 0.0;
+        } else {
+            // End dialogue
+            dialogue_state.active_npc = None;
+            dialogue_state.current_node = None;
+            dialogue_state.proximity_cooldown = 3.0;
+        }
+    }
+}
+
+/// System: suppress player movement while dialogue is active.
+///
+/// Resets player input to zero when dialogue is happening.
+pub fn dialogue_movement_lock_system(
+    dialogue_state: Res<DialogueState>,
+    mut input_query: Query<&mut super::player::PlayerInput, With<Player>>,
+) {
+    if dialogue_state.active_npc.is_some() {
+        for mut input in input_query.iter_mut() {
+            input.move_forward = 0.0;
+            input.move_right = 0.0;
+            input.jump = false;
+            input.run = false;
+        }
+    }
+}
+
 /// Plugin for dialogue systems.
 pub struct DialoguePlugin;
 
@@ -396,6 +637,10 @@ impl Plugin for DialoguePlugin {
                 proximity_dialogue_trigger_system,
                 click_dialogue_system,
                 typewriter_system,
+                dialogue_ui_system,
+                dialogue_choice_system,
+                dialogue_movement_lock_system
+                    .after(super::player::player_input_system),
             ),
         );
     }

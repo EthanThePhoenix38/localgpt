@@ -190,6 +190,7 @@ pub fn debug_spawn_point_system(query: Query<(&Transform, &SpawnPoint)>, mut giz
 }
 
 /// System to respawn the player when below the kill plane.
+#[allow(clippy::type_complexity)]
 pub fn respawn_player_system(
     kill_plane: Res<KillPlane>,
     mut player_query: Query<&mut Transform, With<Player>>,

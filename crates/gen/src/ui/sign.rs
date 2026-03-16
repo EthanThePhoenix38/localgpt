@@ -91,6 +91,7 @@ pub fn parse_sign_color(hex: &str) -> Option<Color> {
 }
 
 /// System to billboard signs to face camera.
+#[allow(clippy::type_complexity)]
 pub fn sign_billboard_system(
     camera_query: Query<&Transform, (With<Camera3d>, Without<Sign>)>,
     mut sign_query: Query<(&Sign, &mut Transform), (With<Sign>, Without<Camera3d>)>,

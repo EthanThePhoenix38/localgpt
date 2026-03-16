@@ -483,6 +483,7 @@ impl PlayerInventory {
 // ---------------------------------------------------------------------------
 
 /// System: check proximity triggers against the player each frame.
+#[allow(clippy::type_complexity)]
 pub fn proximity_trigger_system(
     time: Res<Time>,
     mut player_query: Query<
@@ -562,6 +563,7 @@ pub fn proximity_trigger_system(
 }
 
 /// System: handle click triggers (E key press within max_distance).
+#[allow(clippy::type_complexity)]
 pub fn click_trigger_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<

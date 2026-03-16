@@ -182,6 +182,7 @@ pub fn notification_spawn_system(
 }
 
 /// System to animate notifications.
+#[allow(clippy::type_complexity)]
 pub fn notification_animation_system(
     time: Res<Time>,
     mut commands: Commands,
