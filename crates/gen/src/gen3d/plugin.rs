@@ -323,6 +323,8 @@ pub fn setup_gen_app(
         .add_plugins(crate::physics::GravityPlugin)
         .add_plugins(crate::physics::ColliderPlugin)
         .add_plugins(crate::physics::JointPlugin)
+        // Gallery UI (egui overlay, G toggle)
+        .add_plugins(crate::gen3d::gallery_ui::GalleryPlugin)
         // World Inspector Panel (egui overlay, F1 toggle)
         .add_plugins(crate::inspector::InspectorPlugin);
 }

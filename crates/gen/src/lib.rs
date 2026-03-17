@@ -5,7 +5,10 @@
 
 pub mod character;
 pub mod character_tools;
+pub mod experiment;
 pub mod gen3d;
+pub mod gpu_lock;
+pub mod heartbeat_gen;
 pub mod inspector;
 pub mod interaction;
 pub mod mcp;

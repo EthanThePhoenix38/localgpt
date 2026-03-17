@@ -92,6 +92,32 @@ pub struct WorldMeta {
     /// Time of day (0.0–24.0, for lighting presets).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub time_of_day: Option<f32>,
+
+    // --- Gallery & experiment metadata (added for headless pipeline) ---
+    /// Free-form style tags for gallery filtering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    /// Generation source: "interactive", "headless", "experiment", "mcp".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// If part of a variation experiment, the group ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variation_group: Option<String>,
+    /// Variation axis and value (e.g., ("lighting", "sunset")).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variation: Option<(String, String)>,
+    /// Original prompt used to generate this world.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// LLM model used for generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Generation duration in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generation_duration_ms: Option<u64>,
+    /// Style name from memory (if applied).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style_ref: Option<String>,
 }
 
 /// Environment settings.
@@ -161,6 +187,14 @@ impl WorldManifest {
                 description: None,
                 biome: None,
                 time_of_day: None,
+                tags: None,
+                source: None,
+                variation_group: None,
+                variation: None,
+                prompt: None,
+                model: None,
+                generation_duration_ms: None,
+                style_ref: None,
             },
             environment: None,
             camera: None,

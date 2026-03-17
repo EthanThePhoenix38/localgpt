@@ -12,10 +12,15 @@ pub mod avatar;
 pub mod behaviors;
 pub mod commands;
 pub mod compat;
+pub mod gallery;
+pub mod gallery_ui;
 pub mod gltf_export;
+pub mod headless;
 pub mod html_export;
+pub mod offscreen;
 pub mod plugin;
 pub mod registry;
+pub mod system_prompt;
 pub mod tools;
 pub mod world;
 

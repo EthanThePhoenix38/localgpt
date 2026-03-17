@@ -5,6 +5,7 @@
 
 pub mod asset_gen_tools;
 pub mod avatar_tools;
+pub mod experiment_tools;
 pub mod interaction_tools;
 pub mod physics_tools;
 pub mod terrain_tools;

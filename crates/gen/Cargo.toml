@@ -51,6 +51,12 @@ cpal = "0.17"
 # World skill serialization
 ron = "0.9"
 
+# Timestamps for experiment tracking
+chrono = { workspace = true }
+
+# File locking for GPU exclusivity (unix only, used by gpu_lock)
+libc = "0.2"
+
 # WebSocket inspector protocol (Spec 0.6)
 axum = { version = "0.8", features = ["ws"] }
 

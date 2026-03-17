@@ -418,6 +418,75 @@ async fn handle_gen_command(
             CommandResult::Continue
         }
 
+        "/gallery" => {
+            let subcommand = parts.get(1).copied().unwrap_or("list");
+            match subcommand {
+                "list" | "ls" => {
+                    let summary = gen3d::gallery::gallery_summary(workspace);
+                    println!("\n{}\n", summary);
+                }
+                "refresh" => {
+                    let entries = gen3d::gallery::scan_world_gallery(workspace);
+                    println!("\nRefreshed: {} worlds found.\n", entries.len());
+                }
+                _ => {
+                    println!("\nUsage:");
+                    println!("  /gallery         List all worlds");
+                    println!("  /gallery list    List all worlds");
+                    println!("  /gallery refresh Rescan skills/");
+                    println!("  Press G in the viewport to toggle the gallery overlay\n");
+                }
+            }
+            CommandResult::Continue
+        }
+
+        "/experiments" | "/exp" => {
+            let subcommand = parts.get(1).copied().unwrap_or("list");
+            match subcommand {
+                "list" | "ls" => {
+                    let config = localgpt_core::config::Config::load().ok();
+                    let state_dir = config
+                        .as_ref()
+                        .map(|c| c.paths.state_dir.clone())
+                        .unwrap_or_else(|| PathBuf::from("~/.local/state/localgpt"));
+                    let tracker = localgpt_gen::experiment::ExperimentTracker::new(&state_dir);
+                    match tracker.read_all() {
+                        Ok(exps) => {
+                            if exps.is_empty() {
+                                println!("\nNo experiments found.\n");
+                            } else {
+                                println!("\n{} experiments:", exps.len());
+                                for exp in exps.iter().rev().take(20) {
+                                    let status = format!("{}", exp.status);
+                                    let entities = exp
+                                        .entity_count
+                                        .map(|n| format!("{} entities", n))
+                                        .unwrap_or_default();
+                                    let prompt_preview = if exp.prompt.len() > 50 {
+                                        &exp.prompt[..50]
+                                    } else {
+                                        &exp.prompt
+                                    };
+                                    println!(
+                                        "  [{}] {} — {} {}",
+                                        status, exp.id, prompt_preview, entities
+                                    );
+                                }
+                                println!();
+                            }
+                        }
+                        Err(e) => eprintln!("\nError reading experiments: {}\n", e),
+                    }
+                }
+                _ => {
+                    println!("\nUsage:");
+                    println!("  /experiments        List recent experiments");
+                    println!("  /experiments list   List recent experiments\n");
+                }
+            }
+            CommandResult::Continue
+        }
+
         _ => {
             // Not a recognized command - send to agent
             CommandResult::SendMessage(input.to_string())
@@ -559,13 +628,51 @@ struct Cli {
 #[derive(Subcommand)]
 enum GenSubcommand {
     /// Run as MCP server (stdio) — Bevy window + gen tools over MCP
-    McpServer,
+    McpServer {
+        /// Run headless (no window) — for CI or batch generation via MCP
+        #[arg(long)]
+        headless: bool,
+    },
     /// Control an external avatar (headless, no Bevy window)
     Control {
         /// URL of the external app
         url: String,
         /// Initial prompt
         prompt: Option<String>,
+    },
+    /// Headless generation — generate a world without opening a window
+    Headless {
+        /// Generation prompt (required)
+        #[arg(long)]
+        prompt: String,
+
+        /// Output world skill directory (default: auto-named in workspace/skills/)
+        #[arg(long)]
+        output: Option<String>,
+
+        /// Capture a thumbnail after generation (default: true)
+        #[arg(long, default_value = "true")]
+        screenshot: bool,
+
+        /// Screenshot width in pixels
+        #[arg(long, default_value = "1280")]
+        screenshot_width: u32,
+
+        /// Screenshot height in pixels
+        #[arg(long, default_value = "720")]
+        screenshot_height: u32,
+
+        /// Max generation time before abort (seconds, default: 300)
+        #[arg(long, default_value = "300")]
+        timeout: u64,
+
+        /// Override LLM model for this run
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Style hint prepended to prompt
+        #[arg(long)]
+        style: Option<String>,
     },
 }
 
@@ -612,12 +719,87 @@ fn main() -> Result<()> {
             )
         }
 
-        Some(GenSubcommand::McpServer) => {
+        Some(GenSubcommand::Headless {
+            prompt,
+            output,
+            screenshot,
+            screenshot_width,
+            screenshot_height,
+            timeout,
+            model,
+            style,
+        }) => {
+            // Headless generation mode — no window, generate and exit
+            let headless_config = gen3d::headless::HeadlessConfig {
+                prompt,
+                output,
+                screenshot,
+                screenshot_width,
+                screenshot_height,
+                timeout_secs: timeout,
+                agent_id: cli.agent,
+                model,
+                style,
+            };
+
+            tracing::info!("Starting headless generation: {:?}", headless_config.prompt);
+
+            let (bridge, channels) = gen3d::create_gen_channels();
+            let completion_flag = gen3d::headless::HeadlessCompletionFlag::default();
+            let flag_for_agent = completion_flag.clone();
+            let flag_for_timeout = completion_flag.clone();
+            let agent_config = config.clone();
+
+            // Spawn timeout watchdog
+            let timeout_secs = headless_config.timeout_secs;
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(timeout_secs));
+                if !flag_for_timeout.is_done() {
+                    tracing::error!("Headless generation timed out after {}s", timeout_secs);
+                    flag_for_timeout.complete_failure();
+                }
+            });
+
+            // Spawn agent loop on background thread
+            let bridge_for_agent = bridge.clone();
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime for headless gen");
+
+                rt.block_on(async move {
+                    match run_headless_agent(bridge_for_agent, headless_config, agent_config).await
+                    {
+                        Ok(()) => flag_for_agent.complete_success(),
+                        Err(e) => {
+                            tracing::error!("Headless generation failed: {}", e);
+                            flag_for_agent.complete_failure();
+                        }
+                    }
+                });
+            });
+
+            // Run headless Bevy on the main thread
+            let result = run_headless_bevy_app(channels, workspace, completion_flag.clone());
+
+            // Map exit code based on success/failure
+            if !completion_flag.is_success() {
+                std::process::exit(1);
+            }
+
+            result
+        }
+
+        Some(GenSubcommand::McpServer { headless }) => {
             // MCP server mode: Bevy on main thread, MCP stdio server on background thread
-            let initial_scene = cli
-                .scene
-                .as_ref()
-                .and_then(|path| gen3d::plugin::resolve_gltf_path(path, &workspace));
+            let initial_scene = if headless {
+                None
+            } else {
+                cli.scene
+                    .as_ref()
+                    .and_then(|path| gen3d::plugin::resolve_gltf_path(path, &workspace))
+            };
 
             let (bridge, channels) = gen3d::create_gen_channels();
             let bridge_for_mcp = bridge.clone();
@@ -637,8 +819,13 @@ fn main() -> Result<()> {
                 });
             });
 
-            // Run Bevy on the main thread
-            run_bevy_app(channels, workspace, initial_scene)
+            // Run Bevy on the main thread (headless or windowed)
+            if headless {
+                let completion_flag = gen3d::headless::HeadlessCompletionFlag::default();
+                run_headless_bevy_app(channels, workspace, completion_flag)
+            } else {
+                run_bevy_app(channels, workspace, initial_scene)
+            }
         }
 
         None => {
@@ -708,6 +895,136 @@ fn run_bevy_app(
     gen3d::plugin::setup_gen_app(&mut app, channels, workspace, initial_scene);
 
     app.run();
+
+    Ok(())
+}
+
+/// Set up and run headless Bevy (no window) on the main thread.
+///
+/// Headless mode uses DefaultPlugins without a primary window, and adds
+/// the completion detector system that exits when the agent is done.
+fn run_headless_bevy_app(
+    channels: gen3d::GenChannels,
+    workspace: std::path::PathBuf,
+    completion_flag: gen3d::headless::HeadlessCompletionFlag,
+) -> Result<()> {
+    use bevy::prelude::*;
+
+    let mut app = App::new();
+
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: None, // No window
+                exit_condition: bevy::window::ExitCondition::DontExit,
+                ..default()
+            })
+            .set(bevy::render::RenderPlugin {
+                render_creation: bevy::render::settings::RenderCreation::Automatic(
+                    bevy::render::settings::WgpuSettings {
+                        // Allow software rendering on headless servers
+                        backends: Some(bevy::render::settings::Backends::all()),
+                        ..default()
+                    },
+                ),
+                ..default()
+            })
+            .set(bevy::asset::AssetPlugin {
+                file_path: "/".to_string(),
+                ..default()
+            })
+            .disable::<bevy::log::LogPlugin>(),
+    );
+
+    // Insert completion flag and add detector system
+    app.insert_resource(completion_flag);
+    app.add_systems(Update, gen3d::headless::headless_completion_detector);
+
+    gen3d::plugin::setup_gen_app(&mut app, channels, workspace, None);
+
+    app.run();
+
+    Ok(())
+}
+
+/// Run the headless generation agent — generates a world and exits.
+async fn run_headless_agent(
+    bridge: std::sync::Arc<gen3d::GenBridge>,
+    headless_config: gen3d::headless::HeadlessConfig,
+    config: localgpt_core::config::Config,
+) -> Result<()> {
+    use localgpt_core::agent::Agent;
+    use localgpt_core::agent::tools::create_safe_tools;
+    use localgpt_core::memory::MemoryManager;
+    use std::sync::Arc;
+
+    let agent_id = &headless_config.agent_id;
+
+    // Set up memory
+    let memory = MemoryManager::new_with_agent(&config.memory, agent_id)?;
+    let memory = Arc::new(memory);
+
+    // Create safe tools + gen tools (no CLI tools needed in headless)
+    let mut tools = create_safe_tools(&config, Some(memory.clone()))?;
+    tools.extend(gen3d::tools::create_gen_tools(bridge.clone()));
+    tools.extend(localgpt_gen::mcp::avatar_tools::create_character_tools(
+        bridge.clone(),
+    ));
+    tools.extend(localgpt_gen::mcp::interaction_tools::create_interaction_tools(bridge.clone()));
+    tools.extend(localgpt_gen::mcp::terrain_tools::create_terrain_tools(
+        bridge.clone(),
+    ));
+    tools.extend(localgpt_gen::mcp::ui_tools::create_ui_tools(bridge.clone()));
+    tools.extend(localgpt_gen::mcp::physics_tools::create_physics_tools(
+        bridge.clone(),
+    ));
+
+    // Configure agent
+    let mut config = config;
+    config.agent.max_tool_repeats = config.agent.max_tool_repeats.max(20);
+
+    if let Some(ref model) = headless_config.model {
+        config.agent.default_model = model.clone();
+    }
+
+    // Create agent
+    let mut agent = Agent::new_with_tools(config.clone(), agent_id, memory, tools)?;
+    agent.new_session().await?;
+
+    // Build effective prompt
+    let effective_prompt = format!(
+        "{}\n\n{}",
+        gen3d::system_prompt::HEADLESS_EXPERIMENT_PROMPT,
+        headless_config.effective_prompt()
+    );
+
+    eprintln!("Generating: {}", headless_config.prompt);
+
+    // Generate the world
+    let response = agent.chat(&effective_prompt).await?;
+
+    tracing::info!("Agent response: {}", &response[..response.len().min(200)]);
+
+    // Save the world
+    let world_name = headless_config
+        .output
+        .as_deref()
+        .map(|p| {
+            std::path::Path::new(p)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        })
+        .unwrap_or_else(|| localgpt_gen::experiment::prompt_to_slug(&headless_config.prompt));
+
+    let save_prompt = format!(
+        "Save this world with gen_save_world. Name: \"{}\"",
+        world_name
+    );
+    let _save_response = agent.chat(&save_prompt).await?;
+
+    eprintln!("World saved: {}", world_name);
 
     Ok(())
 }

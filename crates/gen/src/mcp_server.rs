@@ -7,6 +7,7 @@
 //! - All gen tools (spawn, modify, camera, audio, behaviors, world, etc.)
 //! - memory_search, memory_get (read), memory_save, memory_log (write)
 //! - web_fetch, web_search
+//! - Experiment queue tools (gen_queue_experiment, gen_list_experiments, gen_experiment_status)
 
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ use anyhow::Result;
 use localgpt_core::agent::tools::Tool;
 use localgpt_core::config::Config;
 
+use crate::experiment::ExperimentTracker;
 use crate::gen3d::GenBridge;
 
 /// Run the MCP stdio server with gen tools + core tools.
@@ -24,11 +26,11 @@ pub async fn run_mcp_server(bridge: Arc<GenBridge>, config: Config) -> Result<()
 }
 
 /// Create the combined tool set for the MCP server:
-/// gen tools + safe core tools + memory write tools.
+/// gen tools + safe core tools + memory write tools + experiment tools.
 ///
 /// CLI tools (bash, read_file, write_file, edit_file) are excluded because
 /// external CLI backends already have their own file/shell tools.
-fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<Box<dyn Tool>>> {
+pub fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<Box<dyn Tool>>> {
     use localgpt_core::agent::tools::create_safe_tools;
     use localgpt_core::mcp::memory_tools::create_memory_write_tools;
     use localgpt_core::memory::MemoryManager;
@@ -68,6 +70,12 @@ fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<Box<d
 
     // AI1 tools: AI asset generation
     tools.extend(crate::mcp::asset_gen_tools::create_asset_gen_tools(bridge));
+
+    // Experiment queue tools: queue, list, status
+    let tracker = Arc::new(ExperimentTracker::new(&config.paths.state_dir));
+    tools.extend(crate::mcp::experiment_tools::create_experiment_tools(
+        tracker,
+    ));
 
     Ok(tools)
 }
