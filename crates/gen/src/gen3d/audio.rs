@@ -168,9 +168,16 @@ fn audio_thread_main(rx: mpsc::Receiver<AudioGraphUpdate>, master_vol: Shared) {
 
     let sample_rate = supported_config.sample_rate() as f64;
     let channels = supported_config.channels() as usize;
-    let config = supported_config.config();
+    let mut config = supported_config.config();
 
-    tracing::info!("Audio output: {} Hz, {} channels", sample_rate, channels);
+    // Request a larger buffer to avoid underruns from FunDSP graph processing
+    config.buffer_size = cpal::BufferSize::Fixed(2048);
+
+    tracing::info!(
+        "Audio output: {} Hz, {} channels, buffer 2048",
+        sample_rate,
+        channels
+    );
 
     // Build initial silent graph
     let mut net = Net::new(0, 2);
@@ -358,7 +365,7 @@ where
                     }
                 }
             },
-            |err| tracing::error!("Audio stream error: {}", err),
+            |err| tracing::warn!("Audio stream: {}", err),
             None,
         )
         .ok()?;

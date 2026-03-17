@@ -114,7 +114,11 @@ pub fn compute_depth_camera(
         DepthCameraAngle::Front => {
             let dist = scene_extent * 1.5 + 10.0;
             DepthCameraSetup {
-                position: [scene_center[0], scene_center[1] + 2.0, scene_center[2] + dist],
+                position: [
+                    scene_center[0],
+                    scene_center[1] + 2.0,
+                    scene_center[2] + dist,
+                ],
                 look_at: scene_center,
                 orthographic: false,
                 ortho_scale: 1.0,
@@ -143,11 +147,7 @@ pub struct DepthCameraSetup {
 }
 
 /// Normalize a raw depth buffer to 0.0-1.0 range, inverted (near=1, far=0).
-pub fn normalize_depth(
-    raw_depths: &[f32],
-    near: f32,
-    far: f32,
-) -> Vec<f32> {
+pub fn normalize_depth(raw_depths: &[f32], near: f32, far: f32) -> Vec<f32> {
     let range = far - near;
     if range <= 0.0 {
         return vec![0.0; raw_depths.len()];
@@ -198,7 +198,8 @@ pub fn write_grayscale_png(
 pub fn add_depth_noise(depths: &mut [f32], sigma: f32, seed: u32) {
     // Simple hash-based pseudo-random noise (no external dependency)
     for (i, d) in depths.iter_mut().enumerate() {
-        let hash = ((i as u32).wrapping_mul(2654435761).wrapping_add(seed)) as f32 / u32::MAX as f32;
+        let hash =
+            ((i as u32).wrapping_mul(2654435761).wrapping_add(seed)) as f32 / u32::MAX as f32;
         // Box-Muller approximation: map uniform [0,1] to approximate Gaussian
         let noise = (hash - 0.5) * 2.0 * sigma;
         *d = (*d + noise).clamp(0.0, 1.0);

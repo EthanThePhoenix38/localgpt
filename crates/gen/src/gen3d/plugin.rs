@@ -3586,12 +3586,18 @@ fn process_gen_commands(
                 }
             }
 
-            GenCommand::RenderDepth { config, output_path } => {
+            GenCommand::RenderDepth {
+                config,
+                output_path,
+            } => {
                 use crate::worldgen::depth::*;
 
                 // Compute scene bounds from all GenEntities
                 let (scene_center, scene_extent) = {
-                    let (c, e) = compute_scene_bounds_from_entities(&params.gen_entities, &params.transforms);
+                    let (c, e) = compute_scene_bounds_from_entities(
+                        &params.gen_entities,
+                        &params.transforms,
+                    );
                     ([c.x, c.y, c.z], e.max(5.0))
                 };
 
@@ -3618,13 +3624,11 @@ fn process_gen_commands(
                 // For each entity, compute its depth (distance along camera forward axis)
                 let mut raw_depths = Vec::new();
                 for (_name, bevy_ent) in params.registry.all_names() {
-                    let Ok(transform) = params.transforms.get(bevy_ent) else { continue };
+                    let Ok(transform) = params.transforms.get(bevy_ent) else {
+                        continue;
+                    };
                     let pos = transform.translation;
-                    let to_entity = [
-                        pos.x - cam_pos[0],
-                        pos.y - cam_pos[1],
-                        pos.z - cam_pos[2],
-                    ];
+                    let to_entity = [pos.x - cam_pos[0], pos.y - cam_pos[1], pos.z - cam_pos[2]];
                     let depth = to_entity[0] * fwd_norm[0]
                         + to_entity[1] * fwd_norm[1]
                         + to_entity[2] * fwd_norm[2];
@@ -3636,14 +3640,8 @@ fn process_gen_commands(
 
                 // If we have entities, compute a basic depth map
                 if !raw_depths.is_empty() {
-                    let min_depth = raw_depths
-                        .iter()
-                        .copied()
-                        .fold(f32::MAX, f32::min);
-                    let max_depth = raw_depths
-                        .iter()
-                        .copied()
-                        .fold(f32::MIN, f32::max);
+                    let min_depth = raw_depths.iter().copied().fold(f32::MAX, f32::min);
+                    let max_depth = raw_depths.iter().copied().fold(f32::MIN, f32::max);
                     let fill_depth = if max_depth > min_depth {
                         (min_depth + max_depth) / 2.0
                     } else {
@@ -3652,7 +3650,8 @@ fn process_gen_commands(
                     depth_buf.fill(fill_depth.clamp(config.near_plane, config.far_plane));
                 }
 
-                let mut normalized = normalize_depth(&depth_buf, config.near_plane, config.far_plane);
+                let mut normalized =
+                    normalize_depth(&depth_buf, config.near_plane, config.far_plane);
                 if config.add_noise {
                     add_depth_noise(&mut normalized, 0.005, 42);
                 }
@@ -3666,7 +3665,10 @@ fn process_gen_commands(
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_millis();
-                    folder.join(format!("depth_{ts}.png")).to_string_lossy().to_string()
+                    folder
+                        .join(format!("depth_{ts}.png"))
+                        .to_string_lossy()
+                        .to_string()
                 });
 
                 // Write PNG
@@ -3689,15 +3691,15 @@ fn process_gen_commands(
             GenCommand::PreviewWorld { config } => {
                 use crate::worldgen::preview::*;
 
-                let _full_prompt = build_preview_prompt(
-                    &config.prompt,
-                    config.style_preset,
-                );
+                let _full_prompt = build_preview_prompt(&config.prompt, config.style_preset);
 
-                let depth_map = config.depth_map_path.clone()
+                let depth_map = config
+                    .depth_map_path
+                    .clone()
                     .unwrap_or_else(|| "(auto-render needed)".to_string());
 
-                let style_name = config.style_preset
+                let style_name = config
+                    .style_preset
                     .map(|s| format!("{:?}", s).to_lowercase())
                     .unwrap_or_else(|| "custom".to_string());
 
@@ -3708,7 +3710,10 @@ fn process_gen_commands(
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_millis();
-                    folder.join(format!("preview_{ts}.png")).to_string_lossy().to_string()
+                    folder
+                        .join(format!("preview_{ts}.png"))
+                        .to_string_lossy()
+                        .to_string()
                 });
 
                 // NOTE: Actual image generation requires external API (ControlNet/ComfyUI).
@@ -3720,7 +3725,15 @@ fn process_gen_commands(
                 }
             }
 
-            GenCommand::GenerateAsset { prompt, name, position, scale, model, quality, .. } => {
+            GenCommand::GenerateAsset {
+                prompt,
+                name,
+                position,
+                scale,
+                model,
+                quality,
+                ..
+            } => {
                 let task_id = params.asset_gen_manager.create_task(
                     crate::gen3d::asset_gen::GenerationTaskType::Mesh,
                     prompt.clone(),
@@ -3736,12 +3749,22 @@ fn process_gen_commands(
                     estimated_seconds: estimated,
                     message: format!(
                         "Generating '{}' with {} ({:?} quality). Will auto-spawn at [{}, {}, {}] when ready.",
-                        name, model.display_name(), quality, position[0], position[1], position[2]
+                        name,
+                        model.display_name(),
+                        quality,
+                        position[0],
+                        position[1],
+                        position[2]
                     ),
                 }
             }
 
-            GenCommand::GenerateTexture { entity, prompt, style, resolution } => {
+            GenCommand::GenerateTexture {
+                entity,
+                prompt,
+                style,
+                resolution,
+            } => {
                 let task_id = params.asset_gen_manager.create_task(
                     crate::gen3d::asset_gen::GenerationTaskType::Texture,
                     prompt.clone(),
@@ -3768,24 +3791,43 @@ fn process_gen_commands(
                             let cancelled = params.asset_gen_manager.cancel_task(id);
                             serde_json::json!({ "cancelled": cancelled, "task_id": id }).to_string()
                         } else {
-                            serde_json::json!({ "error": "task_id required for cancel" }).to_string()
+                            serde_json::json!({ "error": "task_id required for cancel" })
+                                .to_string()
                         }
                     }
                     _ => {
                         // "status" or "list"
-                        let active: Vec<_> = params.asset_gen_manager.active_tasks().into_iter().cloned().collect();
-                        let completed: Vec<_> = params.asset_gen_manager.completed_tasks().into_iter().cloned().collect();
-                        let failed: Vec<_> = params.asset_gen_manager.failed_tasks().into_iter().cloned().collect();
+                        let active: Vec<_> = params
+                            .asset_gen_manager
+                            .active_tasks()
+                            .into_iter()
+                            .cloned()
+                            .collect();
+                        let completed: Vec<_> = params
+                            .asset_gen_manager
+                            .completed_tasks()
+                            .into_iter()
+                            .cloned()
+                            .collect();
+                        let failed: Vec<_> = params
+                            .asset_gen_manager
+                            .failed_tasks()
+                            .into_iter()
+                            .cloned()
+                            .collect();
                         serde_json::json!({
                             "active": active,
                             "completed": completed,
                             "failed": failed,
                             "queue_depth": active.len(),
                             "model_server": params.asset_gen_manager.server_status,
-                        }).to_string()
+                        })
+                        .to_string()
                     }
                 };
-                GenResponse::GenerationStatusResult { status_json: result }
+                GenResponse::GenerationStatusResult {
+                    status_json: result,
+                }
             }
 
             // Tier 24: AI NPC Intelligence (AI2)
@@ -3800,7 +3842,9 @@ fn process_gen_commands(
                 }
             }
 
-            GenCommand::NpcObserve { entity, question, .. } => {
+            GenCommand::NpcObserve {
+                entity, question, ..
+            } => {
                 // Would render from NPC POV and send to VLM
                 let description = format!(
                     "NPC '{}' observing scene{}",

@@ -151,7 +151,9 @@ pub fn build_brain_context(
 
     ctx.push_str(&format!(
         "## Current situation\nPosition: ({:.1}, {:.1}, {:.1})\nCurrently: {:?}\n\n",
-        perception.npc_position[0], perception.npc_position[1], perception.npc_position[2],
+        perception.npc_position[0],
+        perception.npc_position[1],
+        perception.npc_position[2],
         perception.current_action
     ));
 
@@ -310,10 +312,7 @@ mod tests {
         // Should only keep last 20
         assert_eq!(state.recent_events.len(), 20);
         assert_eq!(state.recent_events.front().unwrap().description, "event_5");
-        assert_eq!(
-            state.recent_events.back().unwrap().description,
-            "event_24"
-        );
+        assert_eq!(state.recent_events.back().unwrap().description, "event_24");
     }
 
     #[test]

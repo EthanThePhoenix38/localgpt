@@ -304,10 +304,7 @@ impl Tool for GenGenerationStatusTool {
     async fn execute(&self, arguments: &str) -> Result<String> {
         let args: Value = serde_json::from_str(arguments)?;
 
-        let action = args["action"]
-            .as_str()
-            .unwrap_or("status")
-            .to_string();
+        let action = args["action"].as_str().unwrap_or("status").to_string();
 
         let task_id = args["task_id"].as_str().map(String::from);
 

@@ -570,6 +570,15 @@ enum GenSubcommand {
 }
 
 fn main() -> Result<()> {
+    // On Linux, default to X11 (XWayland) to avoid wgpu "Invalid surface" errors
+    // on Wayland compositors. winit 0.29+ selects Wayland when WAYLAND_DISPLAY is set.
+    // Users can set LOCALGPT_WAYLAND=1 to keep native Wayland.
+    #[cfg(target_os = "linux")]
+    if std::env::var("LOCALGPT_WAYLAND").is_err() {
+        // SAFETY: called at program start before any threads are spawned.
+        unsafe { std::env::remove_var("WAYLAND_DISPLAY") };
+    }
+
     let cli = Cli::parse();
 
     // Initialize logging before handing off to Bevy
@@ -683,6 +692,8 @@ fn run_bevy_app(
                 primary_window: Some(Window {
                     title: "LocalGPT Gen".into(),
                     resolution: bevy::window::WindowResolution::new(1280, 720),
+                    present_mode: bevy::window::PresentMode::AutoVsync,
+                    composite_alpha_mode: bevy::window::CompositeAlphaMode::Auto,
                     ..default()
                 }),
                 ..default()

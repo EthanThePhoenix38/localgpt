@@ -696,10 +696,7 @@ impl Tool for GenSetNpcBrainTool {
                 .as_str()
                 .unwrap_or("a friendly villager")
                 .to_string(),
-            model: args["model"]
-                .as_str()
-                .unwrap_or("llama3.2:3b")
-                .to_string(),
+            model: args["model"].as_str().unwrap_or("llama3.2:3b").to_string(),
             tick_rate: args["tick_rate"].as_f64().unwrap_or(2.0) as f32,
             perception_radius: args["perception_radius"].as_f64().unwrap_or(15.0) as f32,
             goals: args["goals"]

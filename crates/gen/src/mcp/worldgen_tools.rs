@@ -1264,33 +1264,29 @@ impl Tool for GenRenderDepthTool {
             _ => worldgen::DepthCameraAngle::Isometric,
         };
 
-        let custom_position = args["custom_position"]
-            .as_array()
-            .and_then(|a| {
-                if a.len() >= 3 {
-                    Some([
-                        a[0].as_f64()? as f32,
-                        a[1].as_f64()? as f32,
-                        a[2].as_f64()? as f32,
-                    ])
-                } else {
-                    None
-                }
-            });
+        let custom_position = args["custom_position"].as_array().and_then(|a| {
+            if a.len() >= 3 {
+                Some([
+                    a[0].as_f64()? as f32,
+                    a[1].as_f64()? as f32,
+                    a[2].as_f64()? as f32,
+                ])
+            } else {
+                None
+            }
+        });
 
-        let custom_look_at = args["custom_look_at"]
-            .as_array()
-            .and_then(|a| {
-                if a.len() >= 3 {
-                    Some([
-                        a[0].as_f64()? as f32,
-                        a[1].as_f64()? as f32,
-                        a[2].as_f64()? as f32,
-                    ])
-                } else {
-                    None
-                }
-            });
+        let custom_look_at = args["custom_look_at"].as_array().and_then(|a| {
+            if a.len() >= 3 {
+                Some([
+                    a[0].as_f64()? as f32,
+                    a[1].as_f64()? as f32,
+                    a[2].as_f64()? as f32,
+                ])
+            } else {
+                None
+            }
+        });
 
         let resolution = args["resolution"]
             .as_array()
@@ -1320,7 +1316,10 @@ impl Tool for GenRenderDepthTool {
 
         match self
             .bridge
-            .send(GenCommand::RenderDepth { config, output_path })
+            .send(GenCommand::RenderDepth {
+                config,
+                output_path,
+            })
             .await?
         {
             GenResponse::DepthRendered {
