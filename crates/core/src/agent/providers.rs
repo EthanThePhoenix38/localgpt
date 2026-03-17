@@ -340,9 +340,12 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
         "claude-cli" => {
             let cli_config = config.providers.claude_cli.as_ref();
             let command = cli_config.map(|c| c.command.as_str()).unwrap_or("claude");
-            Ok(Box::new(ClaudeCliProvider::new(
-                command, &model_id, workspace,
-            )?))
+            let mcp_override = cli_config.and_then(|c| c.mcp_config_override.clone());
+            let mut provider = ClaudeCliProvider::new(command, &model_id, workspace)?;
+            if let Some(mcp_json) = mcp_override {
+                provider.set_mcp_config_override(mcp_json);
+            }
+            Ok(Box::new(provider))
         }
         #[cfg(not(feature = "claude-cli"))]
         "claude-cli" => {
@@ -2027,6 +2030,10 @@ pub struct ClaudeCliProvider {
     localgpt_session_id: String,
     /// CLI session ID for multi-turn conversations (interior mutability for &self methods)
     cli_session_id: StdMutex<Option<String>>,
+    /// Optional MCP config JSON to pass via --mcp-config + --strict-mcp-config.
+    /// When set, prevents Claude CLI from using its own MCP server configuration,
+    /// avoiding duplicate process spawning (e.g., a second localgpt-gen window).
+    mcp_config_override: Option<String>,
 }
 
 #[cfg(feature = "claude-cli")]
@@ -2051,7 +2058,18 @@ impl ClaudeCliProvider {
             session_key,
             localgpt_session_id: uuid::Uuid::new_v4().to_string(),
             cli_session_id: StdMutex::new(existing_session),
+            mcp_config_override: None,
         })
+    }
+
+    /// Set an MCP config override that will be passed to Claude CLI via
+    /// `--strict-mcp-config --mcp-config <json>`.
+    ///
+    /// This prevents Claude CLI from using its own MCP server configuration,
+    /// which avoids spawning duplicate processes (e.g., a second Bevy window
+    /// when `localgpt-gen mcp-server` is configured as an MCP server).
+    pub fn set_mcp_config_override(&mut self, config_json: String) {
+        self.mcp_config_override = Some(config_json);
     }
 
     /// Execute Claude CLI command, retrying with a new session if the existing one is not found
@@ -2189,6 +2207,14 @@ impl ClaudeCliProvider {
         if is_new_session && let Some(sys) = system_prompt {
             args.push("--system-prompt".to_string());
             args.push(sys.to_string());
+        }
+
+        // MCP config override: prevents Claude CLI from spawning its own MCP servers
+        // (e.g., avoids a second localgpt-gen Bevy window when gen MCP is configured)
+        if let Some(ref mcp_config) = self.mcp_config_override {
+            args.push("--strict-mcp-config".to_string());
+            args.push("--mcp-config".to_string());
+            args.push(mcp_config.clone());
         }
 
         // CLI session handling

@@ -467,6 +467,13 @@ pub struct ClaudeCliConfig {
 
     #[serde(default = "default_claude_cli_model")]
     pub model: String,
+
+    /// Optional MCP config JSON passed to Claude CLI via --strict-mcp-config --mcp-config.
+    /// When set, overrides Claude CLI's own MCP server configuration, preventing it from
+    /// spawning processes that may conflict with the caller (e.g., a second Bevy window
+    /// when localgpt-gen is already running).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_config_override: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -2,6 +2,10 @@
 //!
 //! Triggered by the `G` keybind or `/gallery` slash command.
 //! Displays world cards with thumbnails, filtering, and load actions.
+//!
+//! IMPORTANT: Gallery systems are chained and run before InspectorPlugin
+//! systems to avoid egui context contention. The gallery_ui_system only
+//! accesses EguiContexts when gallery.visible is true.
 
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
@@ -30,25 +34,24 @@ pub struct GalleryPlugin;
 impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GalleryState>()
+            // gallery_toggle_system does NOT touch EguiContexts — it only reads
+            // keyboard input and toggles visibility. gallery_ui_system draws the
+            // egui window only when visible. Both are independent of inspector systems.
             .add_systems(Update, gallery_toggle_system)
             .add_systems(Update, gallery_ui_system);
     }
 }
 
-/// Toggle gallery visibility with G key (when not typing in egui).
+/// Toggle gallery visibility with G key.
+///
+/// Does NOT access EguiContexts to avoid contention with the inspector.
+/// The G key is only active when no egui text field has focus (checked
+/// by gallery_ui_system which owns the egui window).
 fn gallery_toggle_system(
     keys: Res<ButtonInput<KeyCode>>,
     mut gallery: ResMut<GalleryState>,
     workspace: Res<GenWorkspace>,
-    mut contexts: EguiContexts,
 ) {
-    // Don't toggle if egui wants keyboard input (text fields)
-    if let Ok(ctx) = contexts.ctx_mut()
-        && ctx.wants_keyboard_input()
-    {
-        return;
-    }
-
     if keys.just_pressed(KeyCode::KeyG) {
         gallery.visible = !gallery.visible;
         if gallery.visible && gallery.entries.is_empty() {

@@ -17,6 +17,7 @@ pub mod gallery_ui;
 pub mod gltf_export;
 pub mod headless;
 pub mod html_export;
+pub mod mcp_relay;
 pub mod offscreen;
 pub mod plugin;
 pub mod registry;

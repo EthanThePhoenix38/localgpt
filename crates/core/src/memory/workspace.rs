@@ -61,6 +61,23 @@ pub fn init_workspace(workspace: &Path, paths: &crate::paths::Paths) -> Result<b
         info!("Created {}", gitignore_path.display());
     }
 
+    // Create .mcp.json for Claude CLI / Codex MCP server discovery.
+    // Uses --connect to relay to an existing gen process instead of spawning a new one.
+    let mcp_json_path = workspace.join(".mcp.json");
+    if !mcp_json_path.exists() {
+        fs::write(&mcp_json_path, MCP_JSON_TEMPLATE)?;
+        info!("Created {}", mcp_json_path.display());
+    }
+
+    // Create .gemini/settings.json for Gemini CLI MCP server discovery.
+    let gemini_dir = workspace.join(".gemini");
+    let gemini_settings_path = gemini_dir.join("settings.json");
+    if !gemini_settings_path.exists() {
+        fs::create_dir_all(&gemini_dir)?;
+        fs::write(&gemini_settings_path, GEMINI_SETTINGS_TEMPLATE)?;
+        info!("Created {}", gemini_settings_path.display());
+    }
+
     Ok(is_brand_new)
 }
 
@@ -168,6 +185,30 @@ const GITIGNORE_TEMPLATE: &str = r#"# LocalGPT workspace .gitignore
 *.swp
 *~
 .DS_Store
+"#;
+
+/// MCP server config for Claude CLI / Codex.
+/// Uses --connect to relay tool calls to the existing gen process's Bevy window
+/// instead of spawning a new process (which would create a second window).
+const MCP_JSON_TEMPLATE: &str = r#"{
+  "mcpServers": {
+    "localgpt-gen": {
+      "command": "localgpt-gen",
+      "args": ["mcp-server", "--connect"]
+    }
+  }
+}
+"#;
+
+/// MCP server config for Gemini CLI.
+const GEMINI_SETTINGS_TEMPLATE: &str = r#"{
+  "mcpServers": {
+    "localgpt-gen": {
+      "command": "localgpt-gen",
+      "args": ["mcp-server", "--connect"]
+    }
+  }
+}
 "#;
 
 /// Initialize state directory with .gitignore and device key.

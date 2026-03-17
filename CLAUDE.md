@@ -197,6 +197,18 @@ See `docs/gen-audio.md` for detailed architecture and usage examples.
 - **Avatar:** `world.ron` avatar section defines user presence (spawn position, PoV mode, movement speed, height, optional 3D model entity)
 - **Tours:** `world.ron` tours section defines guided tours — named sequences of waypoints with camera positions, descriptions, pause durations, and movement modes (walk/fly/teleport)
 
+**WorldGen Pipeline (WG1–WG7):**
+- **Blockout-first workflow:** `gen_plan_layout` → `gen_apply_blockout` → `gen_populate_region`
+- **Navmesh:** Grid-based walkability analysis with A* pathfinding, slope detection, erosion
+- **Hierarchical placement:** Three-tier system (hero/medium/decorative) with collision-aware ground snap
+- **Evaluation loop:** Screenshot capture with entity highlighting + camera presets for LLM self-evaluation
+- **Blockout editing:** Add/remove/resize/move regions with incremental regeneration
+- **Scene decomposition:** Semantic roles (ground/structure/prop/vegetation/etc.), connectivity-ordered generation, GLTF mesh segmentation
+- **Depth preview:** Depth map rendering + styled 2D preview generation (external API scaffolded)
+- **MCP tools:** 40+ tools total across P0–P5, WG1–WG7, AI1–AI2
+
+See `docs/gen/external-services.md` for external service setup (Ollama, ComfyUI, model server).
+
 ### Mobile
 
 UniFFI proc-macro bindings (`crates/mobile-ffi/`). `LocalGPTClient` owns its own tokio runtime and wraps `AgentHandle`. Error type: `MobileError` enum (Init, Chat, Memory, Config).

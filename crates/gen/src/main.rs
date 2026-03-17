@@ -632,6 +632,11 @@ enum GenSubcommand {
         /// Run headless (no window) — for CI or batch generation via MCP
         #[arg(long)]
         headless: bool,
+
+        /// Connect to an existing gen process's MCP relay instead of starting Bevy.
+        /// Pass the relay port (e.g., 9878) or omit to auto-discover.
+        #[arg(long)]
+        connect: Option<Option<u16>>,
     },
     /// Control an external avatar (headless, no Bevy window)
     Control {
@@ -791,7 +796,28 @@ fn main() -> Result<()> {
             result
         }
 
-        Some(GenSubcommand::McpServer { headless }) => {
+        Some(GenSubcommand::McpServer { headless, connect }) => {
+            // --connect mode: relay stdio MCP to an existing gen process's TCP relay
+            if let Some(port_opt) = connect {
+                let port = port_opt
+                    .or_else(gen3d::mcp_relay::read_relay_port)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "No relay port specified and no running gen process found.\n\
+                             Start localgpt-gen first, or pass --connect <port>."
+                        )
+                    })?;
+
+                tracing::info!("Connecting to existing gen process relay on port {}", port);
+
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime");
+
+                return rt.block_on(run_mcp_stdio_relay(port));
+            }
+
             // MCP server mode: Bevy on main thread, MCP stdio server on background thread
             let initial_scene = if headless {
                 None
@@ -839,8 +865,10 @@ fn main() -> Result<()> {
             let agent_id = cli.agent;
             let initial_prompt = cli.prompt;
             let bridge_for_agent = bridge.clone();
+            let bridge_for_relay = bridge.clone();
+            let relay_config = config.clone();
 
-            // Spawn tokio runtime + agent loop on a background thread
+            // Spawn tokio runtime + agent loop + MCP relay on a background thread
             // (Bevy must own the main thread for windowing/GPU on macOS)
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Builder::new_multi_thread()
@@ -849,8 +877,28 @@ fn main() -> Result<()> {
                     .expect("Failed to build tokio runtime for gen agent");
 
                 rt.block_on(async move {
+                    // Start the MCP relay server so CLI backends (claude, codex, gemini)
+                    // can connect to the existing Bevy window instead of spawning a new one.
+                    match gen3d::mcp_relay::start_mcp_relay(
+                        bridge_for_relay,
+                        &relay_config,
+                    )
+                    .await
+                    {
+                        Ok(port) => {
+                            eprintln!(
+                                "MCP relay active on port {} (CLI backends will use this window)",
+                                port
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!("MCP relay failed to start: {} (CLI backends may spawn a separate window)", e);
+                        }
+                    }
+
                     if let Err(e) =
-                        run_agent_loop(bridge_for_agent, &agent_id, initial_prompt, config).await
+                        run_agent_loop(bridge_for_agent, &agent_id, initial_prompt, relay_config)
+                            .await
                     {
                         tracing::error!("Gen agent loop error: {}", e);
                     }
@@ -1029,6 +1077,69 @@ async fn run_headless_agent(
     Ok(())
 }
 
+/// MCP stdio ↔ TCP relay: bridges Claude CLI's MCP stdio to the existing gen
+/// process's TCP relay server. This process is spawned by Claude CLI when
+/// `--connect` is passed — it reads from stdin, forwards to the TCP relay,
+/// and writes responses to stdout.
+async fn run_mcp_stdio_relay(port: u16) -> Result<()> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpStream;
+
+    let stream = TcpStream::connect(("127.0.0.1", port)).await.map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to connect to gen MCP relay on port {}: {}\n\
+             Make sure localgpt-gen is running in interactive mode.",
+            port,
+            e
+        )
+    })?;
+
+    let (tcp_reader, mut tcp_writer) = stream.into_split();
+    let mut tcp_lines = BufReader::new(tcp_reader).lines();
+
+    let stdin = tokio::io::stdin();
+    let mut stdin_lines = BufReader::new(stdin).lines();
+
+    let mut stdout = tokio::io::stdout();
+
+    // Bidirectional relay: stdin → TCP, TCP → stdout
+    loop {
+        tokio::select! {
+            // stdin → TCP (requests from Claude CLI)
+            line = stdin_lines.next_line() => {
+                match line {
+                    Ok(Some(line)) => {
+                        let mut buf = line;
+                        buf.push('\n');
+                        if tcp_writer.write_all(buf.as_bytes()).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(None) => break, // stdin closed
+                    Err(_) => break,
+                }
+            }
+            // TCP → stdout (responses from gen process)
+            line = tcp_lines.next_line() => {
+                match line {
+                    Ok(Some(line)) => {
+                        let mut buf = line;
+                        buf.push('\n');
+                        if stdout.write_all(buf.as_bytes()).await.is_err() {
+                            break;
+                        }
+                        stdout.flush().await.ok();
+                    }
+                    Ok(None) => break, // TCP closed
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Run the interactive agent loop in headless control mode.
 async fn run_headless_control_loop(
     url: &str,
@@ -1165,6 +1276,41 @@ async fn run_agent_loop(
     // abort mid-scene.  Raise it so legitimate scene-building isn't blocked.
     let mut config = config;
     config.agent.max_tool_repeats = config.agent.max_tool_repeats.max(20);
+
+    // When using a CLI backend (claude-cli, codex, gemini-cli), override its MCP
+    // config so it uses `localgpt-gen mcp-server --connect` to relay tool calls
+    // to the EXISTING Bevy window instead of spawning a new one.
+    let is_cli_backend = config.agent.default_model.starts_with("claude-cli")
+        || config.agent.default_model.starts_with("codex")
+        || config.agent.default_model.starts_with("gemini-cli");
+
+    if is_cli_backend {
+        let gen_binary =
+            std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("localgpt-gen"));
+        let mcp_config = serde_json::json!({
+            "mcpServers": {
+                "localgpt-gen": {
+                    "command": gen_binary.to_string_lossy(),
+                    "args": ["mcp-server", "--connect"]
+                }
+            }
+        });
+
+        eprintln!(
+            "CLI backend detected ({}). Gen tools will route to this window via MCP relay.",
+            config.agent.default_model
+        );
+
+        let cli_config = config.providers.claude_cli.get_or_insert_with(|| {
+            localgpt_core::config::ClaudeCliConfig {
+                command: "claude".to_string(),
+                model: config.agent.default_model.clone(),
+                mcp_config_override: None,
+            }
+        });
+        cli_config.mcp_config_override = Some(mcp_config.to_string());
+    }
+
     let workspace = config.workspace_path();
 
     // Create agent with combined tools
