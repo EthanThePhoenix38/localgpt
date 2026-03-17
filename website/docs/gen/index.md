@@ -61,7 +61,14 @@ The agent receives your prompt and iteratively builds a world — spawning shape
 
 ## Templates
 
-World templates are coming soon — ready-to-customize Fantasy, Sci-Fi, Horror, and Urban environments.
+Jumpstart your project with ready-to-customize world templates (coming soon):
+
+- **Fantasy** — [Medieval Village](/templates/fantasy/medieval-village), [Enchanted Forest](/templates/fantasy/enchanted-forest), [Japanese Temple](/templates/fantasy/japanese-temple), [Cozy Farm](/templates/fantasy/cozy-farm), [Winter Wonderland](/templates/fantasy/winter-wonderland)
+- **Sci-Fi** — [Space Station](/templates/sci-fi/space-station), [Underwater World](/templates/sci-fi/underwater-world), [Alien World](/templates/sci-fi/alien-world)
+- **Horror** — [Haunted House](/templates/horror/haunted-house), [Backrooms](/templates/horror/backrooms)
+- **Urban** — [Cyberpunk City](/templates/urban/cyberpunk-city), [Modern City](/templates/urban/modern-city)
+
+[Browse all templates →](/templates)
 
 ## Current Limitations
 
