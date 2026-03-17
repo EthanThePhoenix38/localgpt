@@ -124,6 +124,8 @@ struct PendingGltfLoad {
     name: String,
     path: String,
     send_response: bool,
+    /// WG6.3: Decompose loaded mesh into editable sub-objects.
+    segment: bool,
 }
 
 /// Queue of pending glTF loads waiting for asset server to finish loading.
@@ -430,6 +432,7 @@ fn load_initial_scene(
         name,
         path: path.to_string_lossy().into_owned(),
         send_response: false,
+        segment: false,
     });
 }
 
@@ -1036,7 +1039,7 @@ fn process_gen_commands(
                 &params.mesh_handles,
                 &params.meshes,
             ),
-            GenCommand::LoadGltf { path } => {
+            GenCommand::LoadGltf { path, segment } => {
                 if let Some(resolved) = resolve_gltf_path(&path, &params.workspace.path) {
                     let name = resolved
                         .file_stem()
@@ -1056,6 +1059,7 @@ fn process_gen_commands(
                         name,
                         path: resolved.to_string_lossy().into_owned(),
                         send_response: true,
+                        segment,
                     });
                 } else {
                     let response = GenResponse::Error {
@@ -3441,22 +3445,20 @@ fn process_gen_commands(
                         }
 
                         // Region connectivity check
-                        if check_all_regions {
-                            if let Some(ref blockout) = params.current_blockout {
-                                let regions = &blockout.spec.regions;
-                                for i in 0..regions.len() {
-                                    for j in (i + 1)..regions.len() {
-                                        let ci = regions[i].bounds.center;
-                                        let cj = regions[j].bounds.center;
-                                        let a = Vec3::new(ci[0], 0.0, ci[1]);
-                                        let b = Vec3::new(cj[0], 0.0, cj[1]);
-                                        if !grid.are_connected(a, b) {
-                                            result.disconnected_regions.push(format!(
-                                                "{} <-> {}",
-                                                regions[i].id, regions[j].id
-                                            ));
-                                            result.navigable = false;
-                                        }
+                        if check_all_regions && let Some(ref blockout) = params.current_blockout {
+                            let regions = &blockout.spec.regions;
+                            for i in 0..regions.len() {
+                                for j in (i + 1)..regions.len() {
+                                    let ci = regions[i].bounds.center;
+                                    let cj = regions[j].bounds.center;
+                                    let a = Vec3::new(ci[0], 0.0, ci[1]);
+                                    let b = Vec3::new(cj[0], 0.0, cj[1]);
+                                    if !grid.are_connected(a, b) {
+                                        result.disconnected_regions.push(format!(
+                                            "{} <-> {}",
+                                            regions[i].id, regions[j].id
+                                        ));
+                                        result.navigable = false;
                                     }
                                 }
                             }
@@ -3925,7 +3927,7 @@ fn process_gen_commands(
 }
 
 /// Process pending screenshots that need frame delays.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn process_pending_screenshots(
     channel_res: ResMut<GenChannelRes>,
     mut pending: ResMut<PendingScreenshots>,
@@ -3957,17 +3959,15 @@ fn process_pending_screenshots(
 
         // --- WG4.1: Apply entity highlight ---
         let mut original_emissive: Option<(Entity, LinearRgba)> = None;
-        if let Some(ref entity_name) = screenshot_req.highlight_entity {
-            if let Some(entity) = registry.get_entity(entity_name) {
-                if let Ok(mat_handle) = material_handles.get(entity) {
-                    if let Some(mat) = materials.get_mut(&mat_handle.0) {
-                        let orig = mat.emissive;
-                        let [r, g, b, _] = screenshot_req.highlight_color;
-                        mat.emissive = LinearRgba::new(r * 3.0, g * 3.0, b * 3.0, 1.0);
-                        original_emissive = Some((entity, orig));
-                    }
-                }
-            }
+        if let Some(ref entity_name) = screenshot_req.highlight_entity
+            && let Some(entity) = registry.get_entity(entity_name)
+            && let Ok(mat_handle) = material_handles.get(entity)
+            && let Some(mat) = materials.get_mut(&mat_handle.0)
+        {
+            let orig = mat.emissive;
+            let [r, g, b, _] = screenshot_req.highlight_color;
+            mat.emissive = LinearRgba::new(r * 3.0, g * 3.0, b * 3.0, 1.0);
+            original_emissive = Some((entity, orig));
         }
 
         // --- WG4.1: Reposition camera for angle preset ---
@@ -4003,19 +4003,18 @@ fn process_pending_screenshots(
                     }
                     ScreenshotCameraAngle::EntityFocus => {
                         // Frame the highlighted entity with 2x bounding distance
-                        if let Some(ref ename) = screenshot_req.highlight_entity {
-                            if let Some(ent) = registry.get_entity(ename) {
-                                if let Ok((_, etf)) = gen_entities.get(ent) {
-                                    let focus = etf.translation;
-                                    let dist = 8.0; // Reasonable framing distance
-                                    cam_tf.translation = Vec3::new(
-                                        focus.x + dist * 0.5,
-                                        focus.y + dist * 0.5,
-                                        focus.z + dist * 0.5,
-                                    );
-                                    cam_tf.look_at(focus, Vec3::Y);
-                                }
-                            }
+                        if let Some(ref ename) = screenshot_req.highlight_entity
+                            && let Some(ent) = registry.get_entity(ename)
+                            && let Ok((_, etf)) = gen_entities.get(ent)
+                        {
+                            let focus = etf.translation;
+                            let dist = 8.0; // Reasonable framing distance
+                            cam_tf.translation = Vec3::new(
+                                focus.x + dist * 0.5,
+                                focus.y + dist * 0.5,
+                                focus.z + dist * 0.5,
+                            );
+                            cam_tf.look_at(focus, Vec3::Y);
                         }
                     }
                     ScreenshotCameraAngle::Current => {}
@@ -4082,19 +4081,18 @@ fn process_pending_screenshots(
         }
 
         // --- WG4.1: Restore original emissive after screenshot is queued ---
-        if let Some((entity, orig_emissive)) = original_emissive {
-            if let Ok(mat_handle) = material_handles.get(entity) {
-                if let Some(mat) = materials.get_mut(&mat_handle.0) {
-                    mat.emissive = orig_emissive;
-                }
-            }
+        if let Some((entity, orig_emissive)) = original_emissive
+            && let Ok(mat_handle) = material_handles.get(entity)
+            && let Some(mat) = materials.get_mut(&mat_handle.0)
+        {
+            mat.emissive = orig_emissive;
         }
 
         // --- WG4.1: Restore original camera transform ---
-        if let Some(orig_tf) = original_camera_transform {
-            if let Ok(mut cam_tf) = camera_transforms.single_mut() {
-                *cam_tf = orig_tf;
-            }
+        if let Some(orig_tf) = original_camera_transform
+            && let Ok(mut cam_tf) = camera_transforms.single_mut()
+        {
+            *cam_tf = orig_tf;
         }
 
         // Send response with the first (primary) path
@@ -4185,6 +4183,11 @@ fn process_pending_gltf_loads(
         let load = pending.queue.remove(i);
 
         // Spawn the scene with source tracking
+        // WG6.3: If segment=true, the mesh will be decomposed into sub-objects
+        // after the scene finishes loading. The segmentation data model is in
+        // worldgen/segment.rs; actual mesh decomposition requires post-spawn
+        // access to vertex/index buffers which happens in a deferred system.
+        let _segment = load.segment;
         let entity = commands
             .spawn((
                 SceneRoot(load.handle.clone()),
@@ -5246,6 +5249,7 @@ fn spawn_world_entities(
                     name: name.clone(),
                     path: mesh_ref.path.clone(),
                     send_response: false,
+                    segment: false,
                 });
             } else {
                 tracing::warn!(

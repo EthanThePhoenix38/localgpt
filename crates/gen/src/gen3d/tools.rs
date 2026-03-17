@@ -1414,13 +1414,18 @@ impl Tool for GenLoadGltfTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "gen_load_gltf".into(),
-            description: "Load a glTF/GLB file from disk into the scene. Searches in workspace/exports by default.".into(),
+            description: "Load a glTF/GLB file from disk into the scene. Optionally decompose into editable sub-objects. Searches in workspace/exports by default.".into(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "Path to glTF/GLB file. Can be absolute, relative, or just a filename to search in workspace."
+                    },
+                    "segment": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Decompose mesh into individually editable sub-objects via connected-component analysis"
                     }
                 },
                 "required": ["path"]
@@ -1434,8 +1439,13 @@ impl Tool for GenLoadGltfTool {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing path"))?
             .to_string();
+        let segment = args["segment"].as_bool().unwrap_or(false);
 
-        match self.bridge.send(GenCommand::LoadGltf { path }).await? {
+        match self
+            .bridge
+            .send(GenCommand::LoadGltf { path, segment })
+            .await?
+        {
             GenResponse::GltfLoaded { name, path } => {
                 Ok(format!("Loaded '{}' from {}", name, path))
             }

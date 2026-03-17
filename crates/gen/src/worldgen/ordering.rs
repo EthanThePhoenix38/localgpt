@@ -144,9 +144,9 @@ impl GenerationState {
             .or_insert([LayerStatus::NotStarted; 8]);
 
         let threshold = changed_layer as usize;
-        for i in (threshold + 1)..8 {
-            if layers[i] == LayerStatus::Complete {
-                layers[i] = LayerStatus::NeedsRevalidation;
+        for layer in &mut layers[(threshold + 1)..] {
+            if *layer == LayerStatus::Complete {
+                *layer = LayerStatus::NeedsRevalidation;
             }
         }
     }
@@ -169,10 +169,10 @@ impl GenerationState {
     pub fn next_layer(&self, region_id: &str) -> Option<GenerationLayer> {
         for layer in GenerationLayer::all() {
             let status = self.get_status(region_id, *layer);
-            if status == LayerStatus::NotStarted || status == LayerStatus::NeedsRevalidation {
-                if self.dependencies_met(region_id, *layer) {
-                    return Some(*layer);
-                }
+            if (status == LayerStatus::NotStarted || status == LayerStatus::NeedsRevalidation)
+                && self.dependencies_met(region_id, *layer)
+            {
+                return Some(*layer);
             }
         }
         None

@@ -74,6 +74,8 @@ pub enum GenCommand {
     // Tier 3b: Import
     LoadGltf {
         path: String,
+        /// Decompose mesh into individually editable sub-objects (WG6.3).
+        segment: bool,
     },
 
     // Tier 5: Audio

@@ -142,6 +142,7 @@ pub struct AssetGenManager {
 
 impl AssetGenManager {
     /// Create a new task and return its ID.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_task(
         &mut self,
         task_type: GenerationTaskType,

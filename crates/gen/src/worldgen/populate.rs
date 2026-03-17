@@ -138,7 +138,7 @@ fn plan_decorative_pass(region: &RegionDef) -> PopulationPlan {
     // Scatter placement using a simple hash-based approach
     for i in 0..count {
         let hash = ((i as f32 * 1.618033) % 1.0) * 2.0 - 1.0;
-        let hash2 = ((i as f32 * 2.718281) % 1.0) * 2.0 - 1.0;
+        let hash2 = ((i as f32 * std::f32::consts::E) % 1.0) * 2.0 - 1.0;
         let x = cx + hash * hx;
         let z = cz + hash2 * hz;
 
