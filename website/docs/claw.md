@@ -394,7 +394,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Config validation/schema | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | Agent Zero: pydantic |
 | Hot-reload | ✅ | ❌ | ✅ | 🚧 | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: env reload |
 | Legacy migration | ✅ | ➖ | ➖ | ➖ | ➖ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: migration.rs |
-| State directory | ✅ `~/.openclaw-state/` | ✅ `~/.ironclaw/` | ✅ `~/.localgpt/` | ✅ `~/.moltis/` | ✅ `~/.nanobot/` | ✅ `~/.copaw/` | ✅ `~/.picoclaw/` | ✅ `~/.zeroclaw/` | ✅ `~/.nullclaw/` | ❌ | ❌ | ✅ NVS flash | ✅ `~/.tinyclaw/` | ✅ `work_dir/` | Agent Zero: configurable work_dir |
+| State directory | ✅ `~/.openclaw-state/` | ✅ `~/.ironclaw/` | ✅ XDG dirs | ✅ `~/.moltis/` | ✅ `~/.nanobot/` | ✅ `~/.copaw/` | ✅ `~/.picoclaw/` | ✅ `~/.zeroclaw/` | ✅ `~/.nullclaw/` | ❌ | ❌ | ✅ NVS flash | ✅ `~/.tinyclaw/` | ✅ `work_dir/` | Agent Zero: configurable work_dir |
 | Credentials directory | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ NVS | ✅ | ✅ | Agent Zero: secrets manager; ZeroClaw: encrypted with chacha20poly1305 |
 | Full model compat fields in schema | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Profile support | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: agent profiles |

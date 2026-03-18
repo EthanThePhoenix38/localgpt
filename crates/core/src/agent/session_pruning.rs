@@ -1,6 +1,6 @@
 //! Session pruning - automatic cleanup of old session files
 //!
-//! Sessions accumulate over time in `~/.localgpt/agents/{id}/sessions/`.
+//! Sessions accumulate over time in `~/.local/state/localgpt/agents/{id}/sessions/`.
 //! This module provides automatic cleanup based on age and count limits.
 
 use anyhow::Result;

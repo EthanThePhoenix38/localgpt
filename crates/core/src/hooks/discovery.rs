@@ -52,7 +52,7 @@ impl HookDef {
 ///
 /// Looks in:
 /// - workspace/hooks/*.hook.json
-/// - ~/.localgpt/hooks/*.hook.json (global hooks)
+/// - ~/.local/share/localgpt/hooks/*.hook.json (global hooks, XDG_DATA_HOME)
 pub fn discover_hooks(workspace: &Path) -> Vec<HookDef> {
     let mut hooks = Vec::new();
 

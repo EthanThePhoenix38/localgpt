@@ -165,15 +165,15 @@ The agent is blocked from writing to:
 
 ## Configuration
 
-Default config location: `~/.localgpt/config.toml` (see `config.example.toml`)
+Default config location: `~/.config/localgpt/config.toml` (see `config.example.toml`)
 
 Key settings:
 - `agent.default_model` — Determines provider (default: `claude-cli/opus`)
-- `memory.workspace` — Workspace directory (default: `~/.localgpt/workspace`)
+- `memory.workspace` — Workspace directory (default: `~/.local/share/localgpt/workspace`)
 - `memory.embedding_provider` — `"local"` (default), `"openai"`, or `"none"`
 - `server.port` — HTTP server port (default: 31327)
 
-Workspace path resolution: `LOCALGPT_WORKSPACE` env > `LOCALGPT_PROFILE` env > `memory.workspace` config > `~/.localgpt/workspace`
+Workspace path resolution: `LOCALGPT_WORKSPACE` env > `LOCALGPT_PROFILE` env > `memory.workspace` config > `~/.local/share/localgpt/workspace`
 
 ## Common Tasks
 

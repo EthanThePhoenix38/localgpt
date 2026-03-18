@@ -218,29 +218,37 @@ Android: `apps/android/scripts/build_android.sh` → cargo-ndk + Kotlin bindings
 
 ## Configuration
 
-Config: `~/.localgpt/config.toml` (auto-created on first run, see `config.example.toml`)
+Config: `~/.config/localgpt/config.toml` (auto-created on first run, see `config.example.toml`)
 
 Key settings:
 - `agent.default_model` — Determines provider. Default: `claude-cli/opus`
-- `memory.workspace` — Workspace directory. Default: `~/.localgpt/workspace`
+- `memory.workspace` — Workspace directory. Default: `~/.local/share/localgpt/workspace`
 - `memory.embedding_provider` — `"local"` (default), `"openai"`, or `"none"`
 - `server.port` — HTTP server port (default: 31327)
 - `telegram.enabled` / `telegram.api_token` — Telegram bot (supports `${ENV_VAR}` syntax)
 
-Workspace path resolution: `LOCALGPT_WORKSPACE` env > `LOCALGPT_PROFILE` env > `memory.workspace` config > `~/.localgpt/workspace`
+Workspace path resolution: `LOCALGPT_WORKSPACE` env > `LOCALGPT_PROFILE` env > `memory.workspace` config > `~/.local/share/localgpt/workspace`
 
-## Runtime Directory Structure
+## Runtime Directory Structure (XDG Base Directory Specification)
 
 ```
-~/.localgpt/
+~/.config/localgpt/                      # XDG_CONFIG_HOME
 ├── config.toml
-├── agents/{agent_id}/sessions/   # Session transcripts (JSONL, Pi-compatible)
-├── workspace/                    # Memory workspace
-│   ├── MEMORY.md                 # Long-term curated memory
-│   ├── HEARTBEAT.md              # Pending autonomous tasks
-│   ├── SOUL.md                   # Persona/tone
-│   ├── memory/YYYY-MM-DD.md      # Daily logs
-│   ├── knowledge/                # Knowledge repository
-│   └── skills/*/SKILL.md         # Custom skills
-└── logs/
+~/.local/share/localgpt/                 # XDG_DATA_HOME
+├── workspace/                           # Memory workspace
+│   ├── MEMORY.md                        # Long-term curated memory
+│   ├── HEARTBEAT.md                     # Pending autonomous tasks
+│   ├── SOUL.md                          # Persona/tone
+│   ├── memory/YYYY-MM-DD.md             # Daily logs
+│   ├── knowledge/                       # Knowledge repository
+│   └── skills/*/SKILL.md               # Custom skills
+├── localgpt.device.key                  # Device key for policy signing
+└── skills/                              # Managed skills
+~/.local/state/localgpt/                 # XDG_STATE_HOME
+├── agents/{agent_id}/sessions/          # Session transcripts (JSONL)
+├── localgpt.audit.jsonl                 # Security audit log
+└── logs/                                # Application logs
+~/.cache/localgpt/                       # XDG_CACHE_HOME
+├── memory/{agent_id}.sqlite             # Search index (regenerable)
+└── embeddings/                          # Embedding model cache
 ```

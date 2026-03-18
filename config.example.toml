@@ -151,7 +151,7 @@ interval = "30m"
 
 [memory]
 # Where to store memory files
-workspace = "~/.localgpt/workspace"
+# workspace = "~/.local/share/localgpt/workspace"
 
 # Embedding provider for semantic search: "local" (default), "gguf", "openai", or "none"
 # - "local": Uses FastEmbed/ONNX (all-MiniLM-L6-v2), no API key needed
@@ -315,4 +315,4 @@ policy = "deny"
 level = "info"
 
 # Log file path
-file = "~/.localgpt/logs/agent.log"
+file = "~/.local/state/localgpt/logs/agent.log"

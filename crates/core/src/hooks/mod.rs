@@ -9,7 +9,7 @@
 //!
 //! Hook definitions are JSON files in:
 //! - workspace/hooks/*.hook.json
-//! - ~/.localgpt/hooks/*.hook.json (global)
+//! - ~/.local/share/localgpt/hooks/*.hook.json (global, XDG_DATA_HOME)
 //!
 //! Example hook file:
 //! ```json
