@@ -107,6 +107,11 @@ pub struct AgentConfig {
     /// 0 = unlimited. Default: 500.
     #[serde(default = "default_session_max_count")]
     pub session_max_count: usize,
+
+    /// Sections from AGENTS.md (or SOUL.md) to re-inject after session compaction.
+    /// Default: ["Session Startup", "Red Lines"]. Empty array disables injection.
+    #[serde(default = "default_post_compaction_sections")]
+    pub post_compaction_sections: Vec<String>,
 }
 
 fn default_max_tool_repeats() -> usize {
@@ -801,6 +806,12 @@ fn default_tool_output_max_chars() -> usize {
 fn default_document_max_bytes() -> usize {
     10_485_760 // 10MB
 }
+fn default_post_compaction_sections() -> Vec<String> {
+    vec![
+        "Session Startup".to_string(),
+        "Red Lines".to_string(),
+    ]
+}
 fn default_openai_base_url() -> String {
     "https://api.openai.com/v1".to_string()
 }
@@ -948,6 +959,7 @@ impl Default for AgentConfig {
             max_tool_repeats: default_max_tool_repeats(), // Loop detection threshold
             session_max_age: default_session_max_age(), // 30 days
             session_max_count: default_session_max_count(), // 500 sessions
+            post_compaction_sections: default_post_compaction_sections(),
         }
     }
 }

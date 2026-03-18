@@ -1,3 +1,4 @@
+pub mod compaction;
 pub mod failover;
 pub mod hardcoded_filters;
 pub mod path_utils;
@@ -1378,6 +1379,23 @@ impl Agent {
 
         // Compact the session
         self.session.compact(&*self.provider).await?;
+
+        // Inject post-compaction context from workspace files
+        if !self.app_config.agent.post_compaction_sections.is_empty()
+            && let Some(context) = compaction::build_post_compaction_context(
+                &self.app_config.workspace_path(),
+                &self.app_config.agent.post_compaction_sections,
+            )
+        {
+            debug!("Injecting post-compaction context ({} chars)", context.len());
+            self.session.add_message(Message {
+                role: Role::System,
+                content: context,
+                tool_calls: None,
+                tool_call_id: None,
+                images: Vec::new(),
+            });
+        }
 
         let after = self.session.token_count();
         info!("Session compacted: {} -> {} tokens", before, after);
