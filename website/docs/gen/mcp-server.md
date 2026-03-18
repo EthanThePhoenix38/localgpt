@@ -39,7 +39,7 @@ The MCP server exposes gen tools plus core LocalGPT tools:
 
 See [Gen Tools Reference](/docs/gen/tools) for full documentation on each tool.
 
-### MCP-Only Tools (25 tools)
+### MCP-Only Tools (50+ tools)
 
 These additional tools are available exclusively through the MCP server, enabling richer game-like world building:
 
@@ -92,6 +92,42 @@ These additional tools are available exclusively through the MCP server, enablin
 | `gen_add_joint` | Create physical constraints between entities (fixed, revolute, spring, etc.) |
 | `gen_add_force` | Create force fields or apply impulses |
 | `gen_set_gravity` | Control gravity globally or per-zone (presets: earth, moon, mars, zero) |
+
+#### WorldGen Pipeline (15 tools)
+
+| Tool | Description |
+|------|-------------|
+| `gen_plan_layout` | Generate a structured world layout plan from a text description |
+| `gen_apply_blockout` | Apply a blockout spec to create terrain, regions, and paths |
+| `gen_populate_region` | Populate a region with entities using three-tier placement (hero/medium/decorative) |
+| `gen_set_tier` | Set an entity's placement tier (hero, medium, decorative) |
+| `gen_set_role` | Set an entity's semantic role (ground, structure, prop, vegetation, etc.) |
+| `gen_bulk_modify` | Modify multiple entities by role or tier (e.g., recolor all vegetation) |
+| `gen_modify_blockout` | Add, remove, resize, or move blockout regions with incremental regeneration |
+| `gen_evaluate_scene` | Take a screenshot with optional entity highlighting for LLM self-evaluation |
+| `gen_auto_refine` | Automatically evaluate and improve scene quality via screenshot loop |
+| `gen_build_navmesh` | Build a walkability grid for the current terrain |
+| `gen_validate_navigability` | Check that key points are reachable via the navmesh |
+| `gen_edit_navmesh` | Manually override navmesh cells (block, allow, add connection) |
+| `gen_regenerate` | Regenerate regions after blockout changes, preserving manual edits |
+| `gen_render_depth` | Render a depth map of the scene from a specified camera angle |
+| `gen_preview_world` | Generate a styled 2D preview image from a depth map (external API) |
+
+#### Asset Generation (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `gen_generate_asset` | Queue a 3D asset generation task (text-to-3D via external model server) |
+| `gen_asset_status` | Check the status of an asset generation task |
+| `gen_list_assets` | List all queued, running, and completed asset generation tasks |
+
+#### Experiment Queue (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `gen_queue_experiment` | Queue a world generation experiment for background processing |
+| `gen_list_experiments` | List experiments by status (pending, running, completed, failed) |
+| `gen_experiment_status` | Get detailed status of a specific experiment by ID |
 
 ### Core Tools
 

@@ -905,8 +905,13 @@ fn main() -> Result<()> {
                 });
             });
 
-            // Run Bevy on the main thread
-            run_bevy_app(channels, workspace, initial_scene)
+            // Run Bevy on the main thread (blocks until window closes)
+            let result = run_bevy_app(channels, workspace, initial_scene);
+
+            // Clean up relay port file so stale ports aren't discovered
+            gen3d::mcp_relay::cleanup_relay_port();
+
+            result
         }
     }
 }

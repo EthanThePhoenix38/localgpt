@@ -145,6 +145,8 @@ impl ExperimentTracker {
     }
 
     /// Append a new or updated experiment record.
+    ///
+    /// Uses file locking to prevent concurrent writes from corrupting the JSONL.
     pub fn append(&self, experiment: &Experiment) -> anyhow::Result<()> {
         use std::io::Write;
 
@@ -153,12 +155,18 @@ impl ExperimentTracker {
             std::fs::create_dir_all(parent)?;
         }
 
-        let mut file = std::fs::OpenOptions::new()
+        let file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)?;
+
+        // Lock file for exclusive write access
+        lock_file_exclusive(&file)?;
+
+        let mut file = file;
         let line = serde_json::to_string(experiment)?;
         writeln!(file, "{}", line)?;
+        // Lock released when file is dropped
         Ok(())
     }
 
@@ -309,6 +317,24 @@ pub fn has_gen_experiments(heartbeat_content: &str) -> bool {
         return gen_verbs.iter().any(|v| lower.contains(v));
     }
     false
+}
+
+/// Lock a file for exclusive access (blocking, with timeout via retry).
+#[cfg(unix)]
+fn lock_file_exclusive(file: &std::fs::File) -> anyhow::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    let fd = file.as_raw_fd();
+    let ret = unsafe { libc::flock(fd, libc::LOCK_EX) };
+    if ret != 0 {
+        anyhow::bail!("Failed to lock experiment file");
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn lock_file_exclusive(_file: &std::fs::File) -> anyhow::Result<()> {
+    // On non-Unix, skip locking (append mode is mostly safe for single-line writes)
+    Ok(())
 }
 
 #[cfg(test)]

@@ -162,7 +162,7 @@ See [Headless Mode & Experiment Queue](/docs/gen/headless) for full details.
 
 ## Features
 
-- **[Tools](/docs/gen/tools)** — 32 specialized tools for scene creation, plus 25 MCP-only tools for characters, interactions, terrain, UI, and physics
+- **[Tools](/docs/gen/tools)** — 32 core tools plus 50+ MCP-only tools for characters, interactions, terrain, UI, physics, worldgen, and experiments
 - **[Behaviors](/docs/gen/behaviors)** — Data-driven animations (orbit, spin, bounce, etc.)
 - **[Audio](/docs/gen/audio)** — Procedural environmental audio with spatial emitters
 - **[World Skills](/docs/gen/world-skills)** — Save and load complete worlds as reusable skills
@@ -175,7 +175,7 @@ See [Headless Mode & Experiment Queue](/docs/gen/headless) for full details.
 
 ## Templates
 
-Jumpstart your project with ready-to-customize world templates (coming soon):
+Jumpstart your project with ready-to-customize world templates:
 
 - **Fantasy** — [Medieval Village](/templates/fantasy/medieval-village), [Enchanted Forest](/templates/fantasy/enchanted-forest), [Japanese Temple](/templates/fantasy/japanese-temple), [Cozy Farm](/templates/fantasy/cozy-farm), [Winter Wonderland](/templates/fantasy/winter-wonderland)
 - **Sci-Fi** — [Space Station](/templates/sci-fi/space-station), [Underwater World](/templates/sci-fi/underwater-world), [Alien World](/templates/sci-fi/alien-world)

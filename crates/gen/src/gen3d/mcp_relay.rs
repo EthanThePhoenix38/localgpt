@@ -54,13 +54,10 @@ pub fn cleanup_relay_port() {
 
 /// Shared tool set for the relay server.
 /// Tools are created once and shared across all client connections.
+/// `Tool: Send + Sync` is a trait bound, so `Vec<Box<dyn Tool>>` is automatically Send+Sync.
 struct RelayTools {
     tools: Vec<Box<dyn Tool>>,
 }
-
-// SAFETY: Tool implementations are Send+Sync (they use Arc<GenBridge> internally)
-unsafe impl Send for RelayTools {}
-unsafe impl Sync for RelayTools {}
 
 impl RelayTools {
     fn list_schemas(&self) -> Vec<serde_json::Value> {
@@ -131,7 +128,19 @@ async fn handle_relay_client(stream: tokio::net::TcpStream, relay: Arc<RelayTool
     let (reader, mut writer) = stream.into_split();
     let mut lines = BufReader::new(reader).lines();
 
-    while let Ok(Some(line)) = lines.next_line().await {
+    let idle_timeout = std::time::Duration::from_secs(300); // 5 min idle timeout
+
+    loop {
+        let line = match tokio::time::timeout(idle_timeout, lines.next_line()).await {
+            Ok(Ok(Some(line))) => line,
+            Ok(Ok(None)) => break, // Client closed connection
+            Ok(Err(_)) => break,   // Read error
+            Err(_) => {
+                tracing::info!("MCP relay: client idle timeout");
+                break;
+            }
+        };
+
         let line = line.trim().to_string();
         if line.is_empty() {
             continue;
@@ -165,7 +174,14 @@ async fn write_response(
     writer: &mut tokio::net::tcp::OwnedWriteHalf,
     response: &serde_json::Value,
 ) -> std::io::Result<()> {
-    let mut buf = serde_json::to_string(response).unwrap_or_default();
+    let mut buf = match serde_json::to_string(response) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Failed to serialize MCP response: {}", e);
+            r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal serialization error"}}"#
+                .to_string()
+        }
+    };
     buf.push('\n');
     writer.write_all(buf.as_bytes()).await
 }

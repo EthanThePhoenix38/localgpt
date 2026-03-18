@@ -1,7 +1,7 @@
 //! File-based GPU lock for exclusive headless generation.
 //!
 //! Prevents concurrent Bevy instances from fighting over the GPU.
-//! Uses `fs2` file locking for cross-process safety.
+//! Uses `flock` on Unix and `LockFileEx` on Windows for cross-process safety.
 
 use std::path::PathBuf;
 
@@ -42,20 +42,8 @@ impl GpuLock {
             .ok()?;
 
         // Try non-blocking exclusive lock
-        #[cfg(unix)]
-        {
-            use std::os::unix::io::AsRawFd;
-            let fd = file.as_raw_fd();
-            let ret = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
-            if ret != 0 {
-                return None;
-            }
-        }
-
-        #[cfg(not(unix))]
-        {
-            // On non-Unix, use a simple PID-based check
-            // (less robust but functional)
+        if !try_lock_exclusive(&file) {
+            return None;
         }
 
         // Write PID for diagnostics
@@ -95,4 +83,42 @@ impl Drop for GpuLockGuard {
     fn drop(&mut self) {
         tracing::debug!("GPU lock released at {}", self.path.display());
     }
+}
+
+/// Try to acquire an exclusive non-blocking lock on a file.
+#[cfg(unix)]
+fn try_lock_exclusive(file: &std::fs::File) -> bool {
+    use std::os::unix::io::AsRawFd;
+    let fd = file.as_raw_fd();
+    let ret = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
+    ret == 0
+}
+
+/// Try to acquire an exclusive non-blocking lock on a file (Windows).
+#[cfg(windows)]
+fn try_lock_exclusive(file: &std::fs::File) -> bool {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx,
+    };
+    let handle = file.as_raw_handle() as isize;
+    let mut overlapped = unsafe { std::mem::zeroed() };
+    let result = unsafe {
+        LockFileEx(
+            handle,
+            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+            0,
+            1,
+            0,
+            &mut overlapped,
+        )
+    };
+    result != 0
+}
+
+/// Fallback for other platforms — always succeeds (no locking).
+#[cfg(not(any(unix, windows)))]
+fn try_lock_exclusive(_file: &std::fs::File) -> bool {
+    tracing::warn!("GPU lock not supported on this platform — concurrent access not prevented");
+    true
 }
