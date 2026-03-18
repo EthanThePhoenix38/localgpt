@@ -85,11 +85,16 @@ impl Tool for GenQueueExperimentTool {
 
         let prompt = args["prompt"]
             .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'prompt'"))?;
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("Missing or empty 'prompt'"))?;
         let name = args["name"]
             .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'name'"))?;
-        let style = args["style"].as_str().map(|s| s.to_string());
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("Missing or empty 'name'"))?;
+        let style = args["style"]
+            .as_str()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string());
 
         // Check for variation spec in args
         let variations = args.get("variations");
@@ -113,8 +118,16 @@ impl Tool for GenQueueExperimentTool {
             };
 
         let mut experiment_ids = Vec::new();
+        const MAX_VARIATIONS: usize = 50;
 
         if let (Some(ax), Some(vals)) = (var_axis, var_values) {
+            if vals.len() > MAX_VARIATIONS {
+                anyhow::bail!(
+                    "Too many variations ({}, max {})",
+                    vals.len(),
+                    MAX_VARIATIONS
+                );
+            }
             // Create variation group
             let group_id = format!("vg-{}", prompt_to_slug(name));
             for val in &vals {

@@ -208,6 +208,8 @@ impl ExperimentTracker {
     }
 
     /// Compact the tracker: keep only the last N entries.
+    ///
+    /// Uses file locking to prevent concurrent writes during compaction.
     pub fn compact(&self, max_entries: usize) -> anyhow::Result<usize> {
         let all = self.read_all()?;
         let total = all.len();
@@ -218,14 +220,17 @@ impl ExperimentTracker {
         // Keep the most recent entries
         let to_keep: Vec<&Experiment> = all.iter().rev().take(max_entries).collect();
 
-        // Rewrite the file
+        // Rewrite the file with exclusive lock
         use std::io::Write;
-        let mut file = std::fs::OpenOptions::new()
+        let file = std::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .open(&self.path)?;
 
+        lock_file_exclusive(&file)?;
+
+        let mut file = file;
         for exp in to_keep.into_iter().rev() {
             let line = serde_json::to_string(exp)?;
             writeln!(file, "{}", line)?;

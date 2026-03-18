@@ -34,7 +34,8 @@ impl Default for OffscreenRenderTarget {
     }
 }
 
-/// Marker component for the offscreen camera.
+/// Marker component for the offscreen camera (Phase 1.5).
+#[allow(dead_code)]
 #[derive(Component)]
 pub struct OffscreenCamera;
 

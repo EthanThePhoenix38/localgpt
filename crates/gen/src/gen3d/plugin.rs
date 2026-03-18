@@ -516,7 +516,17 @@ fn process_gen_commands(
     mut channel_res: ResMut<GenChannelRes>,
     mut commands: Commands,
     mut params: GenCommandParams,
+    mut pending_gallery_load: ResMut<crate::gen3d::gallery_ui::PendingGalleryLoad>,
 ) {
+    // Process gallery load requests by injecting into the command channel
+    if let Some(path) = pending_gallery_load.path.take() {
+        tracing::info!("Gallery: loading world from {}", path);
+        let _ = channel_res
+            .channels
+            .cmd_tx
+            .send(GenCommand::LoadWorld { path, clear: true });
+    }
+
     while let Ok(cmd) = channel_res.channels.cmd_rx.try_recv() {
         let response = match cmd {
             GenCommand::SceneInfo => handle_scene_info(

@@ -57,6 +57,8 @@ impl GenBridge {
 pub struct GenChannels {
     pub cmd_rx: mpsc::UnboundedReceiver<GenCommand>,
     pub resp_tx: mpsc::UnboundedSender<GenResponse>,
+    /// Sender for injecting commands from Bevy-internal systems (e.g., gallery load).
+    pub cmd_tx: mpsc::UnboundedSender<GenCommand>,
 }
 
 /// Create a matched pair of (GenBridge for agent, GenChannels for Bevy).
@@ -65,11 +67,15 @@ pub fn create_gen_channels() -> (Arc<GenBridge>, GenChannels) {
     let (resp_tx, resp_rx) = mpsc::unbounded_channel();
 
     let bridge = Arc::new(GenBridge {
-        cmd_tx,
+        cmd_tx: cmd_tx.clone(),
         resp_rx: Mutex::new(resp_rx),
     });
 
-    let channels = GenChannels { cmd_rx, resp_tx };
+    let channels = GenChannels {
+        cmd_rx,
+        resp_tx,
+        cmd_tx,
+    };
 
     (bridge, channels)
 }

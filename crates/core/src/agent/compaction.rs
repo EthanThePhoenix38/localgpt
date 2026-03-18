@@ -33,7 +33,7 @@ pub fn extract_sections(content: &str, section_names: &[String]) -> String {
             .or_else(|| trimmed.strip_prefix("## "))
         {
             let heading_lower = heading_text.trim().to_lowercase();
-            capturing = names_lower.iter().any(|name| heading_lower == *name);
+            capturing = names_lower.contains(&heading_lower);
 
             if capturing {
                 // Include the heading itself
@@ -62,10 +62,7 @@ pub fn extract_sections(content: &str, section_names: &[String]) -> String {
 ///
 /// Tries `AGENTS.md` first, falls back to `SOUL.md`.
 /// Returns `None` if no matching sections found or files missing.
-pub fn build_post_compaction_context(
-    workspace: &Path,
-    sections: &[String],
-) -> Option<String> {
+pub fn build_post_compaction_context(workspace: &Path, sections: &[String]) -> Option<String> {
     if sections.is_empty() {
         return None;
     }
@@ -141,10 +138,7 @@ Never do bad things.
 
 Random notes.
 ";
-        let sections = vec![
-            "Session Startup".to_string(),
-            "Red Lines".to_string(),
-        ];
+        let sections = vec!["Session Startup".to_string(), "Red Lines".to_string()];
         let result = extract_sections(md, &sections);
         assert!(result.contains("Boot sequence here."));
         assert!(result.contains("Never do bad things."));
@@ -185,7 +179,8 @@ Random notes.
 
     #[test]
     fn test_extract_truncation() {
-        let long_content = "## Session Startup\n\n".to_string() + &"x".repeat(4000) + "\n\n## Other\n";
+        let long_content =
+            "## Session Startup\n\n".to_string() + &"x".repeat(4000) + "\n\n## Other\n";
         let sections = vec!["Session Startup".to_string()];
         let result = extract_sections(&long_content, &sections);
         assert!(result.len() <= MAX_CONTEXT_CHARS + 20); // +20 for truncation marker
@@ -203,10 +198,7 @@ Random notes.
         )
         .unwrap();
 
-        let sections = vec![
-            "Session Startup".to_string(),
-            "Red Lines".to_string(),
-        ];
+        let sections = vec!["Session Startup".to_string(), "Red Lines".to_string()];
         let result = build_post_compaction_context(workspace, &sections);
         assert!(result.is_some());
         let msg = result.unwrap();
@@ -222,11 +214,7 @@ Random notes.
         let workspace = tmp.path();
 
         // No AGENTS.md, only SOUL.md
-        std::fs::write(
-            workspace.join("SOUL.md"),
-            "## Red Lines\n\nBe kind.\n",
-        )
-        .unwrap();
+        std::fs::write(workspace.join("SOUL.md"), "## Red Lines\n\nBe kind.\n").unwrap();
 
         let sections = vec!["Red Lines".to_string()];
         let result = build_post_compaction_context(workspace, &sections);

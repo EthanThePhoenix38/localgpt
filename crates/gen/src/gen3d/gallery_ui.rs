@@ -31,14 +31,31 @@ pub struct GalleryState {
 /// Bevy plugin that adds the gallery UI systems.
 pub struct GalleryPlugin;
 
+/// Pending world load request from the gallery.
+///
+/// When set, `process_gen_commands` in plugin.rs picks this up and
+/// executes the load (same codepath as `gen_load_world` from the agent).
+#[derive(Resource, Default)]
+pub struct PendingGalleryLoad {
+    pub path: Option<String>,
+}
+
 impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GalleryState>()
-            // gallery_toggle_system does NOT touch EguiContexts — it only reads
-            // keyboard input and toggles visibility. gallery_ui_system draws the
-            // egui window only when visible. Both are independent of inspector systems.
+            .init_resource::<PendingGalleryLoad>()
             .add_systems(Update, gallery_toggle_system)
-            .add_systems(Update, gallery_ui_system);
+            .add_systems(Update, gallery_ui_system)
+            .add_systems(Update, gallery_load_system);
+    }
+}
+
+/// Transfer load_request from GalleryState to PendingGalleryLoad resource.
+fn gallery_load_system(mut gallery: ResMut<GalleryState>, mut pending: ResMut<PendingGalleryLoad>) {
+    if let Some(path) = gallery.load_request.take() {
+        tracing::info!("Gallery: queuing world load from {}", path);
+        pending.path = Some(path);
+        gallery.visible = false;
     }
 }
 
