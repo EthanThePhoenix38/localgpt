@@ -70,7 +70,7 @@ pub fn create_safe_tools(
 
     let mut tools: Vec<Box<dyn Tool>> = vec![
         memory_search_tool,
-        Box::new(MemoryGetTool::new(workspace)),
+        Box::new(MemoryGetTool::new(workspace.clone())),
         Box::new(WebFetchTool::new(
             config.tools.web_fetch_max_bytes,
             web_fetch_filter,
@@ -84,6 +84,23 @@ pub fn create_safe_tools(
         match SearchRouter::from_config(ws_config) {
             Ok(router) => tools.push(Box::new(WebSearchTool::new(Arc::new(router)))),
             Err(e) => tracing::warn!("Web search init failed: {e}"),
+        }
+    }
+
+    // Document loader tool (always available — uses shell commands for extraction)
+    tools.push(Box::new(DocumentLoadTool::new(workspace, &config.tools)));
+
+    // Audio transcription tool (only if STT providers are configured)
+    if let Some(ref stt_config) = config.tools.stt {
+        let env_vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        let registry = crate::media::SttRegistry::from_config(stt_config, &env_vars);
+        if registry.has_providers() {
+            tools.push(Box::new(AudioTranscribeTool::new(
+                Arc::new(registry),
+                config.workspace_path(),
+            )));
+        } else {
+            tracing::debug!("STT configured but no providers available (missing API keys?)");
         }
     }
 
@@ -465,6 +482,205 @@ impl Tool for MemoryGetTool {
     }
 }
 
+// Document Load Tool — extracts text from PDF, DOCX, EPUB, HTML via shell commands
+pub struct DocumentLoadTool {
+    loaders: crate::media::DocumentLoaders,
+    workspace: PathBuf,
+    max_bytes: usize,
+    output_max_chars: usize,
+}
+
+impl DocumentLoadTool {
+    pub fn new(workspace: PathBuf, config: &crate::config::ToolsConfig) -> Self {
+        let loaders = match config.document_loaders {
+            Some(ref custom) => crate::media::DocumentLoaders::with_custom(custom),
+            None => crate::media::DocumentLoaders::new(),
+        };
+        Self {
+            loaders,
+            workspace,
+            max_bytes: config.document_max_bytes,
+            output_max_chars: config.tool_output_max_chars,
+        }
+    }
+
+    fn validate_path(&self, path_str: &str) -> Result<PathBuf> {
+        if path_str.contains('\0') {
+            anyhow::bail!("Invalid path: null bytes not allowed");
+        }
+        let expanded = shellexpand::tilde(path_str).to_string();
+        let resolved = if std::path::Path::new(&expanded).is_absolute() {
+            PathBuf::from(expanded)
+        } else {
+            self.workspace.join(expanded)
+        };
+        if resolved.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            anyhow::bail!("Invalid path: path traversal not allowed");
+        }
+        Ok(resolved)
+    }
+}
+
+#[async_trait]
+impl Tool for DocumentLoadTool {
+    fn name(&self) -> &str {
+        "document_load"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "document_load".to_string(),
+            description: "Extract text content from PDF, DOCX, EPUB, or HTML documents. Returns the document text.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the document file (relative to workspace or absolute)"
+                    }
+                },
+                "required": ["path"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let path_str = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+
+        let resolved = self.validate_path(path_str)?;
+
+        if !resolved.exists() {
+            anyhow::bail!("File not found: {}", path_str);
+        }
+
+        let metadata = fs::metadata(&resolved)?;
+        if metadata.len() as usize > self.max_bytes {
+            anyhow::bail!(
+                "File too large: {} bytes (max: {} bytes / {}MB)",
+                metadata.len(),
+                self.max_bytes,
+                self.max_bytes / 1_048_576
+            );
+        }
+
+        let ext = resolved.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !self.loaders.has_loader(ext) {
+            let supported = self.loaders.supported_extensions().join(", ");
+            anyhow::bail!(
+                "Unsupported format: .{}. Supported: {}",
+                ext,
+                supported
+            );
+        }
+
+        debug!("Loading document: {} ({})", resolved.display(), ext);
+        let text = self.loaders.extract_text(&resolved)?;
+
+        if self.output_max_chars > 0 && text.len() > self.output_max_chars {
+            let truncated = truncate_on_char_boundary(&text, self.output_max_chars);
+            Ok(format!(
+                "{}\n\n[Truncated, {} chars total]",
+                truncated,
+                text.len()
+            ))
+        } else {
+            Ok(text)
+        }
+    }
+}
+
+// Audio Transcribe Tool — transcribes audio files via Groq/OpenAI/CLI
+pub struct AudioTranscribeTool {
+    registry: Arc<crate::media::SttRegistry>,
+    workspace: PathBuf,
+}
+
+impl AudioTranscribeTool {
+    pub fn new(registry: Arc<crate::media::SttRegistry>, workspace: PathBuf) -> Self {
+        Self { registry, workspace }
+    }
+
+    fn validate_path(&self, path_str: &str) -> Result<PathBuf> {
+        if path_str.contains('\0') {
+            anyhow::bail!("Invalid path: null bytes not allowed");
+        }
+        let expanded = shellexpand::tilde(path_str).to_string();
+        let resolved = if std::path::Path::new(&expanded).is_absolute() {
+            PathBuf::from(expanded)
+        } else {
+            self.workspace.join(expanded)
+        };
+        if resolved.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            anyhow::bail!("Invalid path: path traversal not allowed");
+        }
+        Ok(resolved)
+    }
+}
+
+#[async_trait]
+impl Tool for AudioTranscribeTool {
+    fn name(&self) -> &str {
+        "transcribe_audio"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "transcribe_audio".to_string(),
+            description: "Transcribe audio files (MP3, M4A, WAV, OGG, FLAC, WEBM) to text using speech-to-text.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the audio file"
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Language hint (ISO 639-1, e.g., 'en', 'zh', 'ja'). Default: 'en'"
+                    }
+                },
+                "required": ["path"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let path_str = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+
+        let resolved = self.validate_path(path_str)?;
+
+        if !resolved.exists() {
+            anyhow::bail!("File not found: {}", path_str);
+        }
+
+        let mime_type = crate::media::audio::mime_type_from_path(&resolved);
+        if mime_type == "audio/octet-stream" {
+            let ext = resolved.extension().and_then(|e| e.to_str()).unwrap_or("?");
+            anyhow::bail!(
+                "Unsupported audio format: .{}. Supported: ogg, opus, mp3, m4a, wav, webm, flac",
+                ext
+            );
+        }
+
+        let audio_data = fs::read(&resolved)?;
+        debug!(
+            "Transcribing audio: {} ({} bytes, {})",
+            resolved.display(),
+            audio_data.len(),
+            mime_type
+        );
+
+        let text = self.registry.transcribe(&audio_data, mime_type).await?;
+        Ok(text)
+    }
+}
+
 fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
     &s[..s.floor_char_boundary(max_bytes)]
 }
@@ -790,6 +1006,14 @@ pub fn extract_tool_detail(tool_name: &str, arguments: &str) -> Option<String> {
             .get("query")
             .and_then(|v| v.as_str())
             .map(|s| format!("\"{}\"", s)),
+        "document_load" => args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        "transcribe_audio" => args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
 
         // Gen tools - 3D scene manipulation
         "gen_spawn_primitive" => {
@@ -1008,5 +1232,145 @@ mod tests {
         assert!(result.contains("line1"));
         // Cleanup
         let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    // --- DocumentLoadTool tests ---
+
+    fn test_tools_config() -> crate::config::ToolsConfig {
+        crate::config::ToolsConfig::default()
+    }
+
+    #[test]
+    fn test_document_load_tool_schema() {
+        let workspace = std::env::temp_dir().join("localgpt_test_doc_schema");
+        let tool = DocumentLoadTool::new(workspace, &test_tools_config());
+        assert_eq!(tool.name(), "document_load");
+        let schema = tool.schema();
+        assert_eq!(schema.name, "document_load");
+        let params = &schema.parameters;
+        assert!(params["properties"]["path"].is_object());
+        assert_eq!(params["required"][0], "path");
+    }
+
+    #[tokio::test]
+    async fn test_document_load_rejects_path_traversal() {
+        let workspace = std::env::temp_dir().join("localgpt_test_doc_traversal");
+        let _ = std::fs::create_dir_all(&workspace);
+        let tool = DocumentLoadTool::new(workspace, &test_tools_config());
+
+        let args = r#"{"path": "../../../etc/passwd"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("path traversal"));
+    }
+
+    #[tokio::test]
+    async fn test_document_load_rejects_unsupported_format() {
+        let workspace = std::env::temp_dir().join("localgpt_test_doc_format");
+        let _ = std::fs::create_dir_all(&workspace);
+        std::fs::write(workspace.join("test.xyz"), "content").unwrap();
+        let tool = DocumentLoadTool::new(workspace.clone(), &test_tools_config());
+
+        let args = r#"{"path": "test.xyz"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("Unsupported format"));
+        assert!(msg.contains("pdf"));
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[tokio::test]
+    async fn test_document_load_rejects_too_large() {
+        let workspace = std::env::temp_dir().join("localgpt_test_doc_large");
+        let _ = std::fs::create_dir_all(&workspace);
+        std::fs::write(workspace.join("big.pdf"), vec![0u8; 100]).unwrap();
+
+        let mut config = test_tools_config();
+        config.document_max_bytes = 50; // 50 bytes limit
+        let tool = DocumentLoadTool::new(workspace.clone(), &config);
+
+        let args = r#"{"path": "big.pdf"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too large"));
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[tokio::test]
+    async fn test_document_load_file_not_found() {
+        let workspace = std::env::temp_dir().join("localgpt_test_doc_notfound");
+        let _ = std::fs::create_dir_all(&workspace);
+        let tool = DocumentLoadTool::new(workspace, &test_tools_config());
+
+        let args = r#"{"path": "nonexistent.pdf"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    // --- AudioTranscribeTool tests ---
+
+    #[test]
+    fn test_audio_transcribe_tool_schema() {
+        let workspace = std::env::temp_dir().join("localgpt_test_audio_schema");
+        let registry = Arc::new(crate::media::SttRegistry::new(
+            crate::media::SttConfig::default(),
+        ));
+        let tool = AudioTranscribeTool::new(registry, workspace);
+        assert_eq!(tool.name(), "transcribe_audio");
+        let schema = tool.schema();
+        assert_eq!(schema.name, "transcribe_audio");
+        let params = &schema.parameters;
+        assert!(params["properties"]["path"].is_object());
+        assert!(params["properties"]["language"].is_object());
+        assert_eq!(params["required"][0], "path");
+    }
+
+    #[tokio::test]
+    async fn test_audio_transcribe_rejects_path_traversal() {
+        let workspace = std::env::temp_dir().join("localgpt_test_audio_traversal");
+        let _ = std::fs::create_dir_all(&workspace);
+        let registry = Arc::new(crate::media::SttRegistry::new(
+            crate::media::SttConfig::default(),
+        ));
+        let tool = AudioTranscribeTool::new(registry, workspace);
+
+        let args = r#"{"path": "../../../etc/passwd.mp3"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("path traversal"));
+    }
+
+    #[tokio::test]
+    async fn test_audio_transcribe_rejects_unsupported_format() {
+        let workspace = std::env::temp_dir().join("localgpt_test_audio_format");
+        let _ = std::fs::create_dir_all(&workspace);
+        std::fs::write(workspace.join("test.txt"), "not audio").unwrap();
+        let registry = Arc::new(crate::media::SttRegistry::new(
+            crate::media::SttConfig::default(),
+        ));
+        let tool = AudioTranscribeTool::new(registry, workspace.clone());
+
+        let args = r#"{"path": "test.txt"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Unsupported audio"));
+        let _ = std::fs::remove_dir_all(&workspace);
+    }
+
+    #[tokio::test]
+    async fn test_audio_transcribe_file_not_found() {
+        let workspace = std::env::temp_dir().join("localgpt_test_audio_notfound");
+        let _ = std::fs::create_dir_all(&workspace);
+        let registry = Arc::new(crate::media::SttRegistry::new(
+            crate::media::SttConfig::default(),
+        ));
+        let tool = AudioTranscribeTool::new(registry, workspace);
+
+        let args = r#"{"path": "nonexistent.mp3"}"#;
+        let result = tool.execute(args).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
     }
 }

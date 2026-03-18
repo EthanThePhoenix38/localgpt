@@ -152,6 +152,18 @@ pub struct ToolsConfig {
     #[serde(default)]
     pub web_search: Option<WebSearchConfig>,
 
+    /// Document loader overrides: extension → shell command (e.g., "pdf" → "pdftotext $1 -")
+    #[serde(default)]
+    pub document_loaders: Option<std::collections::HashMap<String, String>>,
+
+    /// Maximum document file size in bytes (default: 10MB)
+    #[serde(default = "default_document_max_bytes")]
+    pub document_max_bytes: usize,
+
+    /// Audio transcription (STT) configuration
+    #[serde(default)]
+    pub stt: Option<crate::media::SttConfig>,
+
     /// Per-tool input filters (deny/allow patterns and substrings).
     /// Keys are tool names (e.g. "bash", "web_fetch").
     #[serde(default)]
@@ -777,6 +789,9 @@ fn default_web_fetch_max_bytes() -> usize {
 fn default_tool_output_max_chars() -> usize {
     50000 // 50k characters max for tool output by default
 }
+fn default_document_max_bytes() -> usize {
+    10_485_760 // 10MB
+}
 fn default_openai_base_url() -> String {
     "https://api.openai.com/v1".to_string()
 }
@@ -938,6 +953,9 @@ impl Default for ToolsConfig {
             log_injection_warnings: default_true(),
             use_content_delimiters: default_true(),
             web_search: None,
+            document_loaders: None,
+            document_max_bytes: default_document_max_bytes(),
+            stt: None,
             filters: std::collections::HashMap::new(),
         }
     }
