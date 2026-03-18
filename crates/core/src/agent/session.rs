@@ -297,6 +297,36 @@ impl Session {
         Ok(path)
     }
 
+    /// Save session with optional encryption at rest.
+    pub fn save_to_path_encrypted(
+        &self,
+        path: &PathBuf,
+        encryption_key: Option<&crate::security::encrypt::EncryptionKey>,
+    ) -> Result<()> {
+        if let Some(key) = encryption_key {
+            // Build JSONL content in memory, then encrypt and write as a single blob
+            let content = self.build_jsonl_content()?;
+            let encrypted = key.encrypt(content.as_bytes())?;
+
+            let enc_path = path.with_extension("jsonl.enc");
+            std::fs::write(&enc_path, &encrypted)?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&enc_path, std::fs::Permissions::from_mode(0o600));
+            }
+
+            // Remove unencrypted file if it exists (migration)
+            if path.exists() && path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                let _ = std::fs::remove_file(path);
+            }
+            return Ok(());
+        }
+
+        self.save_to_path(path)
+    }
+
     fn save_to_path(&self, path: &PathBuf) -> Result<()> {
         let mut file = File::create(path)?;
 
@@ -340,6 +370,105 @@ impl Session {
         }
 
         Ok(())
+    }
+
+    /// Build JSONL content as a String (used for encryption).
+    fn build_jsonl_content(&self) -> Result<String> {
+        let mut content = String::new();
+
+        let header = json!({
+            "type": "session",
+            "version": CURRENT_SESSION_VERSION,
+            "id": self.id,
+            "timestamp": self.created_at.to_rfc3339(),
+            "cwd": self.cwd,
+            "compactionCount": self.compaction_count,
+            "memoryFlushCompactionCount": self.memory_flush_compaction_count
+        });
+        content.push_str(&serde_json::to_string(&header)?);
+        content.push('\n');
+
+        if let Some(ref context) = self.system_context {
+            let system_msg = self.format_message_entry(&SessionMessage::new(Message {
+                role: Role::System,
+                content: context.clone(),
+                tool_calls: None,
+                tool_call_id: None,
+                images: Vec::new(),
+            }));
+            content.push_str(&serde_json::to_string(&system_msg)?);
+            content.push('\n');
+        }
+
+        for sm in &self.messages {
+            let entry = self.format_message_entry(sm);
+            content.push_str(&serde_json::to_string(&entry)?);
+            content.push('\n');
+        }
+
+        Ok(content)
+    }
+
+    /// Load session with optional decryption. Tries .jsonl.enc first, then .jsonl.
+    pub fn load_from_path_encrypted(
+        base_path: &PathBuf,
+        session_id: &str,
+        encryption_key: Option<&crate::security::encrypt::EncryptionKey>,
+    ) -> Result<Self> {
+        let enc_path = base_path.with_extension("jsonl.enc");
+
+        // Try encrypted file first
+        if enc_path.exists() {
+            let key = encryption_key.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Session {} is encrypted but no encryption key is available. \
+                     Run `localgpt encrypt enable` or set security.encryption = true",
+                    session_id
+                )
+            })?;
+
+            let data = std::fs::read(&enc_path)?;
+            let plaintext = key.decrypt(&data)?;
+            let content = String::from_utf8(plaintext)
+                .map_err(|_| anyhow::anyhow!("Decrypted session is not valid UTF-8"))?;
+
+            return Self::load_from_string(&content, session_id);
+        }
+
+        // Fall back to unencrypted .jsonl
+        if base_path.exists() {
+            return Self::load_from_path(base_path, session_id);
+        }
+
+        anyhow::bail!("Session not found: {}", session_id)
+    }
+
+    /// Load session from an in-memory JSONL string.
+    fn load_from_string(content: &str, session_id: &str) -> Result<Self> {
+        let mut session = Session {
+            id: session_id.to_string(),
+            created_at: Utc::now(),
+            cwd: ".".to_string(),
+            messages: Vec::new(),
+            system_context: None,
+            token_count: 0,
+            compaction_count: 0,
+            memory_flush_compaction_count: 0,
+        };
+
+        for line in content.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let entry: serde_json::Value = match serde_json::from_str(line) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            session.parse_entry(&entry);
+        }
+
+        session.recalculate_tokens();
+        Ok(session)
     }
 
     /// Format a message in Pi-compatible format
@@ -454,49 +583,49 @@ impl Session {
             if line.trim().is_empty() {
                 continue;
             }
-
             let entry: serde_json::Value = match serde_json::from_str(&line) {
                 Ok(v) => v,
-                Err(_) => continue, // Skip malformed lines (session repair)
+                Err(_) => continue,
             };
-
-            match entry["type"].as_str() {
-                // Pi format header
-                Some("session") => {
-                    if let Some(ts) = entry["timestamp"].as_str()
-                        && let Ok(dt) = DateTime::parse_from_rfc3339(ts)
-                    {
-                        session.created_at = dt.with_timezone(&Utc);
-                    }
-                    if let Some(cwd) = entry["cwd"].as_str() {
-                        session.cwd = cwd.to_string();
-                    }
-                    if let Some(count) = entry["compactionCount"].as_u64() {
-                        session.compaction_count = count as u32;
-                    }
-                    if let Some(count) = entry["memoryFlushCompactionCount"].as_u64() {
-                        session.memory_flush_compaction_count = count as u32;
-                    }
-                }
-                // Pi format message
-                Some("message") => {
-                    if let Some(msg_obj) = entry.get("message")
-                        && let Some(sm) = Self::parse_pi_message(msg_obj)
-                    {
-                        // System messages become system_context
-                        if sm.message.role == Role::System && session.system_context.is_none() {
-                            session.system_context = Some(sm.message.content);
-                        } else {
-                            session.messages.push(sm);
-                        }
-                    }
-                }
-                _ => {}
-            }
+            session.parse_entry(&entry);
         }
 
         session.recalculate_tokens();
         Ok(session)
+    }
+
+    /// Parse a single JSONL entry into this session.
+    fn parse_entry(&mut self, entry: &serde_json::Value) {
+        match entry["type"].as_str() {
+            Some("session") => {
+                if let Some(ts) = entry["timestamp"].as_str()
+                    && let Ok(dt) = DateTime::parse_from_rfc3339(ts)
+                {
+                    self.created_at = dt.with_timezone(&Utc);
+                }
+                if let Some(cwd) = entry["cwd"].as_str() {
+                    self.cwd = cwd.to_string();
+                }
+                if let Some(count) = entry["compactionCount"].as_u64() {
+                    self.compaction_count = count as u32;
+                }
+                if let Some(count) = entry["memoryFlushCompactionCount"].as_u64() {
+                    self.memory_flush_compaction_count = count as u32;
+                }
+            }
+            Some("message") => {
+                if let Some(msg_obj) = entry.get("message")
+                    && let Some(sm) = Self::parse_pi_message(msg_obj)
+                {
+                    if sm.message.role == Role::System && self.system_context.is_none() {
+                        self.system_context = Some(sm.message.content);
+                    } else {
+                        self.messages.push(sm);
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Parse Pi format message

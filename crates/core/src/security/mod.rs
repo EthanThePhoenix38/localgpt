@@ -4,6 +4,7 @@
 //! and public API documentation.
 
 mod audit;
+pub mod encrypt;
 mod localgpt;
 mod policy;
 mod protected_files;

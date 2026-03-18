@@ -294,6 +294,15 @@ pub struct SecurityConfig {
     /// Paths are canonicalized at startup. Symlinks are resolved before checking.
     #[serde(default)]
     pub allowed_directories: Vec<String>,
+
+    /// Enable encryption at rest for sessions and config secrets (default: false).
+    #[serde(default)]
+    pub encryption: bool,
+
+    /// Path to the encryption key file.
+    /// Default: data_dir/encryption.key (~/.local/share/localgpt/encryption.key)
+    #[serde(default)]
+    pub encryption_key_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
