@@ -8,6 +8,7 @@ pub mod daemon;
 #[cfg(feature = "desktop")]
 pub mod desktop;
 pub mod doctor;
+pub mod encrypt;
 pub mod gen3d;
 pub mod hooks;
 pub mod init;
@@ -99,6 +100,9 @@ pub enum Commands {
 
     /// Run diagnostics to validate setup
     Doctor(doctor::DoctorArgs),
+
+    /// Manage encryption at rest
+    Encrypt(encrypt::EncryptArgs),
 
     /// Generate shell completion scripts
     Completion(completion::CompletionArgs),

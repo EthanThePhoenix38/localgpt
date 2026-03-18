@@ -109,7 +109,11 @@ impl EncryptionKey {
     /// Encrypt a string and return `enc:<base64>` format for config files.
     pub fn encrypt_config_value(&self, plaintext: &str) -> Result<String> {
         let encrypted = self.encrypt(plaintext.as_bytes())?;
-        Ok(format!("{}{}", ENC_PREFIX, base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &encrypted)))
+        Ok(format!(
+            "{}{}",
+            ENC_PREFIX,
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &encrypted)
+        ))
     }
 
     /// Decrypt an `enc:<base64>` config value. Returns the plaintext string.

@@ -514,7 +514,10 @@ impl DocumentLoadTool {
         } else {
             self.workspace.join(expanded)
         };
-        if resolved.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        if resolved
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
             anyhow::bail!("Invalid path: path traversal not allowed");
         }
         Ok(resolved)
@@ -569,11 +572,7 @@ impl Tool for DocumentLoadTool {
         let ext = resolved.extension().and_then(|e| e.to_str()).unwrap_or("");
         if !self.loaders.has_loader(ext) {
             let supported = self.loaders.supported_extensions().join(", ");
-            anyhow::bail!(
-                "Unsupported format: .{}. Supported: {}",
-                ext,
-                supported
-            );
+            anyhow::bail!("Unsupported format: .{}. Supported: {}", ext, supported);
         }
 
         debug!("Loading document: {} ({})", resolved.display(), ext);
@@ -600,7 +599,10 @@ pub struct AudioTranscribeTool {
 
 impl AudioTranscribeTool {
     pub fn new(registry: Arc<crate::media::SttRegistry>, workspace: PathBuf) -> Self {
-        Self { registry, workspace }
+        Self {
+            registry,
+            workspace,
+        }
     }
 
     fn validate_path(&self, path_str: &str) -> Result<PathBuf> {
@@ -613,7 +615,10 @@ impl AudioTranscribeTool {
         } else {
             self.workspace.join(expanded)
         };
-        if resolved.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        if resolved
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
             anyhow::bail!("Invalid path: path traversal not allowed");
         }
         Ok(resolved)
@@ -1355,7 +1360,12 @@ mod tests {
         let args = r#"{"path": "test.txt"}"#;
         let result = tool.execute(args).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unsupported audio"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported audio")
+        );
         let _ = std::fs::remove_dir_all(&workspace);
     }
 
