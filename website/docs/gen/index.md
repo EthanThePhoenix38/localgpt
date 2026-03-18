@@ -163,6 +163,7 @@ See [Headless Mode & Experiment Queue](/docs/gen/headless) for full details.
 ## Features
 
 - **[Tools](/docs/gen/tools)** — 32 core tools plus 50+ MCP-only tools for characters, interactions, terrain, UI, physics, worldgen, and experiments
+- **[WorldGen Pipeline](/docs/gen/worldgen)** — Structured world generation: blockout → navmesh → three-tier placement → evaluation
 - **[Behaviors](/docs/gen/behaviors)** — Data-driven animations (orbit, spin, bounce, etc.)
 - **[Audio](/docs/gen/audio)** — Procedural environmental audio with spatial emitters
 - **[World Skills](/docs/gen/world-skills)** — Save and load complete worlds as reusable skills
@@ -170,6 +171,7 @@ See [Headless Mode & Experiment Queue](/docs/gen/headless) for full details.
 - **[MCP Server](/docs/gen/mcp-server)** — Use gen tools from Claude Desktop, VS Code, Zed, Cursor, and other MCP clients
 - **[CLI Mode](/docs/gen/cli-mode)** — MCP relay for Claude CLI, Gemini CLI, and Codex (no API key needed)
 - **[Headless Mode](/docs/gen/headless)** — Batch generation, experiment queue, and creative memory
+- **[External Services](/docs/gen/external-services)** — Optional local services for NPC brains, depth preview, and 3D asset generation
 - **Undo/Redo** — Full undo/redo support for all scene edits with persistence
 - **Streaming Chat** — Real-time tool call display and streaming responses
 

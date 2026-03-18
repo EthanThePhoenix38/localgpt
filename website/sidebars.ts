@@ -24,6 +24,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'gen/index',
         'gen/tools',
+        'gen/worldgen',
         'gen/behaviors',
         'gen/audio',
         'gen/world-skills',
@@ -31,6 +32,7 @@ const sidebars: SidebarsConfig = {
         'gen/mcp-server',
         'gen/cli-mode',
         'gen/headless',
+        'gen/external-services',
       ],
     },
     {
