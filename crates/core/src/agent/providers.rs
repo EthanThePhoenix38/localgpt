@@ -27,6 +27,34 @@ pub struct ImageAttachment {
     pub media_type: String,
 }
 
+impl ImageAttachment {
+    /// Optimize this image attachment in-place using the given max dimension.
+    /// No-op if image-resize feature is not enabled or max_dimension is 0.
+    #[cfg(feature = "image-resize")]
+    pub fn optimize_in_place(&mut self, max_dimension: u32) {
+        if max_dimension == 0 {
+            return;
+        }
+        let config = crate::media::image_optimize::ImageOptConfig {
+            max_dimension,
+            ..Default::default()
+        };
+        match crate::media::image_optimize::optimize_base64_image(&self.data, &self.media_type, &config) {
+            Ok((new_data, new_type)) => {
+                self.data = new_data;
+                self.media_type = new_type;
+            }
+            Err(e) => {
+                tracing::warn!("Image optimization failed, sending original: {e}");
+            }
+        }
+    }
+
+    /// No-op when image-resize feature is not enabled.
+    #[cfg(not(feature = "image-resize"))]
+    pub fn optimize_in_place(&mut self, _max_dimension: u32) {}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,

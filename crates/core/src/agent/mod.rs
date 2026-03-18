@@ -674,13 +674,20 @@ impl Agent {
         // Reset loop detector for new turn
         self.loop_detector.reset();
 
+        // Optimize images before adding to session
+        let mut optimized_images = images;
+        let max_dim = self.app_config.tools.image_max_dimension;
+        for img in &mut optimized_images {
+            img.optimize_in_place(max_dim);
+        }
+
         // Add user message with images
         self.session.add_message(Message {
             role: Role::User,
             content: message.to_string(),
             tool_calls: None,
             tool_call_id: None,
-            images,
+            images: optimized_images,
         });
 
         // Check if we should run pre-compaction memory flush (soft threshold)
@@ -1387,7 +1394,10 @@ impl Agent {
                 &self.app_config.agent.post_compaction_sections,
             )
         {
-            debug!("Injecting post-compaction context ({} chars)", context.len());
+            debug!(
+                "Injecting post-compaction context ({} chars)",
+                context.len()
+            );
             self.session.add_message(Message {
                 role: Role::System,
                 content: context,
@@ -1592,13 +1602,20 @@ impl Agent {
         message: &str,
         images: Vec<ImageAttachment>,
     ) -> Result<StreamResult> {
+        // Optimize images before adding to session
+        let mut optimized_images = images;
+        let max_dim = self.app_config.tools.image_max_dimension;
+        for img in &mut optimized_images {
+            img.optimize_in_place(max_dim);
+        }
+
         // Add user message with images
         self.session.add_message(Message {
             role: Role::User,
             content: message.to_string(),
             tool_calls: None,
             tool_call_id: None,
-            images,
+            images: optimized_images,
         });
 
         // Check if we should run pre-compaction memory flush (soft threshold)

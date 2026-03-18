@@ -8,7 +8,7 @@ description = "Core library for LocalGPT — agent, memory, config, security"
 readme = "README.md"
 
 [features]
-default = ["embeddings-local", "claude-cli", "gemini-cli", "codex-cli", "sqlite-vec"]
+default = ["embeddings-local", "claude-cli", "gemini-cli", "codex-cli", "sqlite-vec", "image-resize"]
 # Local embeddings via fastembed (ONNX). Works on desktop and mobile.
 embeddings-local = ["fastembed"]
 # Claude CLI provider (requires subprocess execution — not available on mobile)
@@ -25,6 +25,8 @@ embeddings-openai = []
 embeddings-none = []
 # Sqlite vector search extension (works on mobile)
 sqlite-vec = ["dep:sqlite-vec"]
+# Image optimization for vision models (resizes before sending to LLM)
+image-resize = ["dep:image"]
 # Legacy alias
 gguf = ["embeddings-gguf"]
 
@@ -51,6 +53,9 @@ rand = { workspace = true }
 fastembed = { version = "5.12", optional = true }
 # GGUF embeddings via llama.cpp (optional)
 llama-cpp-2 = { version = "0.1", optional = true }
+
+# Image optimization
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
 
 # Cron expression parsing
 croner = "2"

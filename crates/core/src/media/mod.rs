@@ -4,6 +4,8 @@
 
 pub mod audio;
 pub mod document;
+#[cfg(feature = "image-resize")]
+pub mod image_optimize;
 pub mod tts;
 
 pub use audio::{SttConfig, SttProvider, SttRegistry};

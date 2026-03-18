@@ -169,6 +169,11 @@ pub struct ToolsConfig {
     #[serde(default)]
     pub stt: Option<crate::media::SttConfig>,
 
+    /// Maximum image dimension (width or height) before resizing for vision models.
+    /// 0 = disabled (send original). Default: 1568px.
+    #[serde(default = "default_image_max_dimension")]
+    pub image_max_dimension: u32,
+
     /// Per-tool input filters (deny/allow patterns and substrings).
     /// Keys are tool names (e.g. "bash", "web_fetch").
     #[serde(default)]
@@ -806,11 +811,11 @@ fn default_tool_output_max_chars() -> usize {
 fn default_document_max_bytes() -> usize {
     10_485_760 // 10MB
 }
+fn default_image_max_dimension() -> u32 {
+    1568 // Moltis-compatible, conservative for token cost
+}
 fn default_post_compaction_sections() -> Vec<String> {
-    vec![
-        "Session Startup".to_string(),
-        "Red Lines".to_string(),
-    ]
+    vec!["Session Startup".to_string(), "Red Lines".to_string()]
 }
 fn default_openai_base_url() -> String {
     "https://api.openai.com/v1".to_string()
@@ -977,6 +982,7 @@ impl Default for ToolsConfig {
             document_loaders: None,
             document_max_bytes: default_document_max_bytes(),
             stt: None,
+            image_max_dimension: default_image_max_dimension(),
             filters: std::collections::HashMap::new(),
         }
     }
