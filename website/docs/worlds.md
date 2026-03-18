@@ -12,6 +12,7 @@ A comparison of AI systems that generate or interact with 3D explorable worlds.
 |--------|-------|--------|---------|---------------|
 | [Genie 3](https://deepmind.google/discover/blog/genie-2-a-large-scale-foundation-world-model/) | Text, Image | Interactive 3D | Cloud | Game world generation |
 | [SIMA 2](https://deepmind.google/discover/blog/sima-2-next-gen-game-ai/) | Gameplay video | Agent behavior | Cloud | Game-playing AI agent |
+| [WorldGen](https://www.meta.com/blog/worldgen-3d-world-generation-reality-labs-generative-ai-research/) | Text | 3D Worlds (USD) | Cloud | Structured 3D world generation |
 | [Marble](https://www.worldlabs.ai/) | Text, Image, Video, 3D | Gaussian Splats, 3D | Cloud | World model for 3D generation |
 | [Artcraft](https://artcraft.ai/) | Text | Images, Video | Cloud | Creative IDE for AI media |
 | [Intangible](https://www.intangible.ai/) | Text | 3D Scenes | Cloud | Camera-centric scene composition |
@@ -19,17 +20,18 @@ A comparison of AI systems that generate or interact with 3D explorable worlds.
 
 ## Feature Comparison
 
-| Feature | Genie 3 | SIMA 2 | Marble | Artcraft | Intangible | LocalGPT Gen |
-|---------|---------|--------|--------|----------|------------|--------------|
-| Text-to-3D | ✓ | — | ✓ | — | ✓ | ✓ |
-| Image-to-3D | ✓ | — | ✓ | — | — | — |
-| Interactive playback | ✓ | ✓ | — | — | ✓ | ✓ |
-| Real-time simulation | ✓ | ✓ | — | — | — | ✓ |
-| Local execution | — | — | — | — | — | ✓ |
-| Open source | — | — | — | — | — | ✓ |
-| Procedural audio | — | — | — | — | — | ✓ |
-| glTF export | — | — | ✓ | — | ✓ | ✓ |
-| Agent control | — | ✓ | — | — | — | ✓ |
+| Feature | Genie 3 | SIMA 2 | WorldGen | Marble | Artcraft | Intangible | LocalGPT Gen |
+|---------|---------|--------|----------|--------|----------|------------|--------------|
+| Text-to-3D | ✓ | — | ✓ | ✓ | — | ✓ | ✓ |
+| Image-to-3D | ✓ | — | — | ✓ | — | — | — |
+| Interactive playback | ✓ | ✓ | — | — | — | ✓ | ✓ |
+| Real-time simulation | ✓ | ✓ | — | — | — | — | ✓ |
+| Structured generation | — | — | ✓ | — | — | — | ✓ |
+| Local execution | — | — | — | — | — | — | ✓ |
+| Open source | — | — | — | — | — | — | ✓ |
+| Procedural audio | — | — | — | — | — | — | ✓ |
+| glTF/USD export | — | — | ✓ | ✓ | — | ✓ | ✓ |
+| Agent control | — | ✓ | — | — | — | — | ✓ |
 
 ## System Highlights
 
@@ -40,6 +42,10 @@ Foundation world model that generates interactive 3D environments from a single 
 ### SIMA 2 (DeepMind)
 
 Gemini-powered agent that learns to play 3D games by watching gameplay video. Self-improving through experience, it reasons about game objectives and adapts to new environments.
+
+### WorldGen (Meta Reality Labs)
+
+Structured 3D world generation from Meta Research. Uses a multi-stage pipeline — LLM generates high-level layout parameters, then procedural systems handle actual geometry placement. Outputs USD scenes with terrain, structures, vegetation, and props. Key insight: LLMs should generate *parameters*, not geometry directly. LocalGPT Gen's [WorldGen pipeline](/docs/gen/tools) implements a similar blockout-first architecture locally.
 
 ### Marble (World Labs)
 

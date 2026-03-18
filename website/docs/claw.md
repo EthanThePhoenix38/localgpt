@@ -7,7 +7,7 @@ slug: /claw
 
 > **⚠️ AI-Generated Documentation:** This document was generated and is maintained by AI assistants. While efforts are made to ensure accuracy, many details must be outdated or incorrect as those projects are moving very fast. Please verify with the source repositories for the most current information.
 >
-> **Last updated:** 2026-03-10
+> **Last updated:** 2026-03-17
 
 This document tracks feature parity across fourteen implementations of the personal AI assistant architecture. OpenClaw (TypeScript) is the reference implementation; IronClaw, LocalGPT, Moltis, and ZeroClaw are Rust implementations; Nanobot, CoPaw, and Agent Zero are Python implementations; PicoClaw is Go; NullClaw is Zig; MimiClaw and ZClaw are C (ESP32); RosClaw is a TypeScript OpenClaw plugin for ROS2 robotics; TinyClaw is a TypeScript multi-agent orchestrator.
 
@@ -15,19 +15,19 @@ This document tracks feature parity across fourteen implementations of the perso
 
 | Project | Language | License | Summary |
 |---------|----------|---------|---------|
-| **OpenClaw** | TypeScript | MIT | Reference implementation; full-featured desktop AI assistant with 20+ messaging channels, WebSocket control plane, memory system, and MCP integration |
-| **IronClaw** | Rust | MIT/Apache 2.0 | Security-focused with WASM sandbox execution, prompt injection defense, and hybrid search memory; NEAR AI integration |
+| **OpenClaw** | TypeScript | MIT | Reference implementation (v2026.3.14); full-featured desktop AI assistant with 20+ messaging channels, WebSocket control plane, advanced hybrid memory system (multimodal embeddings, MMR, temporal decay, query expansion), and MCP integration |
+| **IronClaw** | Rust | MIT/Apache 2.0 | Security-focused (v0.19.0); WASM sandbox with capability-based permissions, Docker sandbox (orchestrator/worker), prompt injection defense, hybrid search memory (PostgreSQL + pgvector), self-repair, dynamic tool building, NEAR AI integration |
 | **LocalGPT** | Rust | Apache 2.0 | Local-first AI assistant with persistent markdown memory, Bevy 3D scene generation (Gen mode), optional autonomous heartbeat, and bridge daemon protocol |
-| **Moltis** | Rust | MIT | Enterprise-ready with Docker sandbox, multi-channel support (Telegram/Slack/HTTP), GraphQL API, and TLS/WebAuthn auth |
+| **Moltis** | Rust | MIT | Enterprise-ready 46-crate workspace (196K LoC, 2,300+ tests, zero unsafe); Docker + Apple Container sandbox, multi-channel (Telegram/Slack/HTTP/Teams/Discord), GraphQL API, TLS/WebAuthn auth, encryption-at-rest (XChaCha20-Poly1305) |
 | **Nanobot** | Python | MIT | Lightweight ~4K LOC implementation with 10+ chat channels and MCP integration; ideal for learning and rapid prototyping |
-| **CoPaw** | Python | Apache 2.0 | AgentScope/Alibaba-based with console web UI, Twilio voice support, and daemon mode; designed for enterprise deployment |
+| **CoPaw** | Python | Apache 2.0 | AgentScope/Alibaba-based (v0.0.6); native desktop installers (Win/Mac), console web UI, 10 channels (DingTalk/Feishu/QQ/Discord/iMessage/Telegram/Signal/Matrix/MQTT/Nostr), local models (llama.cpp/MLX/Ollama), ReMeLight memory, Twilio voice, daemon mode |
 | **PicoClaw** | Go | MIT | Minimal footprint (under 10MB RAM) with multi-arch support; WeCom enterprise messaging; targets resource-constrained environments |
-| **ZeroClaw** | Rust | MIT/Apache 2.0 | Ultra-lightweight with trait-driven architecture, Prometheus metrics, and extensive IoT protocol support (MQTT, Nextcloud Talk) |
-| **NullClaw** | Zig | MIT | 678KB binary with multi-layer sandbox; I2C/SPI hardware interfaces; demonstrates Zig's suitability for embedded AI |
+| **ZeroClaw** | Rust | MIT/Apache 2.0 | Ultra-lightweight (v0.1.8, &lt;5MB RAM, &lt;10ms startup, 1,017+ tests); trait-driven architecture, Prometheus metrics, research phase for proactive info gathering, extensive IoT protocol support (MQTT, Nextcloud Talk) |
+| **NullClaw** | Zig | MIT | 678KB binary, 50+ AI providers, 35+ tools, 10 memory engines, 5,300+ tests; multi-layer sandbox (Landlock/Firejail/Bubblewrap/Docker); I2C/SPI hardware; dual-backend SQLite + libSQL/Turso |
 | **MimiClaw** | C (ESP32) | MIT | Bare metal ESP32-S3 ($5), Telegram primary channel, OTA updates, serial CLI config; no OS/runtime overhead |
 | **RosClaw** | TypeScript + Python | Apache 2.0 | OpenClaw plugin for ROS2 robotics; rosbridge WebSocket, robot context injection, 3 transport modes |
 | **ZClaw** | C (ESP32) | MIT | 888KiB binary budget, 27 tools, 4 LLM providers, ESP32/C3/S3/C6 support, rate limiting, serial admin |
-| **TinyClaw** | TypeScript | MIT | Multi-agent team orchestrator with TinyOffice dashboard; Hono HTTP, SSE events, WhatsApp/Discord integration |
+| **TinyClaw** | TypeScript | MIT | Multi-agent team orchestrator (v0.0.10); TinyOffice dashboard (Next.js, 11 pages), Hono HTTP + REST API + WebSocket, SSE events, WhatsApp/Discord/Telegram integration |
 | **Agent Zero** | Python | MIT | General-purpose agentic framework with hierarchical multi-agent cooperation, Docker sandbox, browser automation, SKILL.md skills, MCP client/server, and real-time Web UI |
 
 ### GitHub Repositories
@@ -120,20 +120,20 @@ This document tracks feature parity across fourteen implementations of the perso
 | WhatsApp | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ✅ | ❌ | P1 | TinyClaw: whatsapp-web.js |
 | Telegram | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ✅ | ✅ | ❌ | - | ZClaw: long-polling |
 | Discord | ✅ | ❌ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ✅ | ❌ | P2 | TinyClaw: discord.js |
-| Signal | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | P2 | |
+| Signal | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | P2 | CoPaw: v0.0.6 |
 | Slack | ✅ | ✅ | ❌ | 🚧 | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | - | |
 | iMessage | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | Linq | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw only |
 | Feishu/Lark | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | LINE | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | WebChat | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ➖ | ❌ | ✅ | ✅ | - | TinyClaw: TinyOffice; Agent Zero: Web UI |
-| Matrix | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw: E2EE support |
+| Matrix | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw: E2EE support; CoPaw: v0.0.6 |
 | Mattermost | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | Google Chat | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | MS Teams | ✅ | ❌ | ❌ | 🚧 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | Twitch | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | Voice Call | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | CoPaw: Twilio voice |
-| Nostr | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
+| Nostr | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | CoPaw: v0.0.6 |
 | QQ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | DingTalk | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | Email (IMAP/SMTP) | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
@@ -141,7 +141,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | WeCom (企业微信) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | PicoClaw only |
 | MaixCam | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | Embedded camera |
 | OneBot | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | QQ protocol |
-| MQTT | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw: IoT messaging |
+| MQTT | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw + CoPaw: IoT messaging |
 | Nextcloud Talk | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw only |
 | WATI (WhatsApp Business) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw only |
 | Serial/USB | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | - | Embedded device serial |
@@ -413,14 +413,22 @@ This document tracks feature parity across fourteen implementations of the perso
 | MMR re-ranking | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | LLM-based query expansion | ✅ | ❌ | ❌ | 🚧 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | OpenAI embeddings | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ✅ | Agent Zero: sentence-transformers |
-| Gemini embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Gemini embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: gemini-embedding-2-preview |
+| Gemini multimodal embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: image + audio indexing via Gemini |
+| Voyage AI embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Mistral embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Ollama embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Local embeddings | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: sentence-transformers local |
 | SQLite-vec backend | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | |
 | LanceDB backend | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | QMD backend | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Multiple memory engines | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | NullClaw: 10 engines (SQLite, Markdown, ClickHouse, PostgreSQL, Redis, LanceDB, Lucid, LRU, API, None) |
 | Atomic reindexing | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | |
-| Embeddings batching | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | |
-| Citation support | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Embeddings batching | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | OpenClaw: batch-openai, batch-gemini, batch-voyage |
+| Citation support | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: on/off/auto modes per chat type |
+| Session memory indexing | 🚧 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: experimental, delta tracking with 100KB/50msg thresholds |
+| Post-compaction memory sync | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: forced sync after compaction |
+| memory_get tool (snippet read) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: path + from line + line count |
 | Memory CLI commands | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Flexible path structure | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ✅ | Agent Zero: memory_subdir per context |
 | Identity files (AGENTS.md, etc.) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ➖ | ❌ | ❌ | ✅ | Agent Zero: system prompts |
@@ -594,7 +602,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Docker: Chromium + Xvfb | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: browser agent |
 | Docker: init scripts | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | |
 | Browser: extraArgs config | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| Workspace crate count | ➖ | 1 | 13 | 47 | ➖ | ➖ | ➖ | 2 | ➖ | ➖ | ➖ | ➖ | ➖ | ➖ | IronClaw: monolithic single crate |
+| Workspace crate count | ➖ | 1 | 13 | 46 | ➖ | ➖ | ➖ | 2 | ➖ | ➖ | ➖ | ➖ | ➖ | ➖ | IronClaw: monolithic single crate; Moltis: 46 modular crates |
 | Mobile build scripts | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: ESP32/Nucleo firmware |
 | Nix/direnv support | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | mdBook documentation | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
@@ -693,14 +701,18 @@ This document tracks feature parity across fourteen implementations of the perso
 - ✅ OAuth for GitHub Copilot + OpenAI Codex
 - ✅ Two-layer memory (MEMORY.md + HISTORY.md)
 
-**CoPaw additionally:**
-- ✅ Console web UI with channel management
-- ✅ DingTalk, Feishu, QQ, Discord, iMessage, Telegram
+**CoPaw additionally (v0.0.6):**
+- ✅ Native desktop installers (Windows/macOS one-click setup)
+- ✅ Console web UI with channel management (ModelScope Studio)
+- ✅ 10 channels: DingTalk, Feishu, QQ, Discord, iMessage, Telegram, Signal, Matrix, MQTT, Nostr
+- ✅ Local model support (llama.cpp, MLX, Ollama)
+- ✅ ReMeLight memory system with smart truncation
 - ✅ MCP support (stdio + HTTP)
 - ✅ Cron with delivery routing
 - ✅ Twilio voice channel
-- ✅ Daemon mode
+- ✅ Daemon mode + DaemonAgent autonomous diagnostics
 - ✅ Agent interruption API
+- ✅ Russian + Japanese language support
 
 **PicoClaw additionally:**
 - ✅ Ultra-lightweight Go binary (&lt;10MB RAM, &lt;1s boot)
@@ -724,12 +736,14 @@ This document tracks feature parity across fourteen implementations of the perso
 
 **NullClaw additionally:**
 - ✅ Ultra-lightweight Zig binary (678KB, ~1MB RAM, &lt;2ms boot)
-- ✅ 18 channels + 23 providers + 18 tools
-- ✅ Hybrid vector+FTS5 memory
+- ✅ 19 channels + 50+ providers + 35+ tools
+- ✅ 10 memory engines (SQLite hybrid, Markdown, ClickHouse, PostgreSQL, Redis, LanceDB, Lucid, LRU, API, None)
+- ✅ Hybrid vector+FTS5 memory with Reciprocal Rank Fusion
 - ✅ Multi-layer sandbox (landlock, firejail, bubblewrap, docker)
+- ✅ Dual-backend persistence (SQLite + libSQL/Turso)
 - ✅ Hardware peripherals (I2C, SPI)
 - ✅ Composio integration
-- ✅ 3,230+ tests
+- ✅ 5,300+ tests (~250 source files)
 
 **MimiClaw additionally:**
 - ✅ ESP32 bare metal (no Linux, no Node.js, pure C)
@@ -811,67 +825,69 @@ This document tracks feature parity across fourteen implementations of the perso
 
 ## 18. Development Activity
 
-Git repository activity metrics as of 2026-03-10.
+Git repository activity metrics as of 2026-03-17.
 
 ### Commit Activity
 
 | Project | Language | Total Commits | Last 90d | Last 30d | Last 7d | First Commit | Last Commit |
 |---------|----------|---------------|----------|----------|---------|--------------|-------------|
-| **OpenClaw** | TypeScript | 17,089 | 16,488 | 8,179 | 1,737 | 2025-11-24 | 2026-03-06 |
-| **Agent Zero** | Python | 1,345 | 379 | 51 | 0 | 2024-06-10 | 2026-02-24 |
-| **ZeroClaw** | Rust | 1,762 | 1,762 | 1,762 | 132 | 2026-02-13 | 2026-03-05 |
-| **Moltis** | Rust | 1,472 | 1,472 | 1,153 | 134 | 2026-01-28 | 2026-03-06 |
-| **NullClaw** | Zig | 990 | 990 | 990 | 465 | 2026-02-16 | 2026-03-05 |
-| **Nanobot** | Python | 993 | 993 | 869 | 169 | 2026-02-01 | 2026-03-06 |
-| **PicoClaw** | Go | 903 | 903 | 903 | 202 | 2026-02-09 | 2026-03-06 |
-| **LocalGPT** | Rust | 405 | 405 | 325 | 79 | 2026-02-01 | 2026-03-05 |
-| **TinyClaw** | TypeScript | 340 | 340 | 280 | 65 | 2026-02-10 | 2026-03-09 |
-| **IronClaw** | Rust | 339 | 339 | 296 | 83 | 2026-02-02 | 2026-03-06 |
-| **ZClaw** | C (ESP32) | 210 | 210 | 165 | 28 | 2026-02-06 | 2026-03-08 |
-| **MimiClaw** | C (ESP32) | 181 | 181 | 176 | 22 | 2026-02-04 | 2026-03-06 |
-| **CoPaw** | Python | 175 | 175 | 175 | 143 | 2026-02-27 | 2026-03-06 |
-| **RosClaw** | TypeScript + Python | 120 | 120 | 80 | 15 | 2026-02-18 | 2026-03-07 |
+| **OpenClaw** | TypeScript | 20,074 | 18,431 | 9,001 | 2,085 | 2025-11-24 | 2026-03-18 |
+| **ZeroClaw** | Rust | 1,762 | 1,762 | 1,570 | 0 | 2026-02-13 | 2026-03-05 |
+| **NullClaw** | Zig | 1,661 | 1,661 | 1,661 | 364 | 2026-02-16 | 2026-03-17 |
+| **Moltis** | Rust | 1,528 | 1,528 | 365 | 29 | 2026-01-28 | 2026-03-15 |
+| **Agent Zero** | Python | 1,345 | 366 | 6 | 0 | 2024-06-10 | 2026-02-24 |
+| **Nanobot** | Python | 1,332 | 1,332 | 963 | 185 | 2026-02-01 | 2026-03-18 |
+| **PicoClaw** | Go | 1,016 | 1,016 | 769 | 0 | 2026-02-09 | 2026-03-10 |
+| **IronClaw** | Rust | 645 | 645 | 520 | 197 | 2026-02-02 | 2026-03-17 |
+| **CoPaw** | Python | 237 | 237 | 237 | 0 | 2026-02-27 | 2026-03-11 |
+| **MimiClaw** | C (ESP32) | 214 | 214 | 149 | 8 | 2026-02-04 | 2026-03-17 |
+| **ZClaw** | C (ESP32) | 186 | 186 | 186 | 0 | 2026-02-20 | 2026-03-08 |
+| **TinyClaw** | TypeScript | 107 | 107 | 47 | 0 | 2026-02-09 | 2026-03-11 |
+| **RosClaw** | TypeScript + Python | 23 | 23 | 19 | 0 | 2026-02-15 | 2026-03-03 |
 
 ### Contributor Activity (Last 90 Days)
 
+> Contributor counts from GitHub API as of 2026-03-10. Some projects squash commits, so per-contributor rates vary.
+
 | Project | Active Contributors | Total Contributors | Commits/Contributor (90d) |
 |---------|---------------------|-------------------|---------------------------|
-| **OpenClaw** | 1,147 | 1,150 | 14.4 |
-| **Nanobot** | 135 | 135 | 7.4 |
-| **PicoClaw** | 144 | 144 | 6.3 |
+| **OpenClaw** | 1,147 | 1,150 | 16.1 |
 | **ZeroClaw** | 158 | 158 | 11.2 |
-| **NullClaw** | 49 | 49 | 20.2 |
-| **CoPaw** | 47 | 47 | 3.7 |
-| **Agent Zero** | 38 | 38 | 10.0 |
-| **IronClaw** | 37 | 37 | 9.2 |
-| **TinyClaw** | 18 | 18 | 18.9 |
+| **Nanobot** | 135 | 135 | 9.9 |
+| **PicoClaw** | 144 | 144 | 7.1 |
+| **NullClaw** | 49 | 49 | 33.9 |
+| **CoPaw** | 47 | 47 | 5.0 |
+| **Agent Zero** | 38 | 38 | 9.6 |
+| **IronClaw** | 37 | 37 | 17.4 |
+| **TinyClaw** | 18 | 18 | 5.9 |
+| **Moltis** | 14 | 14 | 109.1 |
 | **LocalGPT** | 12 | 13 | 33.8 |
-| **Moltis** | 14 | 14 | 105.1 |
-| **RosClaw** | 8 | 8 | 15.0 |
-| **MimiClaw** | 6 | 6 | 30.2 |
-| **ZClaw** | 4 | 4 | 52.5 |
+| **RosClaw** | 8 | 8 | 2.9 |
+| **MimiClaw** | 6 | 6 | 35.7 |
+| **ZClaw** | 4 | 4 | 46.5 |
 
 ### Velocity Tiers
 
 **Tier 1 — Hyperactive (>1000 commits/30d):**
-- **OpenClaw** (8,179) — Reference implementation, massive community
+- **OpenClaw** (9,001) — Reference implementation, massive community
+- **NullClaw** (1,661) — Zig upstart, sustained fast growth
+- **ZeroClaw** (1,570) — Rapid development, large community
 
 **Tier 2 — Very Active (500-1000 commits/30d):**
-- **ZeroClaw** (1,762) — Rapid development, large community
-- **Moltis** (1,153) — Feature-rich Rust implementation
-- **NullClaw** (990) — Zig upstart, fast growth
-- **Nanobot** (869) — Python lightweight
-- **PicoClaw** (903) — Go embedded
+- **Nanobot** (963) — Python lightweight
+- **PicoClaw** (769) — Go embedded
+- **IronClaw** (520) — Security-focused Rust, accelerating
 
 **Tier 3 — Moderate (100-500 commits/30d):**
-- **LocalGPT** (325) — Steady development, small focused team
-- **IronClaw** (296) — Security-focused Rust
-- **TinyClaw** (280) — Multi-agent orchestrator, growing community
-- **MimiClaw** (176) — ESP32 embedded
-- **CoPaw** (175) — Recent launch (Feb 27)
-- **ZClaw** (165) — Ultra-minimal ESP32
-- **RosClaw** (80) — OpenClaw robotics plugin
-- **Agent Zero** (51) — Established Python framework (since 2024)
+- **Moltis** (365) — Feature-rich Rust implementation
+- **CoPaw** (237) — Growing fast since Feb 27 launch
+- **ZClaw** (186) — Ultra-minimal ESP32
+- **MimiClaw** (149) — ESP32 embedded
+
+**Tier 4 — Steady (&lt;100 commits/30d):**
+- **TinyClaw** (47) — Multi-agent orchestrator
+- **RosClaw** (19) — OpenClaw robotics plugin, re-architecture in progress
+- **Agent Zero** (6) — Established Python framework (since 2024), slowing
 
 ### Development Patterns
 
@@ -889,12 +905,27 @@ Git repository activity metrics as of 2026-03-10.
 
 ## Deviations & Unique Strengths
 
+### OpenClaw
+1. **Advanced hybrid memory** — 80+ files implementing vector + keyword (BM25/FTS5) search with Reciprocal Rank Fusion, MMR diversity re-ranking, temporal decay, and LLM-based query expansion
+2. **6 embedding providers** — OpenAI, Gemini (including multimodal image+audio), Voyage AI, Mistral, Ollama, with batch processing for each
+3. **Session memory indexing** — Experimental feature indexing session transcripts alongside memory files with delta tracking
+4. **Post-compaction memory sync** — Forced memory synchronization after session compaction ensures no context loss
+5. **Citation system** — on/off/auto citation modes; auto shows citations in DMs, suppresses in groups
+6. **Memory v2 research** — Proposed Retain/Recall/Reflect architecture with entity pages, belief confidence, and daily log normalization
+7. **78+ plugin extensions** — Largest plugin ecosystem across 20+ messaging channels
+8. **Heartbeat isolation** — Fresh session per heartbeat run, custom prompts, exec wake scoping
+9. **Pi agent runtime** — RPC-based agent execution model shared across mobile/web/CLI
+
 ### IronClaw
-1. **WASM sandbox** — Lighter weight than Docker, capability-based security
-2. **NEAR AI focus** — Primary provider with session-based auth
-3. **Tinfoil private inference** — Hardware-attested TEE provider
-4. **PostgreSQL + libSQL** — Dual database backend
-5. **Rich terminal UI** — rustyline + termimad with approval overlays
+1. **WASM sandbox** — Lighter weight than Docker, capability-based permissions
+2. **Docker sandbox** — Orchestrator/worker pattern with per-job tokens
+3. **NEAR AI focus** — Primary provider with browser OAuth
+4. **Tinfoil private inference** — Hardware-attested TEE provider
+5. **Self-repair** — Automatic detection and recovery of stuck operations
+6. **Dynamic tool building** — Describe tools in natural language
+7. **Parallel job execution** — Isolated contexts per job
+8. **PostgreSQL + pgvector** — Vector search with Reciprocal Rank Fusion
+9. **Rich terminal UI** — rustyline + termimad with approval overlays
 
 ### LocalGPT
 1. **Gen mode** — Bevy 3D scene generation + FunDSP procedural audio synthesis
@@ -907,16 +938,18 @@ Git repository activity metrics as of 2026-03-10.
 8. **Profile isolation** — `--profile` flag for completely isolated config/data directories
 
 ### Moltis
-1. **GraphQL API** — HTTP + WebSocket GraphQL in addition to RPC
-2. **Voice I/O** — 5 TTS + 9 STT providers out-of-box (`moltis-voice`)
-3. **Browser automation** — Chrome/Chromium via CDP (`moltis-browser`)
-4. **Apple Container sandbox** — Native macOS container support alongside Docker
-5. **WebAuthn/passkey auth** — Hardware-backed authentication
-6. **Tailscale integration** — Serve + Funnel modes for network exposure
-7. **A2UI Canvas** — Agent-controlled HTML UI for mobile/web
-8. **17 hook event types** — Comprehensive lifecycle hooks with circuit breaker
-9. **Zero unsafe code** — Workspace-level `deny(unsafe)` lint
-10. **47-crate workspace** — Highly modular architecture
+1. **46-crate workspace** — 196K lines of core code, 2,300+ tests, highly modular
+2. **Zero unsafe code** — Workspace-level `deny(unsafe)` lint (except opt-in FFI behind `local-embeddings`)
+3. **Encryption at rest** — XChaCha20-Poly1305 + Argon2id
+4. **GraphQL API** — HTTP + WebSocket GraphQL in addition to RPC
+5. **Voice I/O** — 15+ TTS/STT providers out-of-box (`moltis-voice`)
+6. **Browser automation** — Chrome/Chromium via CDP (`moltis-browser`)
+7. **Apple Container sandbox** — Native macOS container support alongside Docker
+8. **WebAuthn/passkey auth** — Hardware-backed authentication
+9. **Tailscale integration** — Serve + Funnel modes for network exposure
+10. **A2UI Canvas** — Agent-controlled HTML UI for mobile/web
+11. **15 lifecycle hooks** — Comprehensive hooks with circuit breaker
+12. **SSRF/CSWSH protection** — Enterprise security hardening
 
 ### Nanobot
 1. **Ultra-lightweight Python** — ~4,000 lines of core code, minimal dependencies, fast to deploy
@@ -928,13 +961,16 @@ Git repository activity metrics as of 2026-03-10.
 7. **Cron delivery routing** — Scheduled task results routed to specific messaging channels
 
 ### CoPaw
-1. **AgentScope/Alibaba ecosystem** — Built by Alibaba's AgentScope team with enterprise focus
-2. **Console web UI** — Full-featured browser-based management interface
-3. **Chinese channel focus** — DingTalk, Feishu, QQ first-class support
-4. **Twilio voice** — Voice call channel via Twilio
-5. **Agent interruption API** — Ability to interrupt running agents
-6. **i18n support** — Internationalization in web UI
-7. **One-click install** — Windows one-click installation script
+1. **AgentScope/Alibaba ecosystem** — Built by Alibaba's AgentScope team with enterprise focus (v0.0.6)
+2. **Native desktop installers** — One-click setup for Windows and macOS
+3. **Console web UI** — Full-featured browser-based management interface (ModelScope Studio)
+4. **10 channels** — DingTalk, Feishu, QQ, Discord, iMessage, Telegram, Signal, Matrix, MQTT, Nostr
+5. **Local model support** — llama.cpp, MLX, Ollama for on-device inference
+6. **ReMeLight memory** — Smart truncation and memory optimization system
+7. **DaemonAgent** — Autonomous diagnostics agent
+8. **Twilio voice** — Voice call channel via Twilio
+9. **Agent interruption API** — Ability to interrupt running agents
+10. **i18n support** — Russian, Japanese, and CJK language support in web UI
 
 ### PicoClaw
 1. **Go-native ultra-lightweight** — &lt;10MB RAM, &lt;1s boot, single binary
@@ -958,12 +994,16 @@ Git repository activity metrics as of 2026-03-10.
 
 ### NullClaw
 1. **Zig ultra-lightweight** — 678KB binary, ~1MB RAM, &lt;2ms boot (smallest)
-2. **3,230+ tests** — Most comprehensive test coverage
-3. **Multi-layer sandbox** — landlock, firejail, bubblewrap, docker options
-4. **Composio integration** — Third-party tool integration platform
-5. **Hardware peripherals** — I2C, SPI, screenshot tools
-6. **True portability** — ARM, x86, RISC-V single binary
-7. **$5 hardware target** — Cheapest possible deployment
+2. **5,300+ tests** — Most comprehensive test coverage (~250 source files)
+3. **50+ AI providers** — OpenRouter, Anthropic, OpenAI, Ollama, Venice, Groq, Mistral, and many more
+4. **10 memory engines** — SQLite hybrid search, Markdown, ClickHouse, PostgreSQL, Redis, LanceDB, Lucid, LRU, API, None
+5. **35+ tools** — Comprehensive built-in tool set with explicit allowlists
+6. **Multi-layer sandbox** — landlock, firejail, bubblewrap, docker options
+7. **Dual-backend persistence** — SQLite + libSQL/Turso
+8. **Composio integration** — Third-party tool integration platform
+9. **Hardware peripherals** — I2C, SPI, screenshot tools
+10. **True portability** — ARM, x86, RISC-V single binary
+11. **$5 hardware target** — Cheapest possible deployment
 
 ### MimiClaw
 1. **ESP32 bare metal** — No Linux, no Node.js, pure C on ESP-IDF
