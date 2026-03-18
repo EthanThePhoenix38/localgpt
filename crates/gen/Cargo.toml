@@ -76,6 +76,10 @@ splines = "4.4"
 # Random number generation (for NPC wander, foliage scattering)
 rand = "0.9"
 
+# File locking for GPU exclusivity (Windows)
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
+
 [features]
 default = []
 # Enable physics integration (requires avian3d 0.5 + bevy 0.17 compat)

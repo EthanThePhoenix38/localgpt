@@ -211,6 +211,20 @@ pub const COMMANDS: &[SlashCommand] = &[
         ],
     },
     SlashCommand {
+        name: "gallery",
+        description: "Browse generated worlds",
+        aliases: &[],
+        usage: "[list|refresh]",
+        interfaces: &[Interface::Gen],
+    },
+    SlashCommand {
+        name: "experiments",
+        description: "List generation experiments",
+        aliases: &["exp"],
+        usage: "[list]",
+        interfaces: &[Interface::Gen],
+    },
+    SlashCommand {
         name: "unpair",
         description: "Unpair this bot account",
         aliases: &[],

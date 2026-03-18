@@ -1044,6 +1044,9 @@ async fn run_headless_agent(
     let mut agent = Agent::new_with_tools(config.clone(), agent_id, memory, tools)?;
     agent.new_session().await?;
 
+    // Inject gen-specific memory guidance
+    agent.add_user_message(gen3d::system_prompt::GEN_MEMORY_PROMPT);
+
     // Build effective prompt
     let effective_prompt = format!(
         "{}\n\n{}",
@@ -1321,6 +1324,9 @@ async fn run_agent_loop(
     // Create agent with combined tools
     let mut agent = Agent::new_with_tools(config.clone(), agent_id, memory, tools)?;
     agent.new_session().await?;
+
+    // Inject gen-specific memory guidance so the LLM learns creative preferences
+    agent.add_user_message(gen3d::system_prompt::GEN_MEMORY_PROMPT);
 
     // Display model info (matching CLI format)
     let embedding_status = if agent.has_embeddings() {
