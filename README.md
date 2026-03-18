@@ -50,9 +50,25 @@ localgpt-gen --verbose
 - **Export** — glTF/GLB, HTML (browser-viewable), screenshots
 - **World skills** — save/load complete worlds as reusable skills
 
+### Headless Mode & Experiment Queue
+
+Queue world experiments and generate without a window — overnight batch runs, CI pipelines, or scripted variations:
+
+```bash
+# Generate a single world (no window)
+localgpt-gen headless --prompt "Build a cozy cabin in a snowy forest"
+
+# With style hint
+localgpt-gen headless --prompt "Village marketplace" --style "Studio Ghibli"
+```
+
+The memory system learns your creative style across sessions — palettes, lighting preferences, entity templates — and applies them automatically in future generations.
+
+Full docs: [Headless Mode & Experiment Queue](https://localgpt.app/docs/gen/headless)
+
 ### MCP Server
 
-Use Gen from any MCP-compatible (Claude Desktop, Codex Desktop/CLI, Gemini CLI, etc.):
+Use Gen from any MCP-compatible tool (Claude CLI, Codex CLI, Gemini CLI, VS Code, Zed, Cursor):
 
 ```bash
 localgpt-gen mcp-server
@@ -71,7 +87,9 @@ Add to your `.mcp.json`:
 }
 ```
 
-Full docs: [`website/docs/gen/index.md`](website/docs/gen/index.md) | [MCP Server](website/docs/gen/mcp-server.md)
+When using Gen interactively with a CLI backend, use `--connect` to route tool calls to your existing window instead of spawning a new one. See [CLI Mode (MCP Relay)](https://localgpt.app/docs/gen/cli-mode).
+
+Full docs: [LocalGPT Gen](https://localgpt.app/docs/gen) | [MCP Server](https://localgpt.app/docs/gen/mcp-server)
 
 Built something cool? Share on [Discord](https://discord.gg/spKRr6mRyp) or [YouTube](https://www.youtube.com/@localgpt-gen)!
 

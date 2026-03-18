@@ -28,6 +28,8 @@ const sidebars: SidebarsConfig = {
         'gen/audio',
         'gen/world-skills',
         'gen/mcp-server',
+        'gen/cli-mode',
+        'gen/headless',
       ],
     },
     {

@@ -112,7 +112,7 @@ CLI tools like `bash`, `read_file`, `write_file`, and `edit_file` are **not** ex
 
 ## Claude CLI
 
-Add to project-level `.mcp.json`):
+Add to project-level `.mcp.json`:
 
 ```json
 {
@@ -134,9 +134,13 @@ $ claude
 
 Claude will call `gen_spawn_primitive`, `gen_set_light`, `gen_set_camera`, etc. to construct the scene in the Bevy window.
 
+:::tip Using Gen interactively with Claude CLI as backend?
+If you're running `localgpt-gen` interactively with `claude-cli/*` as the model, use `--connect` instead so tool calls go to your existing window. See [CLI Mode (MCP Relay)](/docs/gen/cli-mode).
+:::
+
 ## Gemini CLI
 
-Add to `~/.gemini/settings.json`:
+Add to `~/.gemini/settings.json` or your workspace `.gemini/settings.json`:
 
 ```json
 {
@@ -148,6 +152,10 @@ Add to `~/.gemini/settings.json`:
   }
 }
 ```
+
+:::tip Using Gen interactively with Gemini CLI as backend?
+Use `["mcp-server", "--connect"]` instead. See [CLI Mode (MCP Relay)](/docs/gen/cli-mode).
+:::
 
 ## OpenAI Codex CLI
 
@@ -311,6 +319,6 @@ The MCP server initializes LocalGPT's memory system using the workspace configur
 
 - **Verbose logging**: Add `--verbose` to see MCP protocol messages and tool list in stderr: `localgpt-gen mcp-server --verbose`
 - **Binary path**: If `localgpt-gen` is not in your `$PATH`, use the full path (e.g., `/Users/you/.cargo/bin/localgpt-gen`) in the MCP server configuration
-- **One instance**: Each MCP server config spawns its own Bevy window. Only one instance should run at a time per display
+- **One instance**: Each standalone `mcp-server` spawns its own Bevy window. If you're using Gen interactively, use `--connect` to relay to the existing window instead (see [CLI Mode](/docs/gen/cli-mode))
 - **Screenshots**: The AI can take screenshots via `gen_screenshot` to see what it built and course-correct — this works the same as in interactive mode
 - **Memory workspace**: The MCP server reads memory from the same workspace as `localgpt chat`. Any notes saved in interactive mode are available via `memory_search` in MCP mode
