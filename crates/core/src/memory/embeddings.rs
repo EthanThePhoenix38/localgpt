@@ -535,6 +535,173 @@ fn process_sub_batch(
     Ok(results)
 }
 
+// ============================================================================
+// Gemini Embedding Provider - Free tier, multimodal with v2 model
+// ============================================================================
+
+/// Gemini embedding provider using Google's Generative Language API.
+///
+/// Models:
+/// - `text-embedding-004`: 2048 token max, 768 dimensions
+/// - `gemini-embedding-2-preview`: 8192 token max, 768/1536/3072 dimensions, multimodal
+pub struct GeminiEmbeddingProvider {
+    client: Client,
+    api_key: String,
+    model: String,
+    dimensions: usize,
+}
+
+impl GeminiEmbeddingProvider {
+    pub fn new(api_key: &str, model: Option<&str>) -> Self {
+        let model = model.unwrap_or("text-embedding-004").to_string();
+        let dimensions = match model.as_str() {
+            "text-embedding-004" => 768,
+            "gemini-embedding-2-preview" => 768, // default; supports 768/1536/3072
+            _ => 768,
+        };
+        Self {
+            client: Client::new(),
+            api_key: api_key.to_string(),
+            model,
+            dimensions,
+        }
+    }
+
+    fn base_url(&self) -> String {
+        format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}",
+            self.model
+        )
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiEmbedRequest {
+    content: GeminiContent,
+    task_type: String,
+}
+
+#[derive(Serialize)]
+struct GeminiContent {
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(Serialize)]
+struct GeminiPart {
+    text: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiBatchRequest {
+    requests: Vec<GeminiBatchItem>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiBatchItem {
+    model: String,
+    content: GeminiContent,
+    task_type: String,
+}
+
+#[derive(Deserialize)]
+struct GeminiEmbedResponse {
+    embedding: GeminiEmbeddingValues,
+}
+
+#[derive(Deserialize)]
+struct GeminiEmbeddingValues {
+    values: Vec<f32>,
+}
+
+#[derive(Deserialize)]
+struct GeminiBatchResponse {
+    embeddings: Vec<GeminiEmbeddingValues>,
+}
+
+#[async_trait]
+impl EmbeddingProvider for GeminiEmbeddingProvider {
+    fn id(&self) -> &str {
+        "gemini"
+    }
+
+    fn model(&self) -> &str {
+        &self.model
+    }
+
+    fn dimensions(&self) -> usize {
+        self.dimensions
+    }
+
+    async fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        let request = GeminiEmbedRequest {
+            content: GeminiContent {
+                parts: vec![GeminiPart {
+                    text: text.to_string(),
+                }],
+            },
+            task_type: "RETRIEVAL_DOCUMENT".to_string(),
+        };
+
+        let url = format!("{}:embedContent?key={}", self.base_url(), self.api_key);
+
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("Gemini API error {}: {}", status, body);
+        }
+
+        let result: GeminiEmbedResponse = response.json().await?;
+        Ok(normalize_embedding(result.embedding.values))
+    }
+
+    async fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let model_path = format!("models/{}", self.model);
+        let requests: Vec<GeminiBatchItem> = texts
+            .iter()
+            .map(|text| GeminiBatchItem {
+                model: model_path.clone(),
+                content: GeminiContent {
+                    parts: vec![GeminiPart { text: text.clone() }],
+                },
+                task_type: "RETRIEVAL_DOCUMENT".to_string(),
+            })
+            .collect();
+
+        let batch = GeminiBatchRequest { requests };
+        let url = format!(
+            "{}:batchEmbedContents?key={}",
+            self.base_url(),
+            self.api_key
+        );
+
+        debug!("Embedding {} texts with Gemini {}", texts.len(), self.model);
+
+        let response = self.client.post(&url).json(&batch).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("Gemini batch API error {}: {}", status, body);
+        }
+
+        let result: GeminiBatchResponse = response.json().await?;
+        Ok(result
+            .embeddings
+            .into_iter()
+            .map(|e| normalize_embedding(e.values))
+            .collect())
+    }
+}
+
 /// Compute cosine similarity between two normalized vectors
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {

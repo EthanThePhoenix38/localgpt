@@ -576,12 +576,16 @@ pub struct MemoryConfig {
     #[serde(default = "default_workspace")]
     pub workspace: String,
 
-    /// Embedding provider: "local" (fastembed, default), "openai", or "none"
+    /// Embedding provider: "local" (fastembed, default), "openai", "gemini", or "none"
     #[serde(default = "default_embedding_provider")]
     pub embedding_provider: String,
 
     #[serde(default = "default_embedding_model")]
     pub embedding_model: String,
+
+    /// Gemini API key for embeddings (supports ${ENV_VAR} syntax)
+    #[serde(default)]
+    pub gemini_api_key: Option<String>,
 
     /// Cache directory for local embedding models (optional)
     /// Default: ~/.cache/localgpt/models
@@ -1014,6 +1018,7 @@ impl Default for MemoryConfig {
             session_max_messages: default_session_max_messages(),
             session_max_chars: 0, // 0 = unlimited (preserve full content like OpenClaw)
             temporal_decay_lambda: 0.0, // Disabled by default
+            gemini_api_key: None,
         }
     }
 }
@@ -1185,6 +1190,9 @@ impl Config {
         if let Some(ref mut vertex) = self.providers.vertex {
             vertex.service_account_key = expand_env(&vertex.service_account_key);
             vertex.project_id = expand_env(&vertex.project_id);
+        }
+        if let Some(ref mut gemini_key) = self.memory.gemini_api_key {
+            *gemini_key = expand_env(gemini_key);
         }
         if let Some(ref mut auth_token) = self.server.auth_token {
             *auth_token = expand_env(auth_token);

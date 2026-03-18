@@ -8,7 +8,9 @@ mod workspace;
 pub use embeddings::FastEmbedProvider;
 #[cfg(feature = "gguf")]
 pub use embeddings::LlamaCppProvider;
-pub use embeddings::{EmbeddingProvider, OpenAIEmbeddingProvider, hash_text};
+pub use embeddings::{
+    EmbeddingProvider, GeminiEmbeddingProvider, OpenAIEmbeddingProvider, hash_text,
+};
 pub use index::{MemoryIndex, ReindexStats};
 pub use search::MemoryChunk;
 pub use watcher::MemoryWatcher;
@@ -170,6 +172,32 @@ impl MemoryManager {
                 } else {
                     warn!(
                         "OpenAI embedding provider requested but no app config provided. Falling back to FTS-only search."
+                    );
+                    None
+                }
+            }
+            "gemini" => {
+                let api_key = memory_config.gemini_api_key.as_deref().or_else(|| {
+                    app_config
+                        .and_then(|c| c.providers.gemini.as_ref())
+                        .map(|g| g.api_key.as_str())
+                });
+
+                if let Some(key) = api_key {
+                    let model = if memory_config.embedding_model.is_empty()
+                        || memory_config.embedding_model == "text-embedding-3-small"
+                    {
+                        None
+                    } else {
+                        Some(memory_config.embedding_model.as_str())
+                    };
+                    let provider = GeminiEmbeddingProvider::new(key, model);
+                    info!("Using Gemini embedding provider: {}", provider.model());
+                    Some(Arc::new(provider))
+                } else {
+                    warn!(
+                        "Gemini embedding provider requested but no API key configured. \
+                         Set memory.gemini_api_key or providers.gemini.api_key. Falling back to FTS-only search."
                     );
                     None
                 }
