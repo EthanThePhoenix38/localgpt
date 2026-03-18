@@ -166,10 +166,10 @@ See [Headless Mode & Experiment Queue](/docs/gen/headless) for full details.
 - **[Behaviors](/docs/gen/behaviors)** — Data-driven animations (orbit, spin, bounce, etc.)
 - **[Audio](/docs/gen/audio)** — Procedural environmental audio with spatial emitters
 - **[World Skills](/docs/gen/world-skills)** — Save and load complete worlds as reusable skills
+- **[Export](/docs/gen/export)** — glTF/GLB (Blender, Unity, Unreal), HTML (browser-viewable with audio + behaviors), screenshots
 - **[MCP Server](/docs/gen/mcp-server)** — Use gen tools from Claude Desktop, VS Code, Zed, Cursor, and other MCP clients
 - **[CLI Mode](/docs/gen/cli-mode)** — MCP relay for Claude CLI, Gemini CLI, and Codex (no API key needed)
 - **[Headless Mode](/docs/gen/headless)** — Batch generation, experiment queue, and creative memory
-- **HTML Export** — Export worlds as self-contained HTML with Three.js and Web Audio
 - **Undo/Redo** — Full undo/redo support for all scene edits with persistence
 - **Streaming Chat** — Real-time tool call display and streaming responses
 
