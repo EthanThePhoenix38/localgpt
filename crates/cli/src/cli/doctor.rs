@@ -631,21 +631,20 @@ fn check_stale_pid_file(fix: bool) -> CheckResult {
 
     #[cfg(not(unix))]
     {
+        let _ = fix;
         CheckResult::pass("PID file", format!("PID file exists ({})", pid))
     }
 }
 
 /// Check #10: Disk space adequate (>100MB free)
 fn check_disk_space() -> CheckResult {
-    let paths = match localgpt_core::paths::Paths::resolve() {
-        Ok(p) => p,
-        Err(_) => return CheckResult::pass("Disk space", "Cannot check disk space"),
-    };
-
-    let data_dir = paths.data_dir;
-
     #[cfg(unix)]
     {
+        let paths = match localgpt_core::paths::Paths::resolve() {
+            Ok(p) => p,
+            Err(_) => return CheckResult::pass("Disk space", "Cannot check disk space"),
+        };
+        let data_dir = paths.data_dir;
         use std::fs;
         if fs::metadata(&data_dir).is_ok() {
             // Use statvfs to get free space via nix

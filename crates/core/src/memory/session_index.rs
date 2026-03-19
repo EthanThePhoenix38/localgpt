@@ -155,7 +155,7 @@ impl<'a> SessionIndexer<'a> {
 
 /// A single user→assistant exchange extracted from a session.
 #[derive(Debug)]
-struct Exchange {
+pub(crate) struct Exchange {
     user: String,
     assistant: String,
     timestamp: Option<String>,
@@ -163,7 +163,7 @@ struct Exchange {
 
 /// Parse session JSONL and extract user+assistant exchanges.
 /// Skips system messages, tool calls, and tool results.
-pub fn extract_exchanges(content: &str) -> Vec<Exchange> {
+pub(crate) fn extract_exchanges(content: &str) -> Vec<Exchange> {
     let mut exchanges = Vec::new();
     let mut pending_user: Option<String> = None;
     let mut pending_ts: Option<String> = None;

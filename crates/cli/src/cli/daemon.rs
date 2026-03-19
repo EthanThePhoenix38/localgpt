@@ -19,6 +19,7 @@ use std::time::Duration;
 const BRIDGE_CLI_AGENT_ID: &str = "bridge-cli";
 
 /// Synchronously stop the daemon (for use before Tokio runtime starts)
+#[cfg(unix)]
 pub fn stop_sync() -> Result<()> {
     let pid_file = get_pid_file()?;
 
@@ -133,6 +134,7 @@ pub fn daemonize_and_run(agent_id: &str) -> Result<()> {
 }
 
 /// Run the daemon server (called after fork in background mode)
+#[cfg(unix)]
 async fn run_daemon_server(config: Config, agent_id: &str) -> Result<()> {
     // Initialize logging in the daemon process
     // Disable ANSI colors since we're writing to a file
