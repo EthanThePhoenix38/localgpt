@@ -1,6 +1,7 @@
 mod embeddings;
 mod index;
 mod search;
+pub mod session_index;
 mod watcher;
 mod workspace;
 

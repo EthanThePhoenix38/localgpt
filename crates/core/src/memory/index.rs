@@ -273,6 +273,48 @@ impl MemoryIndex {
         Ok(true)
     }
 
+    /// Insert a single pre-built chunk into the index.
+    /// Used by session indexer to add session transcript chunks.
+    pub fn insert_chunk(
+        &self,
+        virtual_path: &str,
+        content: &str,
+        line_start_raw: usize,
+        line_end_raw: usize,
+    ) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        let line_start = line_start_raw as i64;
+        let line_end = line_end_raw as i64;
+        let chunk_id = Uuid::new_v4().to_string();
+        let chunk_hash = hash_content(content);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
+
+        conn.execute(
+            r#"INSERT INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
+               VALUES (?1, ?2, 'session', ?3, ?4, ?5, '', ?6, '', ?7)"#,
+            params![&chunk_id, virtual_path, line_start, line_end, &chunk_hash, content, now],
+        )?;
+
+        Self::insert_fts(
+            &conn,
+            &chunk_id,
+            virtual_path,
+            "session",
+            "",
+            line_start as i32,
+            line_end as i32,
+            content,
+        )?;
+
+        Ok(())
+    }
+
     /// Delete chunks for a path and their FTS entries
     fn delete_chunks_for_path(conn: &Connection, path: &str) -> Result<()> {
         // Delete from FTS first (get chunk IDs)

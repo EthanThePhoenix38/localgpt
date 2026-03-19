@@ -600,6 +600,10 @@ pub struct MemoryConfig {
     #[serde(default)]
     pub gemini_api_key: Option<String>,
 
+    /// Index completed session transcripts for memory_search (default: false)
+    #[serde(default)]
+    pub index_sessions: bool,
+
     /// Cache directory for local embedding models (optional)
     /// Default: ~/.cache/localgpt/models
     /// Can also be set via FASTEMBED_CACHE_DIR environment variable
@@ -1035,6 +1039,7 @@ impl Default for MemoryConfig {
             session_max_chars: 0, // 0 = unlimited (preserve full content like OpenClaw)
             temporal_decay_lambda: 0.0, // Disabled by default
             gemini_api_key: None,
+            index_sessions: false,
         }
     }
 }
