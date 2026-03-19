@@ -35,10 +35,13 @@ pub struct McpToolResult {
     pub is_error: bool,
 }
 
+/// A single content block within a tool result (e.g., text or resource).
 #[derive(Debug, Deserialize)]
 pub struct McpContent {
+    /// The content type identifier (e.g., `"text"`, `"image"`, `"resource"`).
     #[serde(rename = "type")]
     pub content_type: String,
+    /// The textual payload, present when `content_type` is `"text"`.
     #[serde(default)]
     pub text: Option<String>,
 }

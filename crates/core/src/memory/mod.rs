@@ -40,26 +40,40 @@ pub struct MemoryManager {
     is_brand_new: bool,
 }
 
+/// Aggregate statistics about the memory index for a workspace.
 #[derive(Debug)]
 pub struct MemoryStats {
+    /// Absolute path of the indexed workspace.
     pub workspace: String,
+    /// Number of distinct files in the index.
     pub total_files: usize,
+    /// Total number of text chunks across all files.
     pub total_chunks: usize,
+    /// On-disk size of the index database in kilobytes.
     pub index_size_kb: u64,
+    /// Per-file breakdown of indexing statistics.
     pub files: Vec<FileStats>,
 }
 
+/// Per-file statistics within the memory index.
 #[derive(Debug)]
 pub struct FileStats {
+    /// File name (relative to workspace root).
     pub name: String,
+    /// Number of indexed chunks for this file.
     pub chunks: usize,
+    /// Total line count of the source file.
     pub lines: usize,
 }
 
+/// A recently modified memory entry, used for the `memory recent` display.
 #[derive(Debug)]
 pub struct RecentEntry {
+    /// ISO-8601 timestamp of the last modification.
     pub timestamp: String,
+    /// File path (relative to workspace root).
     pub file: String,
+    /// Short text preview of the entry content.
     pub preview: String,
 }
 
