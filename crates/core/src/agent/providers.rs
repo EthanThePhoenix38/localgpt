@@ -39,7 +39,11 @@ impl ImageAttachment {
             max_dimension,
             ..Default::default()
         };
-        match crate::media::image_optimize::optimize_base64_image(&self.data, &self.media_type, &config) {
+        match crate::media::image_optimize::optimize_base64_image(
+            &self.data,
+            &self.media_type,
+            &config,
+        ) {
             Ok((new_data, new_type)) => {
                 self.data = new_data;
                 self.media_type = new_type;
@@ -2562,20 +2566,38 @@ impl LLMProvider for ClaudeCliProvider {
                                             // Format tool details
                                             let detail = if let Some(input) = block.get("input") {
                                                 match tool_name {
-                                                    "Bash" => input.get("command")
+                                                    "Bash" | "run_shell_command" => input.get("command")
                                                         .and_then(|v| v.as_str())
                                                         .map(|s| if s.len() > 60 { format!("{}...", &s[..s.floor_char_boundary(57)]) } else { s.to_string() }),
-                                                    "Read" | "Edit" | "Write" => input.get("file_path")
+                                                    "Read" | "Edit" | "Write" | "read_file" | "replace" | "write_file" => input.get("file_path")
                                                         .or_else(|| input.get("path"))
                                                         .and_then(|v| v.as_str())
                                                         .map(|s| s.to_string()),
-                                                    "Grep" | "Glob" => input.get("pattern")
+                                                    "Grep" | "Glob" | "grep_search" | "glob" | "list_directory" => input.get("pattern")
+                                                        .or_else(|| input.get("dir_path"))
                                                         .and_then(|v| v.as_str())
                                                         .map(|s| format!("\"{}\"", s)),
-                                                    "WebFetch" => input.get("url")
+                                                    "WebFetch" | "web_fetch" => input.get("url")
+                                                        .or_else(|| input.get("prompt"))
                                                         .and_then(|v| v.as_str())
                                                         .map(|s| s.to_string()),
-                                                    "Task" => input.get("description")
+                                                    "Task" | "generalist" => input.get("description")
+                                                        .or_else(|| input.get("request"))
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string()),
+                                                    "codebase_investigator" => input.get("objective")
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string()),
+                                                    "google_web_search" => input.get("query")
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string()),
+                                                    "ask_user" => input.get("questions")
+                                                        .and_then(|v| v.as_array())
+                                                        .map(|arr| format!("{} questions", arr.len())),
+                                                    "cli_help" => input.get("question")
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.to_string()),
+                                                    "activate_skill" => input.get("name")
                                                         .and_then(|v| v.as_str())
                                                         .map(|s| s.to_string()),
                                                     _ => None,
@@ -3120,13 +3142,18 @@ impl LLMProvider for GeminiCliProvider {
 
                                 let params = json.get("parameters");
                                 let detail = match tool_name.as_str() {
-                                    "Bash" => params.and_then(|p| p.get("command")).and_then(|v| v.as_str()).map(|s| {
+                                    "Bash" | "run_shell_command" => params.and_then(|p| p.get("command")).and_then(|v| v.as_str()).map(|s| {
                                         if s.len() > 60 { format!("{}...", &s[..s.floor_char_boundary(57)]) } else { s.to_string() }
                                     }),
-                                    "Read" | "Edit" | "Write" => params.and_then(|p| p.get("file_path").or_else(|| p.get("path"))).and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                    "Grep" | "Glob" => params.and_then(|p| p.get("pattern")).and_then(|v| v.as_str()).map(|s| format!("\"{}\"", s)),
-                                    "WebFetch" => params.and_then(|p| p.get("url")).and_then(|v| v.as_str()).map(|s| s.to_string()),
-                                    "Task" => params.and_then(|p| p.get("description")).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "Read" | "Edit" | "Write" | "read_file" | "replace" | "write_file" => params.and_then(|p| p.get("file_path").or_else(|| p.get("path"))).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "Grep" | "Glob" | "grep_search" | "glob" | "list_directory" => params.and_then(|p| p.get("pattern").or_else(|| p.get("dir_path"))).and_then(|v| v.as_str()).map(|s| format!("\"{}\"", s)),
+                                    "WebFetch" | "web_fetch" => params.and_then(|p| p.get("url").or_else(|| p.get("prompt"))).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "Task" | "generalist" => params.and_then(|p| p.get("description").or_else(|| p.get("request"))).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "codebase_investigator" => params.and_then(|p| p.get("objective")).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "google_web_search" => params.and_then(|p| p.get("query")).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "ask_user" => params.and_then(|p| p.get("questions")).and_then(|v| v.as_array()).map(|arr| format!("{} questions", arr.len())),
+                                    "cli_help" => params.and_then(|p| p.get("question")).and_then(|v| v.as_str()).map(|s| s.to_string()),
+                                    "activate_skill" => params.and_then(|p| p.get("name")).and_then(|v| v.as_str()).map(|s| s.to_string()),
                                     _ => None,
                                 };
 

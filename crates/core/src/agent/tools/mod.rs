@@ -987,12 +987,12 @@ pub fn extract_tool_detail(tool_name: &str, arguments: &str) -> Option<String> {
     let args: Value = serde_json::from_str(arguments).ok()?;
 
     match tool_name {
-        "edit_file" | "write_file" | "read_file" => args
+        "edit_file" | "write_file" | "read_file" | "replace" => args
             .get("path")
             .or_else(|| args.get("file_path"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
-        "bash" => args.get("command").and_then(|v| v.as_str()).map(|s| {
+        "bash" | "run_shell_command" => args.get("command").and_then(|v| v.as_str()).map(|s| {
             if s.len() > 60 {
                 format!("{}...", &s[..57])
             } else {
@@ -1005,12 +1005,25 @@ pub fn extract_tool_detail(tool_name: &str, arguments: &str) -> Option<String> {
             .map(|s| format!("\"{}\"", s)),
         "web_fetch" => args
             .get("url")
+            .or_else(|| args.get("prompt"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
-        "web_search" => args
+        "web_search" | "google_web_search" => args
             .get("query")
             .and_then(|v| v.as_str())
             .map(|s| format!("\"{}\"", s)),
+        "grep_search" | "glob" => args
+            .get("pattern")
+            .and_then(|v| v.as_str())
+            .map(|s| format!("\"{}\"", s)),
+        "list_directory" => args
+            .get("dir_path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        "codebase_investigator" => args
+            .get("objective")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
         "document_load" => args
             .get("path")
             .and_then(|v| v.as_str())
