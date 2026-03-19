@@ -53,11 +53,7 @@ impl<'a> SessionIndexer<'a> {
 
     /// Index all unindexed sessions for an agent.
     /// Returns the number of newly indexed sessions.
-    pub fn index_agent_sessions(
-        &mut self,
-        agent_id: &str,
-        sessions_dir: &Path,
-    ) -> Result<usize> {
+    pub fn index_agent_sessions(&mut self, agent_id: &str, sessions_dir: &Path) -> Result<usize> {
         if !sessions_dir.exists() {
             return Ok(0);
         }
@@ -116,12 +112,7 @@ impl<'a> SessionIndexer<'a> {
     }
 
     /// Index a single session file into the memory index.
-    fn index_session_file(
-        &self,
-        path: &Path,
-        agent_id: &str,
-        session_id: &str,
-    ) -> Result<usize> {
+    fn index_session_file(&self, path: &Path, agent_id: &str, session_id: &str) -> Result<usize> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read session: {}", path.display()))?;
 
@@ -139,7 +130,9 @@ impl<'a> SessionIndexer<'a> {
             let line_start = i * EXCHANGES_PER_CHUNK * 2 + 1;
             let line_end = line_start + EXCHANGES_PER_CHUNK * 2;
 
-            if let Err(e) = self.index.insert_chunk(&virtual_path, chunk_text, line_start, line_end)
+            if let Err(e) = self
+                .index
+                .insert_chunk(&virtual_path, chunk_text, line_start, line_end)
             {
                 warn!("Failed to insert session chunk: {}", e);
                 continue;
@@ -205,7 +198,10 @@ pub fn extract_exchanges(content: &str) -> Vec<Exchange> {
         match role {
             "user" => {
                 pending_user = Some(content_text);
-                pending_ts = msg.get("timestamp").and_then(|t| t.as_str()).map(String::from);
+                pending_ts = msg
+                    .get("timestamp")
+                    .and_then(|t| t.as_str())
+                    .map(String::from);
             }
             "assistant" => {
                 if let Some(user_msg) = pending_user.take() {
@@ -243,18 +239,11 @@ fn extract_message_text(msg: &serde_json::Value) -> String {
         }
     }
     // Fallback: content as string
-    msg["content"]
-        .as_str()
-        .unwrap_or("")
-        .to_string()
+    msg["content"].as_str().unwrap_or("").to_string()
 }
 
 /// Group exchanges into chunks of EXCHANGES_PER_CHUNK.
-fn group_into_chunks(
-    exchanges: &[Exchange],
-    agent_id: &str,
-    session_id: &str,
-) -> Vec<String> {
+fn group_into_chunks(exchanges: &[Exchange], agent_id: &str, session_id: &str) -> Vec<String> {
     exchanges
         .chunks(EXCHANGES_PER_CHUNK)
         .map(|group| {
@@ -277,7 +266,9 @@ fn group_into_chunks(
                 }
                 chunk.push_str("\n\nAssistant: ");
                 if exchange.assistant.len() > 500 {
-                    chunk.push_str(&exchange.assistant[..exchange.assistant.floor_char_boundary(500)]);
+                    chunk.push_str(
+                        &exchange.assistant[..exchange.assistant.floor_char_boundary(500)],
+                    );
                     chunk.push_str("...");
                 } else {
                     chunk.push_str(&exchange.assistant);
@@ -352,7 +343,7 @@ mod tests {
     fn test_unpaired_user_message_skipped() {
         let jsonl = make_session_jsonl(&[
             ("user", "Hello"),
-            ("user", "Another question"),  // Overrides previous
+            ("user", "Another question"), // Overrides previous
             ("assistant", "Answer"),
         ]);
 
@@ -364,10 +355,26 @@ mod tests {
     #[test]
     fn test_group_into_chunks() {
         let exchanges = vec![
-            Exchange { user: "Q1".into(), assistant: "A1".into(), timestamp: Some("2026-03-17T10:00:00Z".into()) },
-            Exchange { user: "Q2".into(), assistant: "A2".into(), timestamp: None },
-            Exchange { user: "Q3".into(), assistant: "A3".into(), timestamp: None },
-            Exchange { user: "Q4".into(), assistant: "A4".into(), timestamp: None },
+            Exchange {
+                user: "Q1".into(),
+                assistant: "A1".into(),
+                timestamp: Some("2026-03-17T10:00:00Z".into()),
+            },
+            Exchange {
+                user: "Q2".into(),
+                assistant: "A2".into(),
+                timestamp: None,
+            },
+            Exchange {
+                user: "Q3".into(),
+                assistant: "A3".into(),
+                timestamp: None,
+            },
+            Exchange {
+                user: "Q4".into(),
+                assistant: "A4".into(),
+                timestamp: None,
+            },
         ];
 
         let chunks = group_into_chunks(&exchanges, "main", "test-session");
@@ -388,13 +395,11 @@ mod tests {
     #[test]
     fn test_long_messages_truncated_in_chunks() {
         let long_text = "x".repeat(1000);
-        let exchanges = vec![
-            Exchange {
-                user: long_text.clone(),
-                assistant: long_text,
-                timestamp: None,
-            },
-        ];
+        let exchanges = vec![Exchange {
+            user: long_text.clone(),
+            assistant: long_text,
+            timestamp: None,
+        }];
 
         let chunks = group_into_chunks(&exchanges, "main", "test");
         assert!(chunks[0].contains("..."));

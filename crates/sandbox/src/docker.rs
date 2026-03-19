@@ -85,25 +85,33 @@ impl DockerSandbox {
             .output()
             .await;
 
-        let workspace_mount = format!(
-            "{}:/workspace:ro",
-            config.workspace.display()
-        );
+        let workspace_mount = format!("{}:/workspace:ro", config.workspace.display());
 
         let output = Command::new(&config.runtime)
             .args([
-                "run", "-d",
-                "--name", &container_name,
-                "--cap-drop", "ALL",
-                "--security-opt", "no-new-privileges",
-                "--memory", &config.memory,
-                "--pids-limit", "256",
-                "--network", "none",
-                "-v", &workspace_mount,
-                "--tmpfs", "/tmp:size=100m",
-                "-w", "/workspace",
+                "run",
+                "-d",
+                "--name",
+                &container_name,
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--memory",
+                &config.memory,
+                "--pids-limit",
+                "256",
+                "--network",
+                "none",
+                "-v",
+                &workspace_mount,
+                "--tmpfs",
+                "/tmp:size=100m",
+                "-w",
+                "/workspace",
                 &config.image,
-                "sleep", "infinity",
+                "sleep",
+                "infinity",
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -113,10 +121,7 @@ impl DockerSandbox {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!(
-                "Failed to start sandbox container: {}",
-                stderr.trim()
-            );
+            bail!("Failed to start sandbox container: {}", stderr.trim());
         }
 
         let container_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -139,10 +144,7 @@ impl DockerSandbox {
         let output = tokio::time::timeout(
             timeout,
             Command::new(&self.runtime)
-                .args([
-                    "exec", &self.container_id,
-                    "sh", "-c", command,
-                ])
+                .args(["exec", &self.container_id, "sh", "-c", command])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .output(),
@@ -163,7 +165,10 @@ impl DockerSandbox {
 
     /// Stop and remove the container.
     pub async fn stop(&self) -> Result<()> {
-        debug!("Stopping sandbox container: {}", &self.container_id[..12.min(self.container_id.len())]);
+        debug!(
+            "Stopping sandbox container: {}",
+            &self.container_id[..12.min(self.container_id.len())]
+        );
 
         let output = Command::new(&self.runtime)
             .args(["rm", "-f", &self.container_id])

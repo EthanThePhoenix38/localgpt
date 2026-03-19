@@ -71,9 +71,9 @@ mod windows {
         let handle = stream.as_raw_handle();
         let mut client_pid = 0;
 
-        let res = unsafe { GetNamedPipeClientProcessId(HANDLE(handle as isize), &mut client_pid) };
+        let res = unsafe { GetNamedPipeClientProcessId(HANDLE(handle), &mut client_pid) };
 
-        if res.as_bool() {
+        if res.is_ok() {
             Ok(PeerIdentity {
                 uid: None,
                 gid: None,

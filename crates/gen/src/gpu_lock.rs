@@ -101,7 +101,7 @@ fn try_lock_exclusive(file: &std::fs::File) -> bool {
     use windows_sys::Win32::Storage::FileSystem::{
         LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx,
     };
-    let handle = file.as_raw_handle() as isize;
+    let handle = file.as_raw_handle();
     let mut overlapped = unsafe { std::mem::zeroed() };
     let result = unsafe {
         LockFileEx(
