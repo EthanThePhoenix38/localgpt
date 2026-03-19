@@ -313,6 +313,19 @@ pub struct SecurityConfig {
     /// Default: data_dir/encryption.key (~/.local/share/localgpt/encryption.key)
     #[serde(default)]
     pub encryption_key_path: Option<String>,
+
+    /// Container sandbox backend: "disabled" (default), "auto", "docker", "podman"
+    /// "auto" tries Docker then Podman, falls back to kernel sandbox.
+    #[serde(default = "default_sandbox_backend")]
+    pub sandbox_backend: String,
+
+    /// Docker image for container sandbox (default: "ubuntu:24.04")
+    #[serde(default)]
+    pub sandbox_image: Option<String>,
+
+    /// Memory limit for sandbox container (e.g., "512m", "1g")
+    #[serde(default)]
+    pub sandbox_memory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -814,6 +827,9 @@ fn default_tool_output_max_chars() -> usize {
 }
 fn default_document_max_bytes() -> usize {
     10_485_760 // 10MB
+}
+fn default_sandbox_backend() -> String {
+    "disabled".to_string()
 }
 fn default_image_max_dimension() -> u32 {
     1568 // Moltis-compatible, conservative for token cost

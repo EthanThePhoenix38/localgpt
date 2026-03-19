@@ -11,6 +11,7 @@
 #[cfg(unix)]
 pub mod child;
 pub mod detect;
+pub mod docker;
 pub mod executor;
 #[cfg(target_os = "linux")]
 pub mod linux;
@@ -21,5 +22,6 @@ pub mod policy;
 #[cfg(unix)]
 pub use child::sandbox_child_main;
 pub use detect::{SandboxCapabilities, detect_capabilities};
+pub use docker::{DockerConfig, DockerSandbox, run_docker_sandboxed};
 pub use executor::run_sandboxed;
 pub use policy::{NetworkPolicy, SandboxLevel, SandboxMode, SandboxPolicy, build_policy};
