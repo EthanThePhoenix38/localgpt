@@ -9,6 +9,8 @@ pub use protocol::{BRIDGE_PROTOCOL_VERSION, BridgeError, BridgeService, BridgeSe
 use futures::StreamExt;
 use tarpc::server::{BaseChannel, Channel};
 
+/// Manages the local-socket server that bridge daemons (Telegram, Discord,
+/// WhatsApp) connect to for secure IPC with the core agent.
 pub struct BridgeServer;
 
 impl BridgeServer {
@@ -52,6 +54,8 @@ where
     Ok(())
 }
 
+/// Connect to a running [`BridgeServer`] at the given socket path and
+/// return a tarpc client that can invoke bridge service RPCs.
 pub async fn connect(socket_name: &str) -> anyhow::Result<BridgeServiceClient> {
     let conn = LocalSocketStream::connect(socket_name).await?;
 

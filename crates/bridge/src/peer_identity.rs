@@ -1,7 +1,15 @@
+/// Identity of a peer connected via a local (Unix-domain / named-pipe) socket.
+///
+/// On Linux/Android all three fields are available via `SO_PEERCRED`.
+/// On macOS/iOS only `uid` and `gid` are returned (`getpeereid`).
+/// On Windows only `pid` is available (`GetNamedPipeClientProcessId`).
 #[derive(Debug, Clone, Copy)]
 pub struct PeerIdentity {
+    /// User ID of the connected process (Unix only).
     pub uid: Option<u32>,
+    /// Group ID of the connected process (Unix only).
     pub gid: Option<u32>,
+    /// Process ID of the connected process.
     pub pid: Option<i32>,
 }
 

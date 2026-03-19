@@ -74,13 +74,23 @@ fn generate_slug(text: &str) -> String {
         .collect()
 }
 
+/// Configuration for the LLM agent, specifying which model to use and
+/// how much of the context window is available for conversation.
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
+    /// The LLM model identifier (e.g., "claude-sonnet-4-20250514").
     pub model: String,
+    /// Maximum token count the model supports in a single request.
     pub context_window: usize,
+    /// Tokens reserved for the response; subtracted from `context_window`
+    /// when computing the budget for input messages.
     pub reserve_tokens: usize,
 }
 
+/// The core AI agent that manages a conversation session, invokes tools,
+/// and persists long-term memory. Each `Agent` instance owns a single
+/// [`Session`], a set of [`Tool`]s, and a [`MemoryManager`] for
+/// markdown-based persistent memory.
 pub struct Agent {
     config: AgentConfig,
     app_config: Config,
