@@ -1,0 +1,167 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.localgpt-app/localgpt-gen",
+  "title": "LocalGPT Gen",
+  "description": "AI-driven 3D world builder: Bevy visuals, procedural audio, and entity behaviors.",
+  "version": "0.3.4",
+  "websiteUrl": "https://localgpt.app",
+  "repository": {
+    "url": "https://github.com/localgpt-app/localgpt",
+    "source": "github",
+    "subfolder": "crates/gen"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/localgpt-app/localgpt-gen",
+      "version": "0.3.4",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "--rm",
+          "description": "Remove container after the session exits"
+        },
+        {
+          "type": "named",
+          "name": "-i",
+          "description": "Keep stdin open (required for stdio transport)"
+        },
+        {
+          "type": "named",
+          "name": "--network",
+          "description": "Network mode. Use 'host' if local models (Ollama, llama.cpp) are running on the host.",
+          "isRequired": false,
+          "default": "host"
+        },
+        {
+          "type": "named",
+          "name": "-v",
+          "description": "Mount a local workspace directory. Exposes memory, skills, and saved worlds to the container.",
+          "isRequired": false,
+          "default": "${HOME}/.local/share/localgpt:/root/.local/share/localgpt"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "name": "subcommand",
+          "description": "Start in MCP server mode with stdio transport",
+          "isRequired": true,
+          "default": "mcp-server",
+          "choices": ["mcp-server"]
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "LOCALGPT_WORKSPACE",
+          "description": "Path to workspace directory (memory, skills, saved worlds). Defaults to ~/.local/share/localgpt/workspace.",
+          "isRequired": false,
+          "default": "~/.local/share/localgpt/workspace",
+          "placeholder": "/path/to/your/workspace"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "description": "Anthropic API key for direct claude-* model access. Not required if using claude-cli provider.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "description": "OpenAI API key for GPT-4o or OpenAI-compatible providers (OpenRouter, Groq, DeepSeek, etc.).",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "src": "https://localgpt.app/img/localgpt-gen-icon.png",
+      "mimeType": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "license": "Apache-2.0",
+      "cratesIo": "https://crates.io/crates/localgpt-gen",
+      "installAlternative": "cargo install localgpt-gen && localgpt-gen mcp-server",
+      "capabilities": {
+        "visual": {
+          "description": "Real-time 3D scene rendering via Bevy engine. Opens an interactive viewport for scene exploration with first-person/third-person navigation, orbit camera, and a live inspector overlay.",
+          "engine": "Bevy 0.18",
+          "features": [
+            "PBR materials and dynamic lighting",
+            "glTF/GLB import and export",
+            "Self-contained HTML export via Three.js",
+            "Screenshot capture for LLM self-evaluation",
+            "Undo/redo history"
+          ]
+        },
+        "audio": {
+          "description": "Procedural environmental soundscapes and spatial audio emitters synthesized in real time. No pre-recorded samples — all audio is generated algorithmically.",
+          "engine": "FunDSP 0.23 + cpal 0.17",
+          "ambientSoundscapes": ["wind", "rain", "forest", "ocean", "cave", "stream", "silence"],
+          "spatialEmitters": ["water", "fire", "hum", "wind", "custom waveform"],
+          "features": [
+            "Distance-attenuated spatial emitters attached to scene entities",
+            "LFO variation for natural-sounding ambience",
+            "Web Audio API export for standalone HTML worlds"
+          ]
+        },
+        "behavior": {
+          "description": "Data-driven entity behaviors, interactive logic, physics, NPCs, and trigger/action wiring — no scripting required.",
+          "features": [
+            "Composable entity animations: orbit, spin, bob, look_at, pulse, path_follow, bounce",
+            "NPC characters with idle, patrol, and wander AI",
+            "Branching NPC dialogue trees",
+            "Trigger/action system: proximity, click, area, collision, timer",
+            "Interactive doors, collectibles, and teleporters",
+            "Entity event wiring (source event → target action)",
+            "Physics bodies and constraints (dynamic, static, kinematic)",
+            "Force fields and joint constraints",
+            "Player-controllable avatar with first/third-person camera"
+          ]
+        }
+      },
+      "toolCategories": {
+        "scene": ["gen_scene_info", "gen_entity_info", "gen_clear_scene"],
+        "spawn": ["gen_spawn_primitive", "gen_spawn_batch", "gen_spawn_mesh", "gen_load_gltf"],
+        "modify": ["gen_modify_entity", "gen_modify_batch", "gen_delete_entity", "gen_delete_batch"],
+        "camera": ["gen_set_camera", "gen_set_camera_mode"],
+        "lighting": ["gen_set_light", "gen_set_environment", "gen_set_sky"],
+        "audio": ["gen_set_ambience", "gen_audio_emitter", "gen_modify_audio", "gen_audio_info"],
+        "behavior": ["gen_add_behavior", "gen_remove_behavior", "gen_list_behaviors", "gen_pause_behaviors"],
+        "character": ["gen_spawn_player", "gen_set_spawn_point", "gen_add_npc", "gen_set_npc_dialogue"],
+        "interaction": ["gen_add_trigger", "gen_add_teleporter", "gen_add_collectible", "gen_add_door", "gen_link_entities"],
+        "terrain": ["gen_add_terrain", "gen_add_water", "gen_add_path", "gen_add_foliage"],
+        "ui": ["gen_add_sign", "gen_add_hud", "gen_add_label", "gen_add_tooltip", "gen_add_notification"],
+        "physics": ["gen_set_physics", "gen_add_collider", "gen_add_joint", "gen_add_force", "gen_set_gravity"],
+        "worldgen": ["gen_plan_layout", "gen_apply_blockout", "gen_populate_region", "gen_evaluate_scene", "gen_auto_refine", "gen_build_navmesh", "gen_validate_navigability", "gen_edit_navmesh"],
+        "assetGen": ["gen_generate_asset", "gen_asset_status", "gen_list_assets"],
+        "experiments": ["gen_queue_experiment", "gen_list_experiments", "gen_experiment_status"],
+        "worldSkills": ["gen_save_world", "gen_load_world", "gen_export_world"],
+        "export": ["gen_export_screenshot", "gen_export_gltf", "gen_export_html"],
+        "history": ["gen_undo", "gen_redo", "gen_undo_info"],
+        "memory": ["memory_search", "memory_get", "memory_save", "memory_log"],
+        "web": ["web_fetch", "web_search"],
+        "screenshot": ["gen_screenshot"]
+      },
+      "totalTools": 83,
+      "supportedClients": [
+        "Claude CLI (claude-cli/opus, claude-cli/sonnet)",
+        "Gemini CLI",
+        "Codex CLI",
+        "VS Code (GitHub Copilot MCP extension)",
+        "Zed",
+        "Cursor",
+        "Windsurf"
+      ],
+      "platforms": ["linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64", "windows/amd64"]
+    }
+  }
+}

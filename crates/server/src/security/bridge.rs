@@ -415,6 +415,8 @@ impl BridgeManager {
                     // Enforce UID matching (same-user only)
                     #[cfg(unix)]
                     {
+                        // SAFETY: getuid() is always safe to call — it has no arguments,
+                        // requires no preconditions, and simply returns the real user ID.
                         let current_uid = unsafe { libc::getuid() };
                         if let Some(peer_uid) = id.uid.filter(|&uid| uid != current_uid) {
                             error!(

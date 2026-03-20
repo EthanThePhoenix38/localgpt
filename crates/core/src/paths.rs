@@ -335,6 +335,8 @@ where
     // Fallback: $TMPDIR/localgpt-{profile}-{$UID|user} on Unix/Windows
     #[cfg(unix)]
     {
+        // SAFETY: getuid() is always safe — no arguments, no preconditions,
+        // simply returns the real user ID of the calling process.
         let uid = unsafe { getuid() };
         let tmpdir = env_fn("TMPDIR").unwrap_or_else(|_| "/tmp".to_string());
         Some(PathBuf::from(tmpdir).join(format!("localgpt{}-{}", profile_suffix, uid)))

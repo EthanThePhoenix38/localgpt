@@ -329,6 +329,9 @@ pub fn has_gen_experiments(heartbeat_content: &str) -> bool {
 fn lock_file_exclusive(file: &std::fs::File) -> anyhow::Result<()> {
     use std::os::unix::io::AsRawFd;
     let fd = file.as_raw_fd();
+    // SAFETY: `fd` is a valid file descriptor obtained from `file` which is borrowed
+    // for the duration of this call. flock(LOCK_EX) blocks until the lock is acquired
+    // and has no memory safety concerns beyond requiring a valid fd.
     let ret = unsafe { libc::flock(fd, libc::LOCK_EX) };
     if ret != 0 {
         anyhow::bail!("Failed to lock experiment file");

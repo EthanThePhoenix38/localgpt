@@ -54,6 +54,9 @@ mod unix {
         let mut uid: libc::uid_t = 0;
         let mut gid: libc::gid_t = 0;
 
+        // SAFETY: `fd` is a valid file descriptor from `stream` (borrowed for this call).
+        // `uid` and `gid` are valid mutable references to initialized locals.
+        // getpeereid() writes the peer credentials and returns 0 on success.
         let ret = unsafe { libc::getpeereid(fd, &mut uid, &mut gid) };
         if ret != 0 {
             return Err(io::Error::last_os_error());
@@ -79,6 +82,9 @@ mod windows {
         let handle = stream.as_raw_handle();
         let mut client_pid = 0;
 
+        // SAFETY: `handle` is a valid raw handle from `stream` (borrowed for this call).
+        // `client_pid` is a valid mutable reference. The Win32 API writes the client
+        // process ID and returns an error code on failure, which we check below.
         let res = unsafe { GetNamedPipeClientProcessId(HANDLE(handle), &mut client_pid) };
 
         if res.is_ok() {

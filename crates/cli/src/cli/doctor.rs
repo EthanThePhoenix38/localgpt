@@ -649,6 +649,9 @@ fn check_disk_space() -> CheckResult {
         if fs::metadata(&data_dir).is_ok() {
             // Use statvfs to get free space via nix
             let path = std::ffi::CString::new(data_dir.to_string_lossy().to_string()).unwrap();
+            // SAFETY: `path` is a valid NUL-terminated CString. `stat` is zeroed
+            // which is a valid initial state for statvfs. The syscall writes filesystem
+            // statistics into `stat` and returns 0 on success.
             unsafe {
                 let mut stat: nix::libc::statvfs = std::mem::zeroed();
                 if nix::libc::statvfs(path.as_ptr(), &mut stat) == 0 {

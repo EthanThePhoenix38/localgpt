@@ -26,7 +26,9 @@ pub fn apply_sandbox(policy: &SandboxPolicy) -> Result<(), String> {
 }
 
 fn set_no_new_privs() -> Result<(), String> {
-    // prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
+    // SAFETY: prctl(PR_SET_NO_NEW_PRIVS) is a well-defined syscall that prevents the
+    // process (and its children) from gaining new privileges. The arguments are all
+    // integer constants with no pointer dereferences or memory safety concerns.
     let ret = unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) };
     if ret != 0 {
         return Err(format!(

@@ -90,6 +90,9 @@ impl Drop for GpuLockGuard {
 fn try_lock_exclusive(file: &std::fs::File) -> bool {
     use std::os::unix::io::AsRawFd;
     let fd = file.as_raw_fd();
+    // SAFETY: `fd` is a valid file descriptor obtained from `file` which is borrowed
+    // for the duration of this call. flock() with LOCK_EX|LOCK_NB is non-blocking
+    // and only operates on the given fd with no memory safety concerns.
     let ret = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
     ret == 0
 }
@@ -102,6 +105,9 @@ fn try_lock_exclusive(file: &std::fs::File) -> bool {
         LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx,
     };
     let handle = file.as_raw_handle();
+    // SAFETY: zeroed OVERLAPPED is a valid initialization for this struct (all-zeros
+    // is an accepted initial state). `handle` is valid for the lifetime of `file`.
+    // LockFileEx with LOCKFILE_FAIL_IMMEDIATELY is non-blocking and well-defined.
     let mut overlapped = unsafe { std::mem::zeroed() };
     let result = unsafe {
         LockFileEx(
