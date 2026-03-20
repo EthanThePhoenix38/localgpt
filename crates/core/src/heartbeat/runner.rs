@@ -92,10 +92,16 @@ impl HeartbeatRunner {
                 parse_time(&hours.end).map_err(|e| anyhow::anyhow!("Invalid end time: {}", e))?;
 
             Some((
-                NaiveTime::from_hms_opt(start_h as u32, start_m as u32, 0)
-                    .ok_or_else(|| anyhow::anyhow!("Invalid active_hours start time: {:02}:{:02}", start_h, start_m))?,
-                NaiveTime::from_hms_opt(end_h as u32, end_m as u32, 0)
-                    .ok_or_else(|| anyhow::anyhow!("Invalid active_hours end time: {:02}:{:02}", end_h, end_m))?,
+                NaiveTime::from_hms_opt(start_h as u32, start_m as u32, 0).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Invalid active_hours start time: {:02}:{:02}",
+                        start_h,
+                        start_m
+                    )
+                })?,
+                NaiveTime::from_hms_opt(end_h as u32, end_m as u32, 0).ok_or_else(|| {
+                    anyhow::anyhow!("Invalid active_hours end time: {:02}:{:02}", end_h, end_m)
+                })?,
             ))
         } else {
             None

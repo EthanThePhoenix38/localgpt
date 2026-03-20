@@ -18,6 +18,7 @@ pub mod memory;
 pub mod paths;
 pub mod sandbox;
 pub mod search;
+pub mod tool;
 pub mod tui;
 
 use clap::{Parser, Subcommand};
@@ -103,6 +104,9 @@ pub enum Commands {
 
     /// Manage encryption at rest
     Encrypt(encrypt::EncryptArgs),
+
+    /// Manage MCP tool servers
+    Tool(tool::ToolArgs),
 
     /// Generate shell completion scripts
     Completion(completion::CompletionArgs),
