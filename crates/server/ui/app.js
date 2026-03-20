@@ -456,23 +456,58 @@ function startStatusPolling() {
 
 async function loadStatus() {
     try {
-        // Fetch both status and heartbeat in parallel
-        const [statusRes, heartbeatRes] = await Promise.all([
+        // Fetch status, heartbeat, and channels in parallel
+        const [statusRes, heartbeatRes, channelsRes] = await Promise.all([
             fetch(`${API}/status`),
-            fetch(`${API}/heartbeat/status`)
+            fetch(`${API}/heartbeat/status`),
+            fetch(`${API}/channels/status`)
         ]);
 
         const status = await statusRes.json();
         const heartbeat = await heartbeatRes.json();
+        const channels = await channelsRes.json();
 
         updateStatusPanel(status, heartbeat);
-        
+        updateChannelsPanel(channels);
+
         // Show detailed welcome message on first run
         if (status.is_brand_new) {
             showFirstRunWelcome();
         }
     } catch (err) {
         console.error('Failed to load status:', err);
+    }
+}
+
+function updateChannelsPanel(data) {
+    const container = document.getElementById('channels-list');
+    if (!container) return;
+
+    if (!data.channels || data.channels.length === 0) {
+        container.innerHTML = '<div class="empty-state">No channels connected</div>';
+        return;
+    }
+
+    const html = data.channels.map(ch => {
+        const dotClass = ch.state === 'connected' ? 'dot-green'
+            : ch.state === 'degraded' ? 'dot-yellow'
+            : 'dot-red';
+        const lastActive = ch.last_active
+            ? new Date(ch.last_active).toLocaleTimeString()
+            : '-';
+        return `<div class="channel-item">
+            <span class="status-dot ${dotClass}"></span>
+            <span class="channel-name">${ch.name}</span>
+            <span class="channel-detail">${ch.state} · last: ${lastActive}</span>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = html;
+
+    // Update summary
+    const summary = document.getElementById('channels-summary');
+    if (summary) {
+        summary.textContent = `${data.summary.connected}/${data.summary.total} connected`;
     }
 }
 

@@ -238,6 +238,7 @@ impl Server {
             .route("/api/config", get(get_config))
             .route("/api/heartbeat/status", get(heartbeat_status))
             .route("/api/bridges", get(list_bridges))
+            .route("/api/channels/status", get(channels_status))
             .route("/api/saved-sessions", get(list_saved_sessions))
             .route("/api/saved-sessions/{session_id}", get(get_saved_session))
             .route("/api/logs/daemon", get(get_daemon_logs))
@@ -557,6 +558,74 @@ async fn list_bridges(
     State(state): State<Arc<AppState>>,
 ) -> Json<Vec<crate::security::bridge::BridgeStatus>> {
     Json(state.bridge_manager.get_active_bridges().await)
+}
+
+#[derive(serde::Serialize)]
+struct ChannelStatus {
+    name: String,
+    state: String,
+    connected_since: Option<String>,
+    last_active: Option<String>,
+    health: String,
+}
+
+#[derive(serde::Serialize)]
+struct ChannelsSummary {
+    total: usize,
+    connected: usize,
+    disconnected: usize,
+    degraded: usize,
+}
+
+#[derive(serde::Serialize)]
+struct ChannelsStatusResponse {
+    channels: Vec<ChannelStatus>,
+    summary: ChannelsSummary,
+}
+
+async fn channels_status(
+    State(state): State<Arc<AppState>>,
+) -> Json<ChannelsStatusResponse> {
+    let bridges = state.bridge_manager.get_active_bridges().await;
+
+    let channels: Vec<ChannelStatus> = bridges
+        .iter()
+        .map(|b| {
+            let name = b
+                .bridge_id
+                .as_deref()
+                .unwrap_or(&b.connection_id)
+                .to_string();
+            let health_str = format!("{:?}", b.health).to_lowercase();
+            let channel_state = match b.health {
+                crate::security::bridge::HealthStatus::Healthy => "connected",
+                crate::security::bridge::HealthStatus::Degraded => "degraded",
+                crate::security::bridge::HealthStatus::Unhealthy => "disconnected",
+            };
+
+            ChannelStatus {
+                name,
+                state: channel_state.to_string(),
+                connected_since: Some(b.connected_at.to_rfc3339()),
+                last_active: Some(b.last_active.to_rfc3339()),
+                health: health_str,
+            }
+        })
+        .collect();
+
+    let connected = channels.iter().filter(|c| c.state == "connected").count();
+    let degraded = channels.iter().filter(|c| c.state == "degraded").count();
+    let disconnected = channels.iter().filter(|c| c.state == "disconnected").count();
+
+    Json(ChannelsStatusResponse {
+        summary: ChannelsSummary {
+            total: channels.len(),
+            connected,
+            disconnected,
+            degraded,
+        },
+        channels,
+    })
 }
 
 // Session management endpoints
