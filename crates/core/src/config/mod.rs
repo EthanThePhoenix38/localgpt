@@ -449,6 +449,16 @@ pub struct ProvidersConfig {
     /// Google Vertex AI (service account key authentication)
     #[serde(default)]
     pub vertex: Option<VertexAiConfig>,
+
+    /// OpenRouter convenience provider (auto-sets base_url)
+    #[serde(default)]
+    pub openrouter: Option<OpenRouterConfig>,
+}
+
+/// OpenRouter provider config — convenience wrapper for OpenAI-compatible
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenRouterConfig {
+    pub api_key: String,
 }
 
 /// Configuration for OpenAI-compatible providers (OpenRouter, DeepSeek, Groq, etc.)
@@ -1221,6 +1231,9 @@ impl Config {
         }
         if let Some(ref mut gemini) = self.providers.gemini {
             gemini.api_key = expand_env(&gemini.api_key);
+        }
+        if let Some(ref mut openrouter) = self.providers.openrouter {
+            openrouter.api_key = expand_env(&openrouter.api_key);
         }
         if let Some(ref mut openai_compat) = self.providers.openai_compatible {
             openai_compat.api_key = expand_env(&openai_compat.api_key);

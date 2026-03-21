@@ -549,6 +549,32 @@ pub fn create_provider(model: &str, config: &Config) -> Result<Box<dyn LLMProvid
             )?))
         }
 
+        "openrouter" => {
+            // OpenRouter — convenience alias with pre-set base URL
+            let api_key = config
+                .providers
+                .openrouter
+                .as_ref()
+                .map(|c| c.api_key.clone())
+                .or_else(|| std::env::var("OPENROUTER_API_KEY").ok())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "OpenRouter provider not configured.\n\
+                        Set OPENROUTER_API_KEY env var or add to {}/config.toml:\n\n\
+                        [providers.openrouter]\n\
+                        api_key = \"${{OPENROUTER_API_KEY}}\"",
+                        DEFAULT_CONFIG_DIR_STR
+                    )
+                })?;
+
+            Ok(Box::new(OpenAICompatibleProvider::new(
+                "https://openrouter.ai/api/v1",
+                &api_key,
+                &model_id,
+                std::collections::HashMap::new(),
+            )?))
+        }
+
         _ => {
             // Fallback: try Claude CLI if configured
             #[cfg(feature = "claude-cli")]
