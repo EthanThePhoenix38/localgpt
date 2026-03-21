@@ -315,7 +315,7 @@ impl Tool for MemorySearchToolWithIndex {
             return Ok("No results found".to_string());
         }
 
-        // Format results with relevance scores
+        // Format results with citation-style references
         let formatted: Vec<String> = results
             .iter()
             .enumerate()
@@ -323,7 +323,7 @@ impl Tool for MemorySearchToolWithIndex {
                 let preview: String = chunk.content.chars().take(200).collect();
                 let preview = preview.replace('\n', " ");
                 format!(
-                    "{}. {} (lines {}-{}, score: {:.3})\n   {}{}",
+                    "{}. [{}:{}-{}] (score: {:.3})\n   {}{}",
                     i + 1,
                     chunk.file,
                     chunk.line_start,
