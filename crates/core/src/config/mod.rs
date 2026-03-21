@@ -612,6 +612,10 @@ pub struct MemoryConfig {
     #[serde(default)]
     pub index_sessions: bool,
 
+    /// Enable multimodal embeddings for images (requires gemini-embedding-2-preview model)
+    #[serde(default)]
+    pub multimodal_embeddings: bool,
+
     /// Cache directory for local embedding models (optional)
     /// Default: ~/.cache/localgpt/models
     /// Can also be set via FASTEMBED_CACHE_DIR environment variable
@@ -1053,6 +1057,7 @@ impl Default for MemoryConfig {
             temporal_decay_lambda: 0.0, // Disabled by default
             gemini_api_key: None,
             index_sessions: false,
+            multimodal_embeddings: false,
         }
     }
 }

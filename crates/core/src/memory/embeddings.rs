@@ -567,6 +567,48 @@ impl GeminiEmbeddingProvider {
         }
     }
 
+    /// Embed text + image together using multimodal Gemini model.
+    ///
+    /// Requires `gemini-embedding-2-preview` model for multimodal support.
+    pub async fn embed_multimodal(
+        &self,
+        text: &str,
+        image_data: &[u8],
+        image_mime_type: &str,
+    ) -> Result<Vec<f32>> {
+        use base64::Engine;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(image_data);
+
+        let request = GeminiEmbedRequest {
+            content: GeminiContent {
+                parts: vec![
+                    GeminiPart::Text {
+                        text: text.to_string(),
+                    },
+                    GeminiPart::InlineData {
+                        inline_data: GeminiInlineData {
+                            mime_type: image_mime_type.to_string(),
+                            data: b64,
+                        },
+                    },
+                ],
+            },
+            task_type: "RETRIEVAL_DOCUMENT".to_string(),
+        };
+
+        let url = format!("{}:embedContent?key={}", self.base_url(), self.api_key);
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("Gemini multimodal API error {}: {}", status, body);
+        }
+
+        let result: GeminiEmbedResponse = response.json().await?;
+        Ok(normalize_embedding(result.embedding.values))
+    }
+
     fn base_url(&self) -> String {
         format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}",
@@ -588,8 +630,20 @@ struct GeminiContent {
 }
 
 #[derive(Serialize)]
-struct GeminiPart {
-    text: String,
+#[serde(untagged)]
+enum GeminiPart {
+    Text { text: String },
+    #[serde(rename_all = "camelCase")]
+    InlineData {
+        inline_data: GeminiInlineData,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiInlineData {
+    mime_type: String,
+    data: String, // base64-encoded
 }
 
 #[derive(Serialize)]
@@ -638,7 +692,7 @@ impl EmbeddingProvider for GeminiEmbeddingProvider {
     async fn embed(&self, text: &str) -> Result<Vec<f32>> {
         let request = GeminiEmbedRequest {
             content: GeminiContent {
-                parts: vec![GeminiPart {
+                parts: vec![GeminiPart::Text {
                     text: text.to_string(),
                 }],
             },
@@ -670,7 +724,7 @@ impl EmbeddingProvider for GeminiEmbeddingProvider {
             .map(|text| GeminiBatchItem {
                 model: model_path.clone(),
                 content: GeminiContent {
-                    parts: vec![GeminiPart { text: text.clone() }],
+                    parts: vec![GeminiPart::Text { text: text.clone() }],
                 },
                 task_type: "RETRIEVAL_DOCUMENT".to_string(),
             })
@@ -749,5 +803,51 @@ mod tests {
         let json = serialize_embedding(&embedding);
         let deserialized = deserialize_embedding(&json);
         assert_eq!(embedding, deserialized);
+    }
+
+    #[test]
+    fn test_gemini_multimodal_request_serialization() {
+        // Verify the multimodal request format matches Gemini API expectations
+        let request = GeminiEmbedRequest {
+            content: GeminiContent {
+                parts: vec![
+                    GeminiPart::Text {
+                        text: "a photo of a cat".to_string(),
+                    },
+                    GeminiPart::InlineData {
+                        inline_data: GeminiInlineData {
+                            mime_type: "image/jpeg".to_string(),
+                            data: "base64data".to_string(),
+                        },
+                    },
+                ],
+            },
+            task_type: "RETRIEVAL_DOCUMENT".to_string(),
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+
+        // Verify structure
+        assert_eq!(json["taskType"], "RETRIEVAL_DOCUMENT");
+        assert_eq!(json["content"]["parts"][0]["text"], "a photo of a cat");
+        assert_eq!(json["content"]["parts"][1]["inlineData"]["mimeType"], "image/jpeg");
+        assert_eq!(json["content"]["parts"][1]["inlineData"]["data"], "base64data");
+    }
+
+    #[test]
+    fn test_gemini_text_only_request_serialization() {
+        let request = GeminiEmbedRequest {
+            content: GeminiContent {
+                parts: vec![GeminiPart::Text {
+                    text: "hello world".to_string(),
+                }],
+            },
+            task_type: "RETRIEVAL_DOCUMENT".to_string(),
+        };
+
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(json["content"]["parts"][0]["text"], "hello world");
+        // No inlineData in text-only request
+        assert!(json["content"]["parts"][0].get("inlineData").is_none());
     }
 }
