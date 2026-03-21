@@ -580,6 +580,45 @@ button:disabled {
     display: block;
 }
 
+/* Settings panel */
+.settings-field {
+    margin-bottom: 12px;
+}
+.settings-field label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--fg-muted);
+    margin-bottom: 4px;
+}
+.settings-field input,
+.settings-field select {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.settings-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+.settings-actions button {
+    padding: 6px 16px;
+    background: var(--primary, #25c2a0);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#settings-status {
+    font-size: 0.8rem;
+    color: var(--fg-muted);
+}
+
 /* Channel status */
 .channel-item {
     display: flex;

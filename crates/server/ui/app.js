@@ -59,6 +59,11 @@ function setupEventListeners() {
     document.getElementById('sessions-toggle').onclick = toggleSessionsPanel;
     document.getElementById('sessions-close').onclick = toggleSessionsPanel;
     document.getElementById('session-back').onclick = showSessionsList;
+
+    // Settings panel
+    document.getElementById('settings-toggle').onclick = toggleSettingsPanel;
+    document.getElementById('settings-close').onclick = toggleSettingsPanel;
+    document.getElementById('settings-save').onclick = saveSettings;
 }
 
 function showEmptyState() {
@@ -727,4 +732,52 @@ function showSessionsList() {
     const viewerEl = document.getElementById('session-viewer');
     listEl.style.display = 'block';
     viewerEl.classList.add('hidden');
+}
+
+// ── Settings Panel ──
+
+function toggleSettingsPanel() {
+    const panel = document.getElementById('settings-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+        loadSettingsValues();
+    }
+}
+
+async function loadSettingsValues() {
+    try {
+        const res = await fetch(`${API}/config`);
+        const config = await res.json();
+        document.getElementById('setting-model').value = config.agent?.default_model || '';
+        document.getElementById('setting-port').value = config.server?.port || 31327;
+        document.getElementById('setting-heartbeat').value = config.heartbeat?.interval || '30m';
+        // Log level not in current config response, set to default
+        document.getElementById('setting-log-level').value = 'info';
+    } catch (err) {
+        console.error('Failed to load settings:', err);
+    }
+}
+
+async function saveSettings() {
+    const fields = document.querySelectorAll('#settings-panel [data-key]');
+    const statusEl = document.getElementById('settings-status');
+    let saved = 0;
+
+    for (const field of fields) {
+        const key = field.dataset.key;
+        const value = field.value;
+        try {
+            const res = await fetch(`${API}/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, value })
+            });
+            if (res.ok) saved++;
+        } catch (err) {
+            console.error(`Failed to save ${key}:`, err);
+        }
+    }
+
+    statusEl.textContent = `Saved ${saved} setting(s). Restart daemon to apply.`;
+    setTimeout(() => { statusEl.textContent = ''; }, 5000);
 }

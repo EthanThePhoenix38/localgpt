@@ -13,6 +13,7 @@
             <div class="header-controls">
                 <button id="sessions-toggle" title="Saved Sessions">Sessions</button>
                 <button id="logs-toggle" title="Daemon Logs">Logs</button>
+                <button id="settings-toggle" title="Settings">Settings</button>
                 <button id="status-toggle" class="icon-btn" title="Status">
                     <span class="status-dot" id="status-dot"></span>
                 </button>
@@ -61,6 +62,41 @@
                 <div class="status-section">
                     <div class="status-section-title">Channels <span id="channels-summary" class="channels-summary"></span></div>
                     <div id="channels-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-panel" class="status-panel hidden">
+            <div class="status-header">
+                <span>Settings</span>
+                <button id="settings-close" class="icon-btn" title="Close">&times;</button>
+            </div>
+            <div class="status-content">
+                <div class="settings-field">
+                    <label for="setting-model">Default Model</label>
+                    <input id="setting-model" type="text" data-key="agent.default_model">
+                </div>
+                <div class="settings-field">
+                    <label for="setting-port">Server Port</label>
+                    <input id="setting-port" type="number" data-key="server.port">
+                </div>
+                <div class="settings-field">
+                    <label for="setting-heartbeat">Heartbeat Interval</label>
+                    <input id="setting-heartbeat" type="text" data-key="heartbeat.interval">
+                </div>
+                <div class="settings-field">
+                    <label for="setting-log-level">Log Level</label>
+                    <select id="setting-log-level" data-key="logging.level">
+                        <option value="trace">trace</option>
+                        <option value="debug">debug</option>
+                        <option value="info">info</option>
+                        <option value="warn">warn</option>
+                        <option value="error">error</option>
+                    </select>
+                </div>
+                <div class="settings-actions">
+                    <button id="settings-save">Save</button>
+                    <span id="settings-status"></span>
                 </div>
             </div>
         </div>

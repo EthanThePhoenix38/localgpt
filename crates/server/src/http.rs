@@ -235,7 +235,7 @@ impl Server {
             .route("/api/memory/stats", get(memory_stats))
             .route("/api/memory/reindex", post(memory_reindex))
             .route("/api/status", get(status))
-            .route("/api/config", get(get_config))
+            .route("/api/config", get(get_config).post(set_config))
             .route("/api/heartbeat/status", get(heartbeat_status))
             .route("/api/bridges", get(list_bridges))
             .route("/api/channels/status", get(channels_status))
@@ -1264,6 +1264,112 @@ async fn get_config(State(state): State<Arc<AppState>>) -> Json<ConfigResponse> 
             interval: state.config.heartbeat.interval.clone(),
         },
     })
+}
+
+#[derive(Deserialize)]
+struct SetConfigRequest {
+    key: String,
+    value: String,
+}
+
+#[derive(Serialize)]
+struct SetConfigResponse {
+    success: bool,
+    key: String,
+    value: String,
+}
+
+async fn set_config(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SetConfigRequest>,
+) -> std::result::Result<Json<SetConfigResponse>, (axum::http::StatusCode, String)> {
+    // Validate key exists by trying to get current value
+    let current = state.config.get_value(&req.key);
+    if current.is_err() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Unknown config key: {}", req.key),
+        ));
+    }
+
+    // Apply the change to config file on disk
+    let config_path = state.config.paths.config_file();
+    if config_path.exists() {
+        let content = std::fs::read_to_string(&config_path).map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read config: {}", e),
+            )
+        })?;
+
+        let new_content =
+            apply_config_value(&content, &req.key, &req.value);
+
+        std::fs::write(&config_path, new_content).map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to write config: {}", e),
+            )
+        })?;
+    }
+
+    Ok(Json(SetConfigResponse {
+        success: true,
+        key: req.key,
+        value: req.value,
+    }))
+}
+
+/// Apply a config key=value change to raw TOML content.
+/// Finds the matching key in the correct section and updates it.
+fn apply_config_value(content: &str, key: &str, value: &str) -> String {
+    let parts: Vec<&str> = key.split('.').collect();
+    if parts.len() != 2 {
+        return content.to_string();
+    }
+
+    let (section, field) = (parts[0], parts[1]);
+    let section_header = format!("[{}]", section);
+
+    let mut result = String::with_capacity(content.len());
+    let mut in_target_section = false;
+    let mut value_set = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // Track which section we're in
+        if trimmed.starts_with('[') && !trimmed.starts_with("[[") {
+            in_target_section = trimmed == section_header;
+        }
+
+        // Replace matching key in target section
+        if in_target_section && !value_set && trimmed.starts_with(field) {
+            if let Some((key_part, _)) = trimmed.split_once('=') {
+                if key_part.trim() == field {
+                    let indent = &line[..line.len() - trimmed.len()];
+                    // Determine if value needs quoting
+                    let formatted = if value.parse::<f64>().is_ok()
+                        || value == "true"
+                        || value == "false"
+                    {
+                        format!("{}{} = {}", indent, field, value)
+                    } else {
+                        format!("{}{} = \"{}\"", indent, field, value)
+                    };
+                    result.push_str(&formatted);
+                    result.push('\n');
+                    value_set = true;
+                    continue;
+                }
+            }
+        }
+
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    result
 }
 
 // Heartbeat status endpoint
