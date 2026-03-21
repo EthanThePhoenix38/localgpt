@@ -241,7 +241,7 @@ async fn handle_message(bot: Bot, msg: Message, state: Arc<BotState>) -> Respons
         return handle_command(&bot, chat_id, &state, &text).await;
     }
 
-    handle_chat(&bot, chat_id, &state, &text).await
+    handle_chat(&bot, chat_id, msg.id, &state, &text).await
 }
 
 async fn handle_pairing(
@@ -521,11 +521,20 @@ async fn handle_command(
 async fn handle_chat(
     bot: &Bot,
     chat_id: ChatId,
+    user_msg_id: MessageId,
     state: &Arc<BotState>,
     text: &str,
 ) -> ResponseResult<()> {
-    // Send typing indicator initially
+    // Send typing indicator and acknowledgment reaction
     let _ = bot.send_chat_action(chat_id, ChatAction::Typing).await;
+    // React with "eyes" emoji to acknowledge the message is being processed
+    let _ = bot
+        .set_message_reaction(chat_id, user_msg_id)
+        .reaction(vec![teloxide::types::ReactionType::Emoji {
+            emoji: "\u{1F440}".to_owned(),
+        }])
+        .send()
+        .await;
 
     let _gate_permit = state.turn_gate.acquire().await;
     let mut sessions = state.sessions.lock().await;
@@ -661,6 +670,13 @@ async fn handle_chat(
 
     // Final render with HTML formatting, split into chunks if needed
     send_long_message(bot, chat_id, msg_id, &response).await;
+
+    // Clear the acknowledgment reaction
+    let _ = bot
+        .set_message_reaction(chat_id, user_msg_id)
+        .reaction(Vec::<teloxide::types::ReactionType>::new())
+        .send()
+        .await;
 
     Ok(())
 }
