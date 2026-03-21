@@ -580,6 +580,13 @@ button:disabled {
     display: block;
 }
 
+/* Abort marker */
+.abort-marker {
+    color: #ff9800;
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
 /* Settings panel */
 .settings-field {
     margin-bottom: 12px;

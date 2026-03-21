@@ -1,6 +1,7 @@
 const API = '/api';
 let sessionId = null;
 let isStreaming = false;
+let abortController = null;
 let statusPollInterval = null;
 let logsAutoRefreshInterval = null;
 
@@ -229,14 +230,18 @@ async function sendMessage() {
     assistantDiv.classList.add('loading');
 
     const sendBtn = document.getElementById('send');
-    sendBtn.disabled = true;
+    sendBtn.textContent = 'Stop';
+    sendBtn.disabled = false;
+    sendBtn.onclick = abortStreaming;
     isStreaming = true;
+    abortController = new AbortController();
 
     try {
         const res = await fetch(`${API}/chat/stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, session_id: sessionId })
+            body: JSON.stringify({ message, session_id: sessionId }),
+            signal: abortController.signal,
         });
 
         if (!res.ok) {
@@ -270,13 +275,32 @@ async function sendMessage() {
         }
     } catch (err) {
         assistantDiv.classList.remove('loading');
-        assistantDiv.classList.add('error');
-        assistantDiv.textContent = `Error: ${err.message}`;
+        if (err.name === 'AbortError') {
+            // User cancelled — preserve partial text and mark as aborted
+            const current = assistantDiv.textContent || assistantDiv.innerHTML;
+            if (current) {
+                assistantDiv.innerHTML += '<span class="abort-marker"> [aborted]</span>';
+            } else {
+                assistantDiv.textContent = '[aborted]';
+            }
+        } else {
+            assistantDiv.classList.add('error');
+            assistantDiv.textContent = `Error: ${err.message}`;
+        }
     } finally {
         assistantDiv.classList.remove('loading');
+        sendBtn.textContent = 'Send';
         sendBtn.disabled = false;
+        sendBtn.onclick = sendMessage;
         isStreaming = false;
+        abortController = null;
         scrollToBottom();
+    }
+}
+
+function abortStreaming() {
+    if (abortController) {
+        abortController.abort();
     }
 }
 
