@@ -707,6 +707,12 @@ pub struct ServerConfig {
     /// Default: 10MB
     #[serde(default = "default_max_request_body")]
     pub max_request_body: usize,
+
+    /// HMAC-SHA256 secret for webhook signature verification.
+    /// When set, incoming webhook requests must include X-Signature-256 header.
+    /// Supports ${ENV_VAR} expansion.
+    #[serde(default)]
+    pub webhook_secret: Option<String>,
 }
 
 fn default_max_request_body() -> usize {
@@ -1095,6 +1101,7 @@ impl Default for ServerConfig {
             rate_limit: RateLimitConfig::default(),
             cors_origins: Vec::new(),
             max_request_body: default_max_request_body(),
+            webhook_secret: None,
         }
     }
 }
@@ -1261,6 +1268,9 @@ impl Config {
         }
         if let Some(ref mut auth_token) = self.server.auth_token {
             *auth_token = expand_env(auth_token);
+        }
+        if let Some(ref mut webhook_secret) = self.server.webhook_secret {
+            *webhook_secret = expand_env(webhook_secret);
         }
     }
 
