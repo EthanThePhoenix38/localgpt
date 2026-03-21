@@ -3,6 +3,7 @@
 //! This module provides document loading, audio transcription, and text-to-speech capabilities.
 
 pub mod audio;
+pub mod cache;
 pub mod document;
 #[cfg(feature = "image-resize")]
 pub mod image_optimize;

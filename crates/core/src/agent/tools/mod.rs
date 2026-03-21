@@ -95,9 +95,18 @@ pub fn create_safe_tools(
         let env_vars: std::collections::HashMap<String, String> = std::env::vars().collect();
         let registry = crate::media::SttRegistry::from_config(stt_config, &env_vars);
         if registry.has_providers() {
+            let audio_cache = if config.tools.media_cache_enabled {
+                Some(crate::media::cache::MediaCache::new(
+                    config.workspace_path().join(".cache").join("media"),
+                    config.tools.media_cache_max_mb,
+                ))
+            } else {
+                None
+            };
             tools.push(Box::new(AudioTranscribeTool::new(
                 Arc::new(registry),
                 config.workspace_path(),
+                audio_cache,
             )));
         } else {
             tracing::debug!("STT configured but no providers available (missing API keys?)");
@@ -488,6 +497,7 @@ pub struct DocumentLoadTool {
     workspace: PathBuf,
     max_bytes: usize,
     output_max_chars: usize,
+    cache: Option<crate::media::cache::MediaCache>,
 }
 
 impl DocumentLoadTool {
@@ -496,11 +506,20 @@ impl DocumentLoadTool {
             Some(ref custom) => crate::media::DocumentLoaders::with_custom(custom),
             None => crate::media::DocumentLoaders::new(),
         };
+        let cache = if config.media_cache_enabled {
+            Some(crate::media::cache::MediaCache::new(
+                workspace.join(".cache").join("media"),
+                config.media_cache_max_mb,
+            ))
+        } else {
+            None
+        };
         Self {
             loaders,
             workspace,
             max_bytes: config.document_max_bytes,
             output_max_chars: config.tool_output_max_chars,
+            cache,
         }
     }
 
@@ -575,8 +594,19 @@ impl Tool for DocumentLoadTool {
             anyhow::bail!("Unsupported format: .{}. Supported: {}", ext, supported);
         }
 
+        // Check cache
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache.get(&resolved) {
+                return Ok(cached);
+            }
+        }
+
         debug!("Loading document: {} ({})", resolved.display(), ext);
         let text = self.loaders.extract_text(&resolved)?;
+
+        if let Some(ref cache) = self.cache {
+            let _ = cache.put(&resolved, &text);
+        }
 
         if self.output_max_chars > 0 && text.len() > self.output_max_chars {
             let truncated = truncate_on_char_boundary(&text, self.output_max_chars);
@@ -595,13 +625,19 @@ impl Tool for DocumentLoadTool {
 pub struct AudioTranscribeTool {
     registry: Arc<crate::media::SttRegistry>,
     workspace: PathBuf,
+    cache: Option<crate::media::cache::MediaCache>,
 }
 
 impl AudioTranscribeTool {
-    pub fn new(registry: Arc<crate::media::SttRegistry>, workspace: PathBuf) -> Self {
+    pub fn new(
+        registry: Arc<crate::media::SttRegistry>,
+        workspace: PathBuf,
+        cache: Option<crate::media::cache::MediaCache>,
+    ) -> Self {
         Self {
             registry,
             workspace,
+            cache,
         }
     }
 
@@ -673,6 +709,13 @@ impl Tool for AudioTranscribeTool {
             );
         }
 
+        // Check cache
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache.get(&resolved) {
+                return Ok(cached);
+            }
+        }
+
         let audio_data = fs::read(&resolved)?;
         debug!(
             "Transcribing audio: {} ({} bytes, {})",
@@ -682,6 +725,11 @@ impl Tool for AudioTranscribeTool {
         );
 
         let text = self.registry.transcribe(&audio_data, mime_type).await?;
+
+        if let Some(ref cache) = self.cache {
+            let _ = cache.put(&resolved, &text);
+        }
+
         Ok(text)
     }
 }
@@ -1335,7 +1383,7 @@ mod tests {
         let registry = Arc::new(crate::media::SttRegistry::new(
             crate::media::SttConfig::default(),
         ));
-        let tool = AudioTranscribeTool::new(registry, workspace);
+        let tool = AudioTranscribeTool::new(registry, workspace, None);
         assert_eq!(tool.name(), "transcribe_audio");
         let schema = tool.schema();
         assert_eq!(schema.name, "transcribe_audio");
@@ -1352,7 +1400,7 @@ mod tests {
         let registry = Arc::new(crate::media::SttRegistry::new(
             crate::media::SttConfig::default(),
         ));
-        let tool = AudioTranscribeTool::new(registry, workspace);
+        let tool = AudioTranscribeTool::new(registry, workspace, None);
 
         let args = r#"{"path": "../../../etc/passwd.mp3"}"#;
         let result = tool.execute(args).await;
@@ -1368,7 +1416,7 @@ mod tests {
         let registry = Arc::new(crate::media::SttRegistry::new(
             crate::media::SttConfig::default(),
         ));
-        let tool = AudioTranscribeTool::new(registry, workspace.clone());
+        let tool = AudioTranscribeTool::new(registry, workspace.clone(), None);
 
         let args = r#"{"path": "test.txt"}"#;
         let result = tool.execute(args).await;
@@ -1389,7 +1437,7 @@ mod tests {
         let registry = Arc::new(crate::media::SttRegistry::new(
             crate::media::SttConfig::default(),
         ));
-        let tool = AudioTranscribeTool::new(registry, workspace);
+        let tool = AudioTranscribeTool::new(registry, workspace, None);
 
         let args = r#"{"path": "nonexistent.mp3"}"#;
         let result = tool.execute(args).await;

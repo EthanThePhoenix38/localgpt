@@ -174,6 +174,14 @@ pub struct ToolsConfig {
     #[serde(default = "default_image_max_dimension")]
     pub image_max_dimension: u32,
 
+    /// Enable media result caching for document_load/transcribe_audio (default: true)
+    #[serde(default = "default_true")]
+    pub media_cache_enabled: bool,
+
+    /// Maximum media cache size in MB (default: 100)
+    #[serde(default = "default_media_cache_max_mb")]
+    pub media_cache_max_mb: u64,
+
     /// Enable browser automation tool via Chrome DevTools Protocol (default: false)
     #[serde(default)]
     pub browser_enabled: bool,
@@ -854,6 +862,9 @@ fn default_tool_output_max_chars() -> usize {
 fn default_document_max_bytes() -> usize {
     10_485_760 // 10MB
 }
+fn default_media_cache_max_mb() -> u64 {
+    100
+}
 fn default_browser_port() -> u16 {
     9222
 }
@@ -1032,6 +1043,8 @@ impl Default for ToolsConfig {
             document_max_bytes: default_document_max_bytes(),
             stt: None,
             image_max_dimension: default_image_max_dimension(),
+            media_cache_enabled: true,
+            media_cache_max_mb: default_media_cache_max_mb(),
             browser_enabled: false,
             browser_port: default_browser_port(),
             filters: std::collections::HashMap::new(),
