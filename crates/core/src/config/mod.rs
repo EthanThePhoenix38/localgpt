@@ -174,6 +174,14 @@ pub struct ToolsConfig {
     #[serde(default = "default_image_max_dimension")]
     pub image_max_dimension: u32,
 
+    /// Enable browser automation tool via Chrome DevTools Protocol (default: false)
+    #[serde(default)]
+    pub browser_enabled: bool,
+
+    /// Chrome CDP debug port (default: 9222)
+    #[serde(default = "default_browser_port")]
+    pub browser_port: u16,
+
     /// Per-tool input filters (deny/allow patterns and substrings).
     /// Keys are tool names (e.g. "bash", "web_fetch").
     #[serde(default)]
@@ -832,6 +840,9 @@ fn default_tool_output_max_chars() -> usize {
 fn default_document_max_bytes() -> usize {
     10_485_760 // 10MB
 }
+fn default_browser_port() -> u16 {
+    9222
+}
 fn default_sandbox_backend() -> String {
     "disabled".to_string()
 }
@@ -1007,6 +1018,8 @@ impl Default for ToolsConfig {
             document_max_bytes: default_document_max_bytes(),
             stt: None,
             image_max_dimension: default_image_max_dimension(),
+            browser_enabled: false,
+            browser_port: default_browser_port(),
             filters: std::collections::HashMap::new(),
         }
     }

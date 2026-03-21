@@ -1,8 +1,10 @@
-//! CLI-only tools: bash, read_file, write_file, edit_file.
+//! CLI-only tools: bash, read_file, write_file, edit_file, browser.
 //!
 //! These tools are not included in `localgpt-core` because they have
 //! platform-specific dependencies (sandbox) and security implications
 //! that make them unsuitable for mobile.
+
+pub mod browser;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -98,7 +100,7 @@ pub fn create_cli_tools(config: &Config) -> Result<Vec<Box<dyn Tool>>> {
     let allowed_dirs = resolve_allowed_directories(config);
     let strict_policy = config.security.strict_policy;
 
-    Ok(vec![
+    let mut tools: Vec<Box<dyn Tool>> = vec![
         Box::new(BashTool::new(
             config.tools.bash_timeout_ms,
             state_dir.clone(),
@@ -126,7 +128,14 @@ pub fn create_cli_tools(config: &Config) -> Result<Vec<Box<dyn Tool>>> {
             file_filter,
             allowed_dirs,
         )),
-    ])
+    ];
+
+    // Conditionally add browser tool
+    if config.tools.browser_enabled {
+        tools.push(Box::new(browser::BrowserTool::new(config.tools.browser_port)));
+    }
+
+    Ok(tools)
 }
 
 // Bash Tool
