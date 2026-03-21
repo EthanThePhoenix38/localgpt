@@ -16,22 +16,23 @@ A comparison of AI systems that generate or interact with 3D explorable worlds.
 | [Marble](https://www.worldlabs.ai/) | Text, Image, Video, 3D | Gaussian Splats, 3D | Cloud | World model for 3D generation |
 | [Artcraft](https://artcraft.ai/) | Text | Images, Video | Cloud | Creative IDE for AI media |
 | [Intangible](https://www.intangible.ai/) | Text | 3D Scenes | Cloud | Camera-centric scene composition |
+| [SceneCraft](https://www.scenecraft.org/) | Text | Interactive narratives | Cloud | AI storytelling for education |
 | **LocalGPT Gen** | Text | Interactive 3D (glTF) | Local | Open-source world building |
 
 ## Feature Comparison
 
-| Feature | Genie 3 | SIMA 2 | WorldGen | Marble | Artcraft | Intangible | LocalGPT Gen |
-|---------|---------|--------|----------|--------|----------|------------|--------------|
-| Text-to-3D | ✓ | — | ✓ | ✓ | — | ✓ | ✓ |
-| Image-to-3D | ✓ | — | — | ✓ | — | — | — |
-| Interactive playback | ✓ | ✓ | — | — | — | ✓ | ✓ |
-| Real-time simulation | ✓ | ✓ | — | — | — | — | ✓ |
-| Structured generation | — | — | ✓ | — | — | — | ✓ |
-| Local execution | — | — | — | — | — | — | ✓ |
-| Open source | — | — | — | — | — | — | ✓ |
-| Procedural audio | — | — | — | — | — | — | ✓ |
-| glTF/USD export | — | — | ✓ | ✓ | — | ✓ | ✓ |
-| Agent control | — | ✓ | — | — | — | — | ✓ |
+| Feature | Genie 3 | SIMA 2 | WorldGen | Marble | Artcraft | Intangible | SceneCraft | LocalGPT Gen |
+|---------|---------|--------|----------|--------|----------|------------|------------|--------------|
+| Text-to-3D | ✓ | — | ✓ | ✓ | — | ✓ | — | ✓ |
+| Image-to-3D | ✓ | — | — | ✓ | — | — | — | — |
+| Interactive playback | ✓ | ✓ | — | — | — | ✓ | ✓ | ✓ |
+| Real-time simulation | ✓ | ✓ | — | — | — | — | — | ✓ |
+| Structured generation | — | — | ✓ | — | — | — | ✓ | ✓ |
+| Local execution | — | — | — | — | — | — | — | ✓ |
+| Open source | — | — | — | — | — | — | — | ✓ |
+| Procedural audio | — | — | — | — | — | — | — | ✓ |
+| glTF/USD export | — | — | ✓ | ✓ | — | ✓ | — | ✓ |
+| Agent control | — | ✓ | — | — | — | — | — | ✓ |
 
 ## System Highlights
 
@@ -58,6 +59,14 @@ IDE for AI-assisted creative work. Combines image generation, video creation, 3D
 ### Intangible
 
 Spatial intelligence platform focused on camera-centric 3D composition. Designed for creative industries needing precise camera control and scene layout.
+
+### SceneCraft (EngageAI Institute)
+
+AI-powered storytelling platform that generates interactive, narrative-based learning experiences from natural language prompts. Developed by the [EngageAI Institute](https://engageai.org/) (NSF AI Institute for Engaged Learning, award DRL-2112635) across NC State, UNC, Indiana University, Vanderbilt, and Digital Promise. Teachers input prompts describing desired story foundations; SceneCraft generates scenes, characters, and dialogue that educators can fully customize to align with instructional goals.
+
+- [scenecraft.org](https://www.scenecraft.org/)
+- [Authoring tool](https://scenecraft.csc.ncsu.edu/scenecraft/home)
+- [EngageAI publications](https://engageai.org/publications)
 
 ### LocalGPT Gen
 
