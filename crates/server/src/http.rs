@@ -583,9 +583,7 @@ struct ChannelsStatusResponse {
     summary: ChannelsSummary,
 }
 
-async fn channels_status(
-    State(state): State<Arc<AppState>>,
-) -> Json<ChannelsStatusResponse> {
+async fn channels_status(State(state): State<Arc<AppState>>) -> Json<ChannelsStatusResponse> {
     let bridges = state.bridge_manager.get_active_bridges().await;
 
     let channels: Vec<ChannelStatus> = bridges
@@ -615,7 +613,10 @@ async fn channels_status(
 
     let connected = channels.iter().filter(|c| c.state == "connected").count();
     let degraded = channels.iter().filter(|c| c.state == "degraded").count();
-    let disconnected = channels.iter().filter(|c| c.state == "disconnected").count();
+    let disconnected = channels
+        .iter()
+        .filter(|c| c.state == "disconnected")
+        .count();
 
     Json(ChannelsStatusResponse {
         summary: ChannelsSummary {
