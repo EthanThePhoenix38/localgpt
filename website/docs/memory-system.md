@@ -132,6 +132,9 @@ Memory settings in `config.toml`:
 
 ```toml
 [memory]
+# Memory search backend: "sqlite" (default), "markdown", or "none"
+# backend = "sqlite"
+
 # Workspace location
 workspace = "~/.local/share/localgpt/workspace"
 
@@ -162,6 +165,25 @@ embedding_cache_dir = "~/.cache/localgpt/embeddings"
 # When enabled, re-ranks results to reduce redundancy
 # use_mmr = false
 ```
+
+### Memory Backends
+
+LocalGPT supports three memory search backends:
+
+| Backend | Description | Use Case |
+|---------|-------------|----------|
+| `sqlite` (default) | SQLite FTS5 full-text search + optional vector embeddings | Most users — fast hybrid search with semantic matching |
+| `markdown` | Simple grep-based search over workspace `.md` files | Minimal setups — no database, human-readable, zero dependencies |
+| `none` | Disables memory search entirely | Ephemeral sessions, testing, or privacy-sensitive use |
+
+Set via `memory.backend` in config:
+
+```toml
+[memory]
+backend = "markdown"  # or "sqlite" (default), "none"
+```
+
+All backends share the same workspace directory and file structure. The `sqlite` backend creates a regenerable index in `~/.cache/localgpt/memory/`. The `markdown` backend searches files directly (no index). The `none` backend returns empty results for all searches.
 
 ### Temporal Decay
 

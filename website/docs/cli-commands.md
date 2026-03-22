@@ -28,6 +28,9 @@ Commands:
   completion  Generate shell completion scripts
   cron        Manage cron jobs
   hooks       Manage lifecycle hooks
+  tool        Manage MCP tool servers
+  plugin      Manage MCP tool servers (alias for 'tool')
+  audit       View and verify compaction audit log
   help        Print help information
 ```
 
@@ -65,6 +68,8 @@ Options:
 | `completion` | Generate shell completion scripts (bash, zsh, fish) |
 | `cron` | Manage cron jobs (list, add, remove) |
 | `hooks` | Manage lifecycle hooks |
+| `tool` / `plugin` | Manage MCP tool servers (list, add, remove, enable, disable) |
+| `audit` | View and verify compaction audit log (show, verify, stats) |
 
 ## Examples
 
@@ -130,6 +135,20 @@ localgpt cron remove <job-id>
 # Manage lifecycle hooks
 localgpt hooks list
 localgpt hooks set beforeToolCall "/path/to/hook.sh"
+
+# Manage MCP tool servers
+localgpt tool list                # List servers with enabled/disabled status
+localgpt tool add myserver --command "npx" -- "@anthropic/mcp-searxng"
+localgpt tool enable myserver     # Enable a disabled server
+localgpt tool disable myserver    # Disable without removing
+localgpt tool remove myserver     # Remove from config
+
+# Compaction audit log
+localgpt audit show               # Show recent compaction events
+localgpt audit show --limit 5     # Show last 5 events
+localgpt audit show --json        # JSON output
+localgpt audit verify             # Verify hash chain integrity
+localgpt audit stats              # Show compaction statistics
 ```
 
 ## Built-in Chat Commands

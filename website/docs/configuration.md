@@ -154,6 +154,12 @@ active_hours = { start = "09:00", end = "22:00" }
 #──────────────────────────────────────────────────────────────────────────────
 
 [memory]
+# Memory search backend: "sqlite" (default), "markdown", or "none"
+# sqlite: Full-text search (FTS5) + optional vector embeddings (recommended)
+# markdown: Simple grep-based search over .md files (no database needed)
+# none: Disable memory search entirely (ephemeral sessions)
+# backend = "sqlite"
+
 # Where to store memory files
 # Supports ~ for home directory
 workspace = "~/.local/share/localgpt/workspace"
