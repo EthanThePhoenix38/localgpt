@@ -49,6 +49,7 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenLoadWorldTool::new(bridge.clone())),
         Box::new(GenExportWorldTool::new(bridge.clone())),
         Box::new(GenExportHtmlTool::new(bridge.clone())),
+        Box::new(GenForkWorldTool::new(bridge.clone())),
         // Scene management
         Box::new(GenClearSceneTool::new(bridge.clone())),
         // Undo/Redo
@@ -2411,6 +2412,89 @@ impl Tool for GenExportHtmlTool {
                 Features: Three.js rendering, OrbitControls, animated behaviors, procedural audio.",
                 path
             )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_fork_world
+// ===========================================================================
+
+struct GenForkWorldTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenForkWorldTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenForkWorldTool {
+    fn name(&self) -> &str {
+        "gen_fork_world"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_fork_world".into(),
+            description: "Fork (copy) an existing world skill to a new name with attribution metadata. \
+                Creates a complete copy of the source world directory under a new skill name, \
+                updating world.ron metadata and SKILL.md title."
+                .into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "Source world name or path to fork from"
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "Name for the forked world"
+                    }
+                },
+                "required": ["source", "new_name"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let source = args["source"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing source"))?
+            .to_string();
+        let new_name = args["new_name"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing new_name"))?
+            .to_string();
+
+        match self
+            .bridge
+            .send(GenCommand::ForkWorld { source, new_name })
+            .await?
+        {
+            GenResponse::WorldSaved {
+                path,
+                skill_name,
+                warnings,
+            } => {
+                let mut msg = format!(
+                    "World forked as '{}' at: {}\nCan be loaded with gen_load_world or invoked as /{}",
+                    skill_name, path, skill_name
+                );
+                if !warnings.is_empty() {
+                    msg.push_str("\n\nWarnings:");
+                    for w in &warnings {
+                        msg.push_str(&format!("\n  - {}", w));
+                    }
+                }
+                Ok(msg)
+            }
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }

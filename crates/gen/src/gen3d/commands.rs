@@ -112,6 +112,12 @@ pub enum GenCommand {
         format: Option<String>,
     },
     ExportHtml,
+    ForkWorld {
+        /// Source world path or skill name.
+        source: String,
+        /// New world name.
+        new_name: String,
+    },
 
     // Tier 8: Scene management
     ClearScene {

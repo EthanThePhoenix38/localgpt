@@ -987,6 +987,131 @@ Use `gen_load_region` / `gen_unload_region` for selective editing.
     )
 }
 
+// ---------------------------------------------------------------------------
+// Fork world
+// ---------------------------------------------------------------------------
+
+/// Copy a directory tree recursively.
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let target = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Fork an existing world skill directory to a new name with attribution.
+pub fn handle_fork_world(
+    source: &str,
+    new_name: &str,
+    workspace: &GenWorkspace,
+) -> Result<(String, Vec<String>), String> {
+    let mut warnings: Vec<String> = Vec::new();
+
+    // 1. Resolve source directory
+    let source_dir = resolve_world_path(source, &workspace.path)
+        .ok_or_else(|| format!("Source world skill not found: {}", source))?;
+
+    // 2. Construct destination
+    let dest_dir = workspace.path.join("skills").join(new_name);
+    if dest_dir.exists() {
+        return Err(format!(
+            "Destination already exists: {}",
+            dest_dir.display()
+        ));
+    }
+
+    // 3. Copy entire directory recursively
+    copy_dir_recursive(&source_dir, &dest_dir)
+        .map_err(|e| format!("Failed to copy world directory: {}", e))?;
+
+    // 4. Read and update world.ron
+    let ron_path = dest_dir.join("world.ron");
+    if ron_path.exists() {
+        match std::fs::read_to_string(&ron_path) {
+            Ok(ron_str) => match ron::from_str::<wt::WorldManifest>(&ron_str) {
+                Ok(mut manifest) => {
+                    let source_name = manifest.meta.name.clone();
+                    manifest.meta.name = new_name.to_string();
+
+                    // Add fork attribution to description
+                    let fork_note = format!("Forked from: {}", source_name);
+                    manifest.meta.description = Some(match manifest.meta.description {
+                        Some(desc) => format!("{}\n\n{}", desc, fork_note),
+                        None => fork_note,
+                    });
+
+                    let pretty = ron::ser::PrettyConfig::default();
+                    match ron::ser::to_string_pretty(&manifest, pretty) {
+                        Ok(ron_out) => {
+                            if let Err(e) = std::fs::write(&ron_path, ron_out) {
+                                warnings.push(format!("Failed to update world.ron: {}", e));
+                            }
+                        }
+                        Err(e) => {
+                            warnings.push(format!("Failed to serialize world.ron: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "Failed to parse world.ron for update: {}. File copied as-is.",
+                        e
+                    ));
+                }
+            },
+            Err(e) => {
+                warnings.push(format!("Failed to read world.ron: {}", e));
+            }
+        }
+    } else {
+        warnings.push("No world.ron found in source — directory copied without manifest update".to_string());
+    }
+
+    // 5. Update SKILL.md — replace title with new name
+    let skill_md_path = dest_dir.join("SKILL.md");
+    if skill_md_path.exists() {
+        match std::fs::read_to_string(&skill_md_path) {
+            Ok(content) => {
+                // Derive source name from directory for replacement
+                let source_skill_name = source_dir
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+
+                let updated = content
+                    .replace(
+                        &format!("name: \"{}\"", source_skill_name),
+                        &format!("name: \"{}\"", new_name),
+                    )
+                    .replace(
+                        &format!("# {}", source_skill_name),
+                        &format!("# {}", new_name),
+                    )
+                    .replace(
+                        &format!("contains: \"{}\"", source_skill_name),
+                        &format!("contains: \"{}\"", new_name),
+                    );
+
+                if let Err(e) = std::fs::write(&skill_md_path, updated) {
+                    warnings.push(format!("Failed to update SKILL.md: {}", e));
+                }
+            }
+            Err(e) => {
+                warnings.push(format!("Failed to read SKILL.md: {}", e));
+            }
+        }
+    }
+
+    Ok((dest_dir.to_string_lossy().into_owned(), warnings))
+}
+
 /// Resolve a world skill path by looking for `world.ron`.
 fn resolve_world_path(path: &str, workspace: &Path) -> Option<PathBuf> {
     let expanded = shellexpand::tilde(path).into_owned();

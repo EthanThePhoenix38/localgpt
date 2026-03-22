@@ -1328,6 +1328,16 @@ fn process_gen_commands(
                 &params.meshes,
             ),
             GenCommand::ExportHtml => handle_export_html(&params.workspace, &params.current_world),
+            GenCommand::ForkWorld { source, new_name } => {
+                match super::world::handle_fork_world(&source, &new_name, &params.workspace) {
+                    Ok((path, warnings)) => GenResponse::WorldSaved {
+                        path,
+                        skill_name: new_name,
+                        warnings,
+                    },
+                    Err(e) => GenResponse::Error { message: e },
+                }
+            }
             GenCommand::LoadWorld { path, clear } => {
                 // Clear existing scene before loading if requested.
                 if clear {
