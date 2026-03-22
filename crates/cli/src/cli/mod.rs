@@ -18,6 +18,7 @@ pub mod memory;
 pub mod paths;
 pub mod sandbox;
 pub mod search;
+pub mod session;
 pub mod tool;
 pub mod tui;
 
@@ -119,4 +120,7 @@ pub enum Commands {
 
     /// Run as MCP server (stdio) — exposes memory tools for external AI backends
     McpServer(mcp_server::McpServerArgs),
+
+    /// Manage sessions (list, branch)
+    Session(session::SessionArgs),
 }

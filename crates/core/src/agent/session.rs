@@ -151,6 +151,21 @@ impl Session {
         &self.id
     }
 
+    /// Create a branched copy of this session with a new ID.
+    /// Inherits all messages and context but gets a fresh identity.
+    pub fn branch(&self) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            created_at: Utc::now(),
+            cwd: self.cwd.clone(),
+            messages: self.messages.clone(),
+            system_context: self.system_context.clone(),
+            token_count: self.token_count,
+            compaction_count: self.compaction_count,
+            memory_flush_compaction_count: self.memory_flush_compaction_count,
+        }
+    }
+
     pub fn token_count(&self) -> usize {
         self.token_count
     }
@@ -327,7 +342,7 @@ impl Session {
         self.save_to_path(path)
     }
 
-    fn save_to_path(&self, path: &PathBuf) -> Result<()> {
+    pub fn save_to_path(&self, path: &PathBuf) -> Result<()> {
         let mut file = File::create(path)?;
 
         // Restrict permissions: session files may contain sensitive data
@@ -561,6 +576,23 @@ impl Session {
         }
 
         Self::load_from_path(&path, session_id)
+    }
+
+    /// Load a session for a specific agent ID.
+    pub fn load_for_agent(session_id: &str, agent_id: &str) -> Result<Self> {
+        let dir = get_sessions_dir_for_agent(agent_id)?;
+        let path = dir.join(format!("{}.jsonl", session_id));
+
+        if !path.exists() {
+            anyhow::bail!("Session not found: {}", session_id);
+        }
+
+        Self::load_from_path(&path, session_id)
+    }
+
+    /// Get the number of messages in this session.
+    pub fn message_count(&self) -> usize {
+        self.messages.len()
     }
 
     fn load_from_path(path: &PathBuf, session_id: &str) -> Result<Self> {
