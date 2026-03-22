@@ -10,6 +10,8 @@ use avian3d::prelude::*;
 #[cfg(feature = "physics")]
 use bevy_tnua::TnuaScheme;
 #[cfg(feature = "physics")]
+use bevy_tnua::builtins::{TnuaBuiltinJumpConfig, TnuaBuiltinWalkConfig};
+#[cfg(feature = "physics")]
 use bevy_tnua::prelude::*;
 #[cfg(feature = "physics")]
 use bevy_tnua_avian3d::*;
@@ -179,6 +181,7 @@ pub fn spawn_player(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    scheme_configs: &mut ResMut<Assets<PlayerSchemeConfig>>,
     params: &SpawnPlayerParams,
 ) -> Entity {
     let position = Vec3::from_array(params.position);
@@ -191,6 +194,24 @@ pub fn spawn_player(
     let capsule_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.3, 0.5, 0.8),
         ..default()
+    });
+
+    // float_height = half the capsule total height (center of mass above ground)
+    let float_height = params.collision_height / 2.0;
+
+    let config_handle = scheme_configs.add(PlayerSchemeConfig {
+        basis: TnuaBuiltinWalkConfig {
+            speed: params.walk_speed,
+            float_height,
+            acceleration: 50.0,
+            air_acceleration: 20.0,
+            coyote_time: 0.15,
+            ..Default::default()
+        },
+        jump: TnuaBuiltinJumpConfig {
+            height: params.jump_force,
+            ..Default::default()
+        },
     });
 
     commands
@@ -212,6 +233,7 @@ pub fn spawn_player(
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             // Controller: Tnua
             TnuaController::<PlayerScheme>::default(),
+            TnuaConfig::<PlayerScheme>(config_handle),
             TnuaAvian3dSensorShape(Collider::cylinder(params.collision_radius * 0.95, 0.0)),
         ))
         .id()

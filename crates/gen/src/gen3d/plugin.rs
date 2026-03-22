@@ -286,8 +286,21 @@ pub fn setup_gen_app(
         .add_plugins(crate::ui::LabelPlugin)
         .add_plugins(crate::ui::TooltipPlugin)
         .add_plugins(crate::ui::NotificationPlugin)
-        // P5: Physics plugins
-        .add_plugins(crate::physics::PhysicsBodyPlugin)
+        // P5: Physics engine (Avian3d + Tnua character controller)
+        ;
+    #[cfg(feature = "physics")]
+    {
+        use crate::character::player::PlayerScheme;
+        app.add_plugins(avian3d::PhysicsPlugins::default())
+            .add_plugins(bevy_tnua::TnuaControllerPlugin::<PlayerScheme>::new(
+                bevy::app::PostUpdate,
+            ))
+            .add_plugins(bevy_tnua_avian3d::TnuaAvian3dPlugin::new(
+                bevy::app::PostUpdate,
+            ));
+    }
+    // P5: Custom physics plugins
+    app.add_plugins(crate::physics::PhysicsBodyPlugin)
         .add_plugins(crate::physics::ForceFieldPlugin)
         .add_plugins(crate::physics::GravityPlugin)
         .add_plugins(crate::physics::ColliderPlugin)
@@ -432,6 +445,8 @@ struct GenCommandParams<'w, 's> {
     world_tours: ResMut<'w, WorldTours>,
     current_world: ResMut<'w, CurrentWorld>,
     camera_mode: ResMut<'w, avatar::CameraMode>,
+    #[cfg(feature = "physics")]
+    player_scheme_configs: ResMut<'w, Assets<crate::character::player::PlayerSchemeConfig>>,
     player_camera_query: Query<'w, 's, &'static mut crate::character::PlayerCamera>,
     terrain_q: Query<'w, 's, (&'static crate::terrain::Terrain, &'static Transform)>,
     npc_behaviors: Query<'w, 's, &'static mut crate::character::npc::NpcBehavior>,
@@ -1513,11 +1528,18 @@ fn process_gen_commands(
                     &mut commands,
                     &mut params.meshes,
                     &mut params.materials,
+                    &mut params.player_scheme_configs,
                     &p,
                 );
                 params.registry.insert_with_id(name.clone(), entity, wid);
                 // Switch to Player camera mode so player systems activate
                 *params.camera_mode = avatar::CameraMode::Player;
+                // Attach PlayerCamera to the main_camera so camera_follow_system tracks the player
+                if let Some(cam_entity) = params.registry.get_entity("main_camera") {
+                    commands
+                        .entity(cam_entity)
+                        .insert(crate::character::PlayerCamera::default());
+                }
                 GenResponse::Spawned {
                     name,
                     entity_id: wid.0,
