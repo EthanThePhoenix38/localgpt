@@ -12,6 +12,7 @@ members = [
     "bridges/telegram",
     "bridges/discord",
     "bridges/whatsapp",
+    "bridges/slack",
     "bridges/cli",
 ]
 default-members = ["crates/cli"]
