@@ -464,7 +464,9 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (player_input_system, player_movement_system).chain(),
+            (player_input_system, player_movement_system)
+                .chain()
+                .run_if(crate::gen3d::avatar::in_player_mode),
         );
     }
 }

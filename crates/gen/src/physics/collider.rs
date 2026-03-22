@@ -177,6 +177,56 @@ pub fn auto_collider_system(
     }
 }
 
+/// Auto-attaches trimesh colliders to glTF-loaded meshes.
+///
+/// glTF scenes load asynchronously — child entities with `Mesh3d` appear after
+/// the scene is ready. This system catches newly added meshes that lack colliders
+/// and generates trimesh colliders from vertex/index data, identical to the
+/// terrain collider approach.
+#[cfg(feature = "physics")]
+pub fn gltf_mesh_collider_system(
+    mut commands: Commands,
+    query: Query<
+        (Entity, &Mesh3d),
+        (
+            Added<Mesh3d>,
+            Without<Collider>,
+            Without<crate::gen3d::registry::ParametricShape>,
+        ),
+    >,
+    meshes: Res<Assets<Mesh>>,
+) {
+    use bevy::mesh::Indices;
+
+    for (entity, mesh_handle) in query.iter() {
+        let Some(mesh) = meshes.get(&mesh_handle.0) else {
+            continue;
+        };
+        let Some(positions) = mesh
+            .attribute(Mesh::ATTRIBUTE_POSITION)
+            .and_then(|attr| attr.as_float3())
+        else {
+            continue;
+        };
+        let vertices: Vec<Vec3> = positions.iter().map(|p| Vec3::from_array(*p)).collect();
+        let Some(indices) = mesh.indices() else {
+            continue;
+        };
+        let tri_indices: Vec<[u32; 3]> = match indices {
+            Indices::U32(idx) => idx.chunks(3).map(|c| [c[0], c[1], c[2]]).collect(),
+            Indices::U16(idx) => idx
+                .chunks(3)
+                .map(|c| [c[0] as u32, c[1] as u32, c[2] as u32])
+                .collect(),
+        };
+        if !vertices.is_empty() && !tri_indices.is_empty() {
+            commands
+                .entity(entity)
+                .insert((RigidBody::Static, Collider::trimesh(vertices, tri_indices)));
+        }
+    }
+}
+
 /// Plugin for collider systems.
 pub struct ColliderPlugin;
 
@@ -186,6 +236,7 @@ impl Plugin for ColliderPlugin {
         {
             app.add_systems(Update, collider_setup_system);
             app.add_systems(Update, auto_collider_system);
+            app.add_systems(Update, gltf_mesh_collider_system);
         }
 
         let _ = app;

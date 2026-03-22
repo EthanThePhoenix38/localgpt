@@ -117,6 +117,14 @@ impl Plugin for InspectorPlugin {
         ws_server::start_ws_server(app);
 
         app.add_plugins(EguiPlugin::default())
+            // Absorb Bevy mouse/keyboard input when egui wants it.
+            // Without this, Bevy's picking system consumes pointer events
+            // before egui sees them, making egui buttons unclickable.
+            .insert_resource({
+                let mut s = bevy_egui::EguiGlobalSettings::default();
+                s.enable_absorb_bevy_input_system = true;
+                s
+            })
             .init_resource::<InspectorState>()
             .init_resource::<InspectorSelection>()
             .init_resource::<outliner::OutlinerCache>()

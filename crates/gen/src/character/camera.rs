@@ -483,7 +483,8 @@ impl Plugin for CameraPlugin {
                     camera_input_system,
                     camera_follow_system,
                     player_mesh_visibility_system,
-                ),
+                )
+                    .run_if(crate::gen3d::avatar::in_player_mode),
             );
     }
 }
