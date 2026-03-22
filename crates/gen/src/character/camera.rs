@@ -452,6 +452,46 @@ mod tests {
     }
 }
 
+/// System to toggle camera POV between ThirdPerson and FirstPerson with the V key.
+///
+/// Resets `transition_progress` to trigger smooth blend between views.
+pub fn camera_pov_toggle_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut camera_query: Query<&mut PlayerCamera>,
+    mut notifications: MessageWriter<crate::ui::notification::NotificationEvent>,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyV) {
+        return;
+    }
+
+    let Ok(mut camera) = camera_query.single_mut() else {
+        return;
+    };
+
+    camera.mode = match camera.mode {
+        CameraPov::ThirdPerson => CameraPov::FirstPerson,
+        CameraPov::FirstPerson => CameraPov::ThirdPerson,
+        // For other modes (TopDown, Fixed), toggle to ThirdPerson
+        _ => CameraPov::ThirdPerson,
+    };
+
+    // Reset transition for smooth blend
+    camera.transition_progress = 0.0;
+
+    let label = match camera.mode {
+        CameraPov::FirstPerson => "First Person",
+        CameraPov::ThirdPerson => "Third Person",
+        _ => "Camera",
+    };
+    info!("Camera POV: {label}");
+    notifications.write(crate::ui::notification::NotificationEvent {
+        text: format!("Camera: {label}"),
+        style: crate::ui::notification::NotificationStyle::Toast,
+        position: crate::ui::notification::NotificationPosition::Top,
+        icon: crate::ui::notification::NotificationIcon::None,
+    });
+}
+
 /// Hide/show the player mesh based on first-person mode.
 /// In first-person, the player capsule is inside the camera, so hide it.
 pub fn player_mesh_visibility_system(
@@ -480,10 +520,12 @@ impl Plugin for CameraPlugin {
             .add_systems(
                 Update,
                 (
+                    camera_pov_toggle_system,
                     camera_input_system,
                     camera_follow_system,
                     player_mesh_visibility_system,
                 )
+                    .chain()
                     .run_if(crate::gen3d::avatar::in_player_mode),
             );
     }

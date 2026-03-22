@@ -50,6 +50,7 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         Box::new(GenExportWorldTool::new(bridge.clone())),
         Box::new(GenExportHtmlTool::new(bridge.clone())),
         Box::new(GenForkWorldTool::new(bridge.clone())),
+        Box::new(GenPackageWorldTool::new(bridge.clone())),
         // Scene management
         Box::new(GenClearSceneTool::new(bridge.clone())),
         // Undo/Redo
@@ -2496,6 +2497,66 @@ impl Tool for GenForkWorldTool {
                 }
                 Ok(msg)
             }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_package_world
+// ===========================================================================
+
+struct GenPackageWorldTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenPackageWorldTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenPackageWorldTool {
+    fn name(&self) -> &str {
+        "gen_package_world"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_package_world".into(),
+            description:
+                "Bundle the current world into a distributable ZIP file. \
+                Includes all world files (world.ron, SKILL.md, assets/, history.jsonl) and \
+                the exported index.html if present. Requires a saved world (use gen_save_world first)."
+                    .into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "Custom output path for the .zip file (default: export/{world_name}.zip)"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let output_path = args["output_path"].as_str().map(|s| s.to_string());
+
+        match self
+            .bridge
+            .send(GenCommand::PackageWorld { output_path })
+            .await?
+        {
+            GenResponse::Exported { path } => Ok(format!(
+                "World packaged to ZIP: {}\n\n\
+                This file contains the complete world and can be distributed or archived.",
+                path
+            )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
         }

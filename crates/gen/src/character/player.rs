@@ -30,6 +30,12 @@ pub enum PlayerScheme {
 #[derive(Component)]
 pub struct Player;
 
+/// Resource tracking whether noclip is active (fly-through-walls mode).
+#[derive(Resource, Default)]
+pub struct NoclipState {
+    pub enabled: bool,
+}
+
 /// Configuration for the player character.
 #[derive(Component, Clone, Serialize, Deserialize)]
 pub struct PlayerConfig {
@@ -78,6 +84,8 @@ pub enum CameraMode {
 pub struct PlayerInput {
     pub move_forward: f32,
     pub move_right: f32,
+    /// Vertical axis: +1 up, -1 down (used in noclip mode).
+    pub move_up: f32,
     pub jump: bool,
     pub run: bool,
 }
@@ -283,12 +291,14 @@ pub fn despawn_player(mut commands: Commands, player_query: Query<Entity, With<P
 /// System to handle player movement input.
 pub fn player_input_system(
     keyboard: Res<ButtonInput<KeyCode>>,
+    noclip: Res<NoclipState>,
     mut query: Query<&mut PlayerInput, With<Player>>,
 ) {
     for mut input in query.iter_mut() {
         // Reset input
         input.move_forward = 0.0;
         input.move_right = 0.0;
+        input.move_up = 0.0;
         input.jump = false;
         input.run = false;
 
@@ -308,17 +318,32 @@ pub fn player_input_system(
             input.move_right += 1.0;
         }
 
-        // Jump
-        input.jump = keyboard.pressed(KeyCode::Space);
+        // Vertical (noclip) / Jump (normal)
+        if noclip.enabled {
+            if keyboard.pressed(KeyCode::Space) {
+                input.move_up += 1.0;
+            }
+            if keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight) {
+                input.move_up -= 1.0;
+            }
+        } else {
+            input.jump = keyboard.pressed(KeyCode::Space);
+        }
 
-        // Run
-        input.run = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+        // Run (only in normal mode — shift is used for down in noclip)
+        if !noclip.enabled {
+            input.run =
+                keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+        }
     }
 }
 
 /// System to apply player movement via Tnua (physics mode).
+///
+/// Skipped when noclip is active (no Tnua controller on entity).
 #[cfg(feature = "physics")]
 pub fn player_movement_system(
+    noclip: Res<NoclipState>,
     mut query: Query<
         (
             &PlayerConfig,
@@ -329,6 +354,9 @@ pub fn player_movement_system(
         With<Player>,
     >,
 ) {
+    if noclip.enabled {
+        return;
+    }
     for (config, input, mut controller, transform) in query.iter_mut() {
         // Calculate movement direction relative to player facing direction
         let forward = transform.forward().as_vec3().xz().normalize_or_zero();
@@ -366,8 +394,12 @@ pub fn player_movement_system(
 #[cfg(not(feature = "physics"))]
 pub fn player_movement_system(
     time: Res<Time>,
+    noclip: Res<NoclipState>,
     mut query: Query<(&PlayerConfig, &PlayerInput, &mut Transform), With<Player>>,
 ) {
+    if noclip.enabled {
+        return;
+    }
     for (config, input, mut transform) in query.iter_mut() {
         // Calculate movement direction relative to player facing direction
         let forward = transform.forward().as_vec3().xz().normalize_or_zero();
@@ -462,8 +494,15 @@ mod tests {
         let input = PlayerInput::default();
         assert_eq!(input.move_forward, 0.0);
         assert_eq!(input.move_right, 0.0);
+        assert_eq!(input.move_up, 0.0);
         assert!(!input.jump);
         assert!(!input.run);
+    }
+
+    #[test]
+    fn test_noclip_state_default() {
+        let state = NoclipState::default();
+        assert!(!state.enabled);
     }
 
     #[test]
@@ -481,14 +520,128 @@ mod tests {
     }
 }
 
+/// System to toggle noclip mode with the N key.
+///
+/// Noclip ON: removes `Collider` and `RigidBody`, enabling free flight through geometry.
+/// Noclip OFF: re-inserts physics components so the player falls with gravity.
+#[cfg(feature = "physics")]
+pub fn noclip_toggle_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut noclip: ResMut<NoclipState>,
+    mut commands: Commands,
+    player_query: Query<(Entity, &PlayerConfig), With<Player>>,
+    mut notifications: MessageWriter<crate::ui::notification::NotificationEvent>,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyN) {
+        return;
+    }
+
+    let Ok((entity, config)) = player_query.single() else {
+        return;
+    };
+
+    noclip.enabled = !noclip.enabled;
+
+    if noclip.enabled {
+        // Remove physics components — player now flies freely
+        commands
+            .entity(entity)
+            .remove::<Collider>()
+            .remove::<RigidBody>()
+            .remove::<TnuaController<PlayerScheme>>()
+            .remove::<TnuaAvian3dSensorShape>()
+            .remove::<LockedAxes>();
+        info!("Noclip ON");
+        notifications.write(crate::ui::notification::NotificationEvent {
+            text: "Noclip ON".into(),
+            style: crate::ui::notification::NotificationStyle::Toast,
+            position: crate::ui::notification::NotificationPosition::Top,
+            icon: crate::ui::notification::NotificationIcon::None,
+        });
+    } else {
+        // Re-insert physics components
+        commands.entity(entity).insert((
+            RigidBody::Dynamic,
+            Collider::capsule(
+                config.collision_radius,
+                config.collision_height - config.collision_radius * 2.0,
+            ),
+            LockedAxes::new().lock_rotation_x().lock_rotation_z(),
+            TnuaController::<PlayerScheme>::default(),
+            TnuaAvian3dSensorShape(Collider::cylinder(config.collision_radius * 0.95, 0.0)),
+        ));
+        info!("Noclip OFF");
+        notifications.write(crate::ui::notification::NotificationEvent {
+            text: "Noclip OFF".into(),
+            style: crate::ui::notification::NotificationStyle::Toast,
+            position: crate::ui::notification::NotificationPosition::Top,
+            icon: crate::ui::notification::NotificationIcon::None,
+        });
+    }
+}
+
+/// Noclip toggle stub (no-op without physics feature).
+#[cfg(not(feature = "physics"))]
+pub fn noclip_toggle_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut noclip: ResMut<NoclipState>,
+    mut notifications: MessageWriter<crate::ui::notification::NotificationEvent>,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyN) {
+        return;
+    }
+    noclip.enabled = !noclip.enabled;
+    let label = if noclip.enabled { "ON" } else { "OFF" };
+    info!("Noclip {label}");
+    notifications.write(crate::ui::notification::NotificationEvent {
+        text: format!("Noclip {label}"),
+        style: crate::ui::notification::NotificationStyle::Toast,
+        position: crate::ui::notification::NotificationPosition::Top,
+        icon: crate::ui::notification::NotificationIcon::None,
+    });
+}
+
+/// Noclip movement: direct Transform translation (6DOF, no gravity).
+///
+/// Only runs when `NoclipState.enabled` is true.
+pub fn noclip_movement_system(
+    time: Res<Time>,
+    noclip: Res<NoclipState>,
+    mut query: Query<(&PlayerConfig, &PlayerInput, &mut Transform), With<Player>>,
+) {
+    if !noclip.enabled {
+        return;
+    }
+
+    for (config, input, mut transform) in query.iter_mut() {
+        let speed = config.run_speed; // noclip always uses run speed
+
+        // Horizontal movement relative to player facing direction
+        let forward = transform.forward().as_vec3().xz().normalize_or_zero();
+        let right = transform.right().as_vec3().xz().normalize_or_zero();
+
+        let move_dir = forward * input.move_forward + right * input.move_right;
+        let move_dir = move_dir.normalize_or_zero();
+
+        let velocity =
+            Vec3::new(move_dir.x, input.move_up, move_dir.y) * speed * time.delta_secs();
+        transform.translation += velocity;
+    }
+}
+
 /// Plugin for player systems.
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<NoclipState>().add_systems(
             Update,
-            (player_input_system, player_movement_system)
+            (
+                noclip_toggle_system,
+                player_input_system,
+                noclip_movement_system,
+                player_movement_system,
+            )
                 .chain()
                 .run_if(crate::gen3d::avatar::in_player_mode),
         );

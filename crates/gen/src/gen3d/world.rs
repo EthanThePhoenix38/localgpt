@@ -26,7 +26,7 @@ use super::audio::AudioEngine;
 use super::behaviors::{BehaviorState, EntityBehaviors};
 use super::commands::*;
 use super::compat;
-use super::plugin::GenWorkspace;
+use super::plugin::{CurrentWorld, GenWorkspace};
 use super::registry::*;
 
 // ---------------------------------------------------------------------------
@@ -1112,6 +1112,137 @@ pub fn handle_fork_world(
     }
 
     Ok((dest_dir.to_string_lossy().into_owned(), warnings))
+}
+
+/// Bundle the current world into a distributable ZIP file.
+///
+/// Walks the world directory recursively and adds all files to a ZIP archive.
+/// The `export/` subdirectory is skipped to avoid recursive inclusion, except
+/// for `export/index.html` which is included when present (from gen_export_html).
+pub fn handle_package_world(
+    output_path: Option<&str>,
+    _workspace: &GenWorkspace,
+    current_world: &CurrentWorld,
+) -> Result<String, String> {
+    // 1. Get the current world path
+    let world_dir = current_world
+        .path
+        .clone()
+        .ok_or_else(|| "No world currently loaded. Save a world first with gen_save_world.".to_string())?;
+
+    if !world_dir.join("world.ron").exists() {
+        return Err(format!(
+            "World directory missing world.ron: {}",
+            world_dir.display()
+        ));
+    }
+
+    // 2. Determine world name for default output path
+    let world_name = current_world
+        .name
+        .as_deref()
+        .unwrap_or("world");
+
+    // 3. Determine output path
+    let zip_path = match output_path {
+        Some(p) => {
+            let expanded = shellexpand::tilde(p).into_owned();
+            PathBuf::from(expanded)
+        }
+        None => {
+            let export_dir = world_dir.join("export");
+            std::fs::create_dir_all(&export_dir).map_err(|e| {
+                format!("Failed to create export directory: {}", e)
+            })?;
+            export_dir.join(format!("{}.zip", world_name))
+        }
+    };
+
+    // Ensure parent directory exists for custom paths
+    if let Some(parent) = zip_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            format!("Failed to create output directory: {}", e)
+        })?;
+    }
+
+    // 4. Create the ZIP file
+    let file = std::fs::File::create(&zip_path).map_err(|e| {
+        format!("Failed to create zip file: {}", e)
+    })?;
+    let mut zip_writer = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    // 5. Walk the world directory recursively
+    add_dir_to_zip(&mut zip_writer, &world_dir, &world_dir, &options)?;
+
+    zip_writer.finish().map_err(|e| {
+        format!("Failed to finalize zip file: {}", e)
+    })?;
+
+    Ok(zip_path.to_string_lossy().into_owned())
+}
+
+/// Recursively add files from `dir` to the ZIP writer, using paths relative to `base`.
+/// Skips the `export/` subdirectory except for `export/index.html`.
+fn add_dir_to_zip(
+    zip_writer: &mut zip::ZipWriter<std::fs::File>,
+    dir: &Path,
+    base: &Path,
+    options: &zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| {
+        format!("Failed to read directory {}: {}", dir.display(), e)
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| {
+            format!("Failed to read directory entry: {}", e)
+        })?;
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(base)
+            .map_err(|e| format!("Path prefix error: {}", e))?;
+
+        // Check if this is inside the export/ subdirectory
+        let in_export = relative
+            .components()
+            .next()
+            .map(|c| c.as_os_str() == "export")
+            .unwrap_or(false);
+
+        if path.is_dir() {
+            if in_export {
+                // Only include export/index.html, skip recursing into export/
+                let index_html = path.join("index.html");
+                if index_html.exists() && relative.as_os_str() == "export" {
+                    let rel_str = "export/index.html";
+                    zip_writer
+                        .start_file(rel_str, *options)
+                        .map_err(|e| format!("Failed to add {} to zip: {}", rel_str, e))?;
+                    let data = std::fs::read(&index_html).map_err(|e| {
+                        format!("Failed to read {}: {}", index_html.display(), e)
+                    })?;
+                    std::io::Write::write_all(zip_writer, &data)
+                        .map_err(|e| format!("Failed to write {} to zip: {}", rel_str, e))?;
+                }
+                continue;
+            }
+            add_dir_to_zip(zip_writer, &path, base, options)?;
+        } else if !in_export {
+            let rel_str = relative.to_string_lossy();
+            zip_writer
+                .start_file(rel_str.as_ref(), *options)
+                .map_err(|e| format!("Failed to add {} to zip: {}", rel_str, e))?;
+            let data = std::fs::read(&path).map_err(|e| {
+                format!("Failed to read {}: {}", path.display(), e)
+            })?;
+            std::io::Write::write_all(zip_writer, &data)
+                .map_err(|e| format!("Failed to write {} to zip: {}", rel_str, e))?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Resolve a world skill path by looking for `world.ron`.
