@@ -35,12 +35,16 @@ pub mod avatar;
 pub mod behavior;
 pub mod creation;
 pub mod entity;
+pub mod genlog;
 pub mod history;
 pub mod identity;
+pub mod library;
 pub mod light;
 pub mod material;
+pub mod region;
 pub mod shape;
 pub mod spatial;
+pub mod sync;
 pub mod tour;
 pub mod validation;
 pub mod world;
@@ -61,3 +65,12 @@ pub use spatial::ChunkCoord;
 pub use tour::{TourDef, TourMode, TourWaypoint};
 pub use validation::{Severity, ValidationIssue, WorldLimits};
 pub use world::{CameraDef, EnvironmentDef, WorldManifest, WorldMeta};
+
+// Multi-file world types (v2)
+pub use genlog::GenLogEntry;
+pub use library::{AudioEmitterSpec, AudioSpec, BehaviorLibrary};
+pub use region::{RegionBounds, RegionEntities};
+pub use sync::{
+    ClaimExtractionError, DiffType, DomainDrift, DriftReport, StructuralClaim, StructuralDiff,
+    SyncDirection, SyncManifest, SyncRecord, SyncStatus,
+};

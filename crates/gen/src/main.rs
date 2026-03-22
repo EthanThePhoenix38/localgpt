@@ -1031,6 +1031,9 @@ async fn run_headless_agent(
     tools.extend(localgpt_gen::mcp::physics_tools::create_physics_tools(
         bridge.clone(),
     ));
+    tools.extend(localgpt_gen::mcp::multifile_tools::create_multifile_tools(
+        bridge.clone(),
+    ));
 
     // Configure agent
     let mut config = config;
@@ -1270,6 +1273,9 @@ async fn run_agent_loop(
     ));
     tools.extend(localgpt_gen::mcp::ui_tools::create_ui_tools(bridge.clone()));
     tools.extend(localgpt_gen::mcp::physics_tools::create_physics_tools(
+        bridge.clone(),
+    ));
+    tools.extend(localgpt_gen::mcp::multifile_tools::create_multifile_tools(
         bridge,
     ));
     tools.extend(localgpt_cli_tools::create_cli_tools(&config)?);

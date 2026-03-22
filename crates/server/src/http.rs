@@ -355,8 +355,8 @@ pub fn verify_webhook_signature(
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     mac.update(body);
     let result = mac.finalize();
 
@@ -1350,8 +1350,7 @@ async fn set_config(
             )
         })?;
 
-        let new_content =
-            apply_config_value(&content, &req.key, &req.value);
+        let new_content = apply_config_value(&content, &req.key, &req.value);
 
         std::fs::write(&config_path, new_content).map_err(|e| {
             (
@@ -1397,14 +1396,12 @@ fn apply_config_value(content: &str, key: &str, value: &str) -> String {
                 if key_part.trim() == field {
                     let indent = &line[..line.len() - trimmed.len()];
                     // Determine if value needs quoting
-                    let formatted = if value.parse::<f64>().is_ok()
-                        || value == "true"
-                        || value == "false"
-                    {
-                        format!("{}{} = {}", indent, field, value)
-                    } else {
-                        format!("{}{} = \"{}\"", indent, field, value)
-                    };
+                    let formatted =
+                        if value.parse::<f64>().is_ok() || value == "true" || value == "false" {
+                            format!("{}{} = {}", indent, field, value)
+                        } else {
+                            format!("{}{} = \"{}\"", indent, field, value)
+                        };
                     result.push_str(&formatted);
                     result.push('\n');
                     value_set = true;

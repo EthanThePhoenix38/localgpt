@@ -68,6 +68,11 @@ pub fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<B
         bridge.clone(),
     ));
 
+    // Multi-file worldgen + sync/drift tools
+    tools.extend(crate::mcp::multifile_tools::create_multifile_tools(
+        bridge.clone(),
+    ));
+
     // AI1 tools: AI asset generation
     tools.extend(crate::mcp::asset_gen_tools::create_asset_gen_tools(bridge));
 

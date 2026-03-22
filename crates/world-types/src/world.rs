@@ -12,7 +12,7 @@ use crate::entity::WorldEntity;
 use crate::tour::TourDef;
 
 /// Current schema version. Increment when making breaking changes.
-pub const WORLD_SCHEMA_VERSION: u32 = 1;
+pub const WORLD_SCHEMA_VERSION: u32 = 2;
 
 /// Minimum supported version for loading. Update when dropping old format support.
 pub const MIN_SUPPORTED_VERSION: u32 = 1;
@@ -67,6 +67,23 @@ pub struct WorldManifest {
     /// Guided tours.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tours: Vec<TourDef>,
+    // ---- Multi-file references (v2) ----
+    /// Path to a separate layout file (blockout regions, spatial graph).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout_file: Option<String>,
+    /// Paths to per-region entity files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region_files: Option<Vec<String>>,
+    /// Paths to behavior library files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behavior_files: Option<Vec<String>>,
+    /// Paths to audio spec files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_files: Option<Vec<String>>,
+    /// Path to an avatar definition file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_file: Option<String>,
+
     /// Entities (inline for small worlds).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entities: Vec<WorldEntity>,
@@ -199,6 +216,11 @@ impl WorldManifest {
             environment: None,
             camera: None,
             avatar: None,
+            layout_file: None,
+            region_files: None,
+            behavior_files: None,
+            audio_files: None,
+            avatar_file: None,
             tours: Vec::new(),
             entities: Vec::new(),
             creations: Vec::new(),
@@ -255,7 +277,7 @@ mod tests {
     fn manifest_new() {
         let m = WorldManifest::new("test_world");
         assert_eq!(m.meta.name, "test_world");
-        assert_eq!(m.version, 1);
+        assert_eq!(m.version, WORLD_SCHEMA_VERSION);
         assert_eq!(m.next_entity_id, 1);
         assert!(m.entities.is_empty());
     }

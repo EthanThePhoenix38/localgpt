@@ -28,6 +28,12 @@ pub struct ParametricShape {
     pub shape: wt::Shape,
 }
 
+/// Associates an entity with a named region for dirty tracking and bulk operations.
+#[derive(Component, Debug, Clone)]
+pub struct RegionMember {
+    pub region_id: String,
+}
+
 /// Bevy component tracking the source file of an imported glTF/GLB.
 ///
 /// Attached to the root entity spawned by `LoadGltf` so that

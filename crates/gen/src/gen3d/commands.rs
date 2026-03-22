@@ -274,6 +274,52 @@ pub enum GenCommand {
         initial_memories: Vec<String>,
         auto_memorize: bool,
     },
+
+    // Tier 25: Multi-file WorldGen
+    WriteWorldPlan {
+        name: String,
+        description: Option<String>,
+        generation_strategy: String,
+        regions: Vec<serde_json::Value>,
+        constraints: Option<serde_json::Value>,
+        environment: Option<serde_json::Value>,
+        camera: Option<serde_json::Value>,
+    },
+    WriteRegion {
+        region_id: String,
+        md_content: String,
+        ron_content: String,
+        flush: bool,
+    },
+    LoadRegion {
+        path: String,
+    },
+    UnloadRegion {
+        region_id: String,
+    },
+    PersistBlockout,
+    WriteBehaviors {
+        name: String,
+        md_content: String,
+        ron_content: String,
+    },
+    WriteAudio {
+        name: String,
+        md_content: String,
+        ron_content: String,
+    },
+
+    // Tier 26: Sync & Drift Detection
+    CheckDrift {
+        domain: Option<String>,
+        detail_level: String,
+    },
+    Sync {
+        domain: String,
+        source: String,
+        preview: bool,
+        resolve_conflicts: Option<HashMap<String, String>>,
+    },
 }
 
 /// Actions for editing the navmesh.
@@ -1098,6 +1144,51 @@ pub enum GenResponse {
         entity: String,
         capacity: usize,
         initial_count: usize,
+    },
+
+    // Multi-file WorldGen responses
+    WorldPlanWritten {
+        skill_md_path: String,
+        world_md_path: String,
+        world_ron_path: String,
+    },
+    RegionWritten {
+        region_id: String,
+        md_path: String,
+        ron_path: String,
+    },
+    RegionLoaded {
+        region_id: String,
+        entity_count: u32,
+    },
+    RegionUnloaded {
+        region_id: String,
+        entities_removed: u32,
+    },
+    BlockoutPersisted {
+        md_path: String,
+        ron_path: String,
+    },
+    BehaviorsWritten {
+        name: String,
+        md_path: String,
+        ron_path: String,
+    },
+    AudioWritten {
+        name: String,
+        md_path: String,
+        ron_path: String,
+    },
+
+    // Sync & Drift responses
+    DriftReport(localgpt_world_types::DriftReport),
+    SyncPreview {
+        domain: String,
+        changes: String,
+    },
+    SyncApplied {
+        domain: String,
+        files_updated: Vec<String>,
     },
 
     Error {

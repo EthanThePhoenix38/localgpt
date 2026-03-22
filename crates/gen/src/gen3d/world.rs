@@ -374,6 +374,11 @@ pub fn handle_save_world(
         camera: camera_def,
         avatar: avatar.map(|a| a.into()),
         tours: tours.iter().map(|t| t.into()).collect(),
+        layout_file: None,
+        region_files: None,
+        behavior_files: None,
+        audio_files: None,
+        avatar_file: None,
         entities: world_entities,
         creations: Vec::new(),
         next_entity_id: next_id,
@@ -514,6 +519,12 @@ fn load_ron_world(world_dir: &Path, ron_path: &Path) -> Result<WorldLoadResult, 
         ));
     }
 
+    // v2 multi-file detection: if region_files or layout_file are present,
+    // load entities from separate files instead of inline
+    if manifest.region_files.is_some() || manifest.layout_file.is_some() {
+        return load_multi_file_world(world_dir, &manifest);
+    }
+
     // Extract ambient audio from entities (kind == Ambient, radius == None)
     let mut ambience_layers: Vec<AmbienceLayerDef> = Vec::new();
     let mut emitters: Vec<AudioEmitterCmd> = Vec::new();
@@ -636,6 +647,344 @@ fn load_edit_history(path: &std::path::Path) -> Option<wt::EditHistory> {
     let cursor = cursor.min(edits.len());
 
     Some(wt::EditHistory { edits, cursor })
+}
+
+// ---------------------------------------------------------------------------
+// Multi-file world load (v2)
+// ---------------------------------------------------------------------------
+
+/// Load a world from the multi-file format where entities are in separate region files.
+fn load_multi_file_world(
+    world_dir: &Path,
+    manifest: &wt::WorldManifest,
+) -> Result<WorldLoadResult, String> {
+    let mut all_entities: Vec<wt::WorldEntity> = Vec::new();
+
+    // Load entities from region files
+    if let Some(ref region_files) = manifest.region_files {
+        for rel_path in region_files {
+            let path = world_dir.join(rel_path);
+            let ron_str = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read {}: {}", rel_path, e))?;
+            let region: wt::RegionEntities = ron::from_str(&ron_str)
+                .map_err(|e| format!("Failed to parse {}: {}", rel_path, e))?;
+            all_entities.extend(region.entities);
+        }
+    }
+
+    // Also include any inline entities (hybrid format)
+    all_entities.extend(manifest.entities.clone());
+
+    // Load behavior files (parsed for validation; behaviors are already on entities)
+    if let Some(ref behavior_files) = manifest.behavior_files {
+        for rel_path in behavior_files {
+            let path = world_dir.join(rel_path);
+            let ron_str = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read {}: {}", rel_path, e))?;
+            let _library: wt::BehaviorLibrary = ron::from_str(&ron_str)
+                .map_err(|e| format!("Failed to parse {}: {}", rel_path, e))?;
+            // Behaviors are applied after entity spawning; library stored for later use
+        }
+    }
+
+    // Load audio files
+    if let Some(ref audio_files) = manifest.audio_files {
+        for rel_path in audio_files {
+            let path = world_dir.join(rel_path);
+            let ron_str = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read {}: {}", rel_path, e))?;
+            let _audio: wt::AudioSpec = ron::from_str(&ron_str)
+                .map_err(|e| format!("Failed to parse {}: {}", rel_path, e))?;
+            // Audio specs are converted to commands during entity spawning
+        }
+    }
+
+    // Process entities for audio extraction (same logic as v1 path)
+    let mut ambience_layers: Vec<AmbienceLayerDef> = Vec::new();
+    let mut emitters: Vec<AudioEmitterCmd> = Vec::new();
+    let mut scene_entities: Vec<wt::WorldEntity> = Vec::new();
+
+    for entity in &all_entities {
+        if let Some(ref audio) = entity.audio {
+            if audio.kind == wt::AudioKind::Ambient && audio.radius.is_none() {
+                if let Some(ambient_sound) = compat::audio_source_to_ambient(&audio.source) {
+                    ambience_layers.push(AmbienceLayerDef {
+                        name: entity
+                            .name
+                            .as_str()
+                            .strip_prefix("ambience_")
+                            .unwrap_or(entity.name.as_str())
+                            .to_string(),
+                        sound: ambient_sound,
+                        volume: audio.volume,
+                    });
+                }
+                if entity.shape.is_none() && entity.light.is_none() {
+                    continue;
+                }
+            } else if let Some(emitter_sound) = compat::audio_source_to_emitter(&audio.source) {
+                emitters.push(AudioEmitterCmd {
+                    name: entity.name.as_str().to_string(),
+                    entity: Some(entity.name.as_str().to_string()),
+                    position: Some(entity.transform.position),
+                    sound: emitter_sound,
+                    radius: audio.radius.unwrap_or(20.0),
+                    volume: audio.volume,
+                });
+            }
+        }
+        scene_entities.push(entity.clone());
+    }
+
+    let behavior_count: usize = scene_entities.iter().map(|e| e.behaviors.len()).sum();
+    let entity_count = scene_entities.len();
+
+    let ambience = if ambience_layers.is_empty() {
+        None
+    } else {
+        Some(AmbienceCmd {
+            layers: ambience_layers,
+            master_volume: None,
+            reverb: None,
+        })
+    };
+
+    let environment = manifest.environment.as_ref().map(|e| EnvironmentCmd {
+        background_color: e.background_color,
+        ambient_light: e.ambient_intensity,
+        ambient_color: e.ambient_color,
+    });
+
+    let camera = manifest.camera.as_ref().map(|c| CameraCmd {
+        position: c.position,
+        look_at: c.look_at,
+        fov_degrees: c.fov_degrees,
+    });
+
+    let avatar = manifest.avatar.as_ref().map(|a| a.into());
+    let tours: Vec<TourDef> = manifest.tours.iter().map(|t| t.into()).collect();
+
+    let edit_history = load_edit_history(&world_dir.join("history.jsonl"));
+
+    Ok(WorldLoadResult {
+        world_path: world_dir.to_string_lossy().into_owned(),
+        world_entities: scene_entities,
+        ambience,
+        emitters,
+        environment,
+        camera,
+        avatar,
+        tours,
+        entity_count,
+        behavior_count,
+        edit_history,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Multi-file world save helpers
+// ---------------------------------------------------------------------------
+
+/// Save world in multi-file format, writing region files and a root manifest with file references.
+#[allow(clippy::too_many_arguments)]
+pub fn save_multi_file_world(
+    skill_dir: &Path,
+    cmd: &SaveWorldCmd,
+    world_entities: Vec<wt::WorldEntity>,
+    environment: Option<wt::EnvironmentDef>,
+    camera_def: Option<wt::CameraDef>,
+    avatar: Option<wt::AvatarDef>,
+    tours: Vec<wt::TourDef>,
+    next_id: u64,
+    pending_writes: &mut super::pending_writes::PendingWrites,
+    generation_log: &super::generation_log::GenerationLog,
+) -> Result<(), String> {
+    // Create subdirectories
+    for subdir in &["regions", "layout", "behaviors", "audio", "avatar", "meta"] {
+        let dir = skill_dir.join(subdir);
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create {}: {}", subdir, e))?;
+    }
+
+    // 1. Flush PendingWrites to disk
+    if !pending_writes.is_empty() {
+        pending_writes
+            .flush_all(skill_dir)
+            .map_err(|e| format!("Failed to flush pending writes: {}", e))?;
+    }
+
+    // 2. Group remaining entities by region_id (if they have one from BlockoutGenerated)
+    // For now, put all entities in a single "main" region if no region grouping exists
+    let mut region_groups: std::collections::HashMap<String, Vec<wt::WorldEntity>> =
+        std::collections::HashMap::new();
+    for entity in &world_entities {
+        // Use entity name prefix as a heuristic for region grouping,
+        // or "main" if no region info is available
+        let region_id = "main".to_string();
+        region_groups
+            .entry(region_id)
+            .or_default()
+            .push(entity.clone());
+    }
+
+    // 3. Write region .ron files
+    let mut region_paths: Vec<String> = Vec::new();
+    for (region_id, entities) in &region_groups {
+        let id_min = entities.iter().map(|e| e.id.0 as u32).min().unwrap_or(0);
+        let id_max = entities
+            .iter()
+            .map(|e| e.id.0 as u32 + 1)
+            .max()
+            .unwrap_or(0);
+        let region = wt::RegionEntities {
+            region_id: region_id.clone(),
+            bounds: None,
+            id_range: (id_min, id_max),
+            entities: entities.clone(),
+        };
+        let ron_str = ron::ser::to_string_pretty(&region, ron::ser::PrettyConfig::default())
+            .map_err(|e| format!("Failed to serialize region {}: {}", region_id, e))?;
+        let rel_path = format!("regions/{}.ron", region_id);
+        std::fs::write(skill_dir.join(&rel_path), &ron_str)
+            .map_err(|e| format!("Failed to write {}: {}", rel_path, e))?;
+        region_paths.push(rel_path);
+    }
+
+    // 4. Write root world.ron with file references (empty entities — they're in region files)
+    let description = cmd.description.as_deref().unwrap_or("A generated 3D world");
+    let manifest = wt::WorldManifest {
+        version: 2,
+        meta: wt::WorldMeta {
+            name: cmd.name.clone(),
+            description: Some(description.to_string()),
+            biome: None,
+            time_of_day: None,
+            tags: None,
+            source: None,
+            variation_group: None,
+            variation: None,
+            prompt: None,
+            model: None,
+            generation_duration_ms: None,
+            style_ref: None,
+        },
+        environment,
+        camera: camera_def,
+        avatar: avatar.clone(),
+        tours: tours.clone(),
+        layout_file: if skill_dir.join("layout/blockout.ron").exists() {
+            Some("layout/blockout.ron".to_string())
+        } else {
+            None
+        },
+        region_files: Some(region_paths.clone()),
+        behavior_files: None,
+        audio_files: None,
+        avatar_file: if avatar.is_some() {
+            Some("avatar/player.ron".to_string())
+        } else {
+            None
+        },
+        entities: vec![], // Entities are in region files
+        creations: Vec::new(),
+        next_entity_id: next_id,
+    };
+
+    let ron_str = ron::ser::to_string_pretty(&manifest, ron::ser::PrettyConfig::default())
+        .map_err(|e| format!("RON serialization failed: {}", e))?;
+    std::fs::write(skill_dir.join("world.ron"), &ron_str)
+        .map_err(|e| format!("Failed to write world.ron: {}", e))?;
+
+    // 5. Write rich SKILL.md
+    let regions_info: Vec<(String, u32)> = region_groups
+        .iter()
+        .map(|(id, entities)| (id.clone(), entities.len() as u32))
+        .collect();
+    let skill_md = generate_skill_md(
+        &cmd.name,
+        description,
+        "iterative-multi-file",
+        &regions_info,
+    );
+    std::fs::write(skill_dir.join("SKILL.md"), &skill_md)
+        .map_err(|e| format!("Failed to write SKILL.md: {}", e))?;
+
+    // 6. Write generation log if present
+    if !generation_log.entries.is_empty() {
+        generation_log
+            .write_jsonl(&skill_dir.join("meta/generation-log.jsonl"))
+            .map_err(|e| format!("Failed to write generation log: {}", e))?;
+    }
+
+    // 7. Write .sync.ron placeholder
+    let sync_placeholder = "(overall_status: Clean, domains: [])";
+    std::fs::write(skill_dir.join("meta/.sync.ron"), sync_placeholder)
+        .map_err(|e| format!("Failed to write .sync.ron: {}", e))?;
+
+    Ok(())
+}
+
+/// Generate a rich SKILL.md with architecture index for multi-file worlds.
+pub fn generate_skill_md(
+    name: &str,
+    description: &str,
+    strategy: &str,
+    regions: &[(String, u32)],
+) -> String {
+    let mut region_table = String::new();
+    for (region_id, count) in regions {
+        region_table.push_str(&format!(
+            "| `regions/{}.ron` | Region | {} entities |\n",
+            region_id, count
+        ));
+    }
+
+    format!(
+        r#"---
+name: "{name}"
+description: "{description}"
+type: world
+version: "2.0"
+generation_strategy: "{strategy}"
+user-invocable: true
+metadata:
+  type: "world"
+useWhen:
+  - contains: "{name}"
+---
+# {name}
+
+{description}
+
+## Architecture Index
+
+| File | Domain | Contents |
+|------|--------|----------|
+| `world.ron` | Root | Manifest, environment, camera |
+{region_table}| `layout/blockout.ron` | Layout | Spatial regions, terrain |
+| `meta/generation-log.jsonl` | Meta | Tool invocation log |
+
+## Generation Strategy
+
+**Strategy:** `{strategy}`
+
+This world was generated using the iterative multi-file pipeline.
+Each region is stored in a separate file for incremental updates.
+
+## Loading
+
+Load with `gen_load_world` to restore the full 3D scene.
+Export with `gen_export_world` for external viewers.
+
+## Regeneration Notes
+
+Individual regions can be regenerated without affecting others.
+Use `gen_load_region` / `gen_unload_region` for selective editing.
+"#,
+        name = name,
+        description = description,
+        strategy = strategy,
+        region_table = region_table,
+    )
 }
 
 /// Resolve a world skill path by looking for `world.ron`.

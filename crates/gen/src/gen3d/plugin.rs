@@ -240,6 +240,9 @@ pub fn setup_gen_app(
         .init_resource::<avatar::PovState>()
         .init_resource::<avatar::AvatarMovementConfig>()
         .init_resource::<crate::gen3d::asset_gen::AssetGenManager>()
+        .init_resource::<super::pending_writes::PendingWrites>()
+        .init_resource::<super::generation_log::GenerationLog>()
+        .init_resource::<super::region_dirty::RegionDirtyFlags>()
         .add_systems(
             Startup,
             (
@@ -255,6 +258,7 @@ pub fn setup_gen_app(
         .add_systems(Update, audio::spatial_audio_update)
         .add_systems(Update, audio::auto_infer_audio)
         .add_systems(Update, behaviors::behavior_tick)
+        .add_systems(Update, super::region_dirty::track_region_dirty)
         // Avatar systems (run when camera is attached to avatar and not hovering inspector)
         .add_systems(
             Update,
@@ -489,6 +493,10 @@ struct GenCommandParams<'w, 's> {
     navmesh_resource: Option<Res<'w, crate::worldgen::NavMeshResource>>,
     navmesh_overrides: ResMut<'w, crate::worldgen::NavMeshOverrides>,
     asset_gen_manager: ResMut<'w, crate::gen3d::asset_gen::AssetGenManager>,
+    pending_writes: ResMut<'w, super::pending_writes::PendingWrites>,
+    generation_log: ResMut<'w, super::generation_log::GenerationLog>,
+    region_dirty_flags: ResMut<'w, super::region_dirty::RegionDirtyFlags>,
+    region_member_q: Query<'w, 's, (Entity, &'static super::registry::RegionMember)>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -3885,6 +3893,319 @@ fn process_gen_commands(
                     entity,
                     capacity,
                     initial_count,
+                }
+            }
+
+            // Multi-file WorldGen handlers
+            GenCommand::WriteWorldPlan {
+                name,
+                description,
+                generation_strategy,
+                regions,
+                constraints: _,
+                environment: _,
+                camera: _,
+            } => {
+                // Build region info for SKILL.md
+                let regions_info: Vec<(String, u32)> = regions
+                    .iter()
+                    .filter_map(|r| {
+                        let id = r.get("id").and_then(|v| v.as_str())?.to_string();
+                        let count =
+                            r.get("entity_count").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                        Some((id, count))
+                    })
+                    .collect();
+
+                let desc = description.as_deref().unwrap_or("A generated 3D world");
+                let skill_md = super::world::generate_skill_md(
+                    &name,
+                    desc,
+                    &generation_strategy,
+                    &regions_info,
+                );
+
+                // Create world.md with environment, camera, region layout
+                let world_md = format!(
+                    "# {}\n\n{}\n\n## Generation Strategy\n\n{}\n\n## Regions\n\n{}\n",
+                    name,
+                    desc,
+                    generation_strategy,
+                    regions
+                        .iter()
+                        .filter_map(|r| serde_json::to_string_pretty(r).ok())
+                        .collect::<Vec<_>>()
+                        .join("\n\n"),
+                );
+
+                // Create root world.ron placeholder (will be finalized on save)
+                let mut manifest = wt::WorldManifest::new(&name);
+                manifest.version = 2;
+                manifest.meta.description = description.clone();
+                let world_ron =
+                    ron::ser::to_string_pretty(&manifest, ron::ser::PrettyConfig::default())
+                        .unwrap_or_default();
+
+                // Store all three in PendingWrites
+                params
+                    .pending_writes
+                    .insert("SKILL", skill_md, String::new());
+                params.pending_writes.insert("world", world_md, world_ron);
+
+                GenResponse::WorldPlanWritten {
+                    skill_md_path: format!("{name}/SKILL.md"),
+                    world_md_path: format!("{name}/world.md"),
+                    world_ron_path: format!("{name}/world.ron"),
+                }
+            }
+            GenCommand::WriteRegion {
+                region_id,
+                md_content,
+                ron_content,
+                flush,
+            } => {
+                let domain = format!("regions/{region_id}");
+                params
+                    .pending_writes
+                    .insert(&domain, md_content, ron_content);
+
+                let flush_err = if flush {
+                    let skill_dir =
+                        params.current_world.path.clone().unwrap_or_else(|| {
+                            params.workspace.path.join("skills").join("current")
+                        });
+                    std::fs::create_dir_all(skill_dir.join("regions"))
+                        .and_then(|_| params.pending_writes.flush(&domain, &skill_dir))
+                        .err()
+                } else {
+                    None
+                };
+
+                if let Some(e) = flush_err {
+                    GenResponse::Error {
+                        message: format!("Failed to flush region {}: {}", region_id, e),
+                    }
+                } else {
+                    GenResponse::RegionWritten {
+                        region_id: region_id.clone(),
+                        md_path: format!("regions/{region_id}.md"),
+                        ron_path: format!("regions/{region_id}.ron"),
+                    }
+                }
+            }
+            GenCommand::LoadRegion { path } => {
+                // Try to read region .ron from PendingWrites first, then from disk
+                let domain = format!("regions/{path}");
+                let ron_content = if let Some((_, ron)) = params.pending_writes.remove(&domain) {
+                    Ok(ron)
+                } else {
+                    let world_dir =
+                        params.current_world.path.clone().unwrap_or_else(|| {
+                            params.workspace.path.join("skills").join("current")
+                        });
+                    std::fs::read_to_string(world_dir.join(format!("regions/{}.ron", path)))
+                        .map_err(|e| format!("Failed to read region {}: {}", path, e))
+                };
+
+                match ron_content.and_then(|s| {
+                    ron::from_str::<wt::RegionEntities>(&s)
+                        .map_err(|e| format!("Failed to parse region {}: {}", path, e))
+                }) {
+                    Err(msg) => GenResponse::Error { message: msg },
+                    Ok(region) => {
+                        let region_id = region.region_id.clone();
+                        let world_dir = params.current_world.path.clone();
+
+                        spawn_world_entities(
+                            &region.entities,
+                            &mut commands,
+                            &mut params.meshes,
+                            &mut params.materials,
+                            &mut params.registry,
+                            &mut params.next_entity_id,
+                            &mut params.behavior_state,
+                            &params.asset_server,
+                            &mut params.pending_gltf,
+                            world_dir.as_deref(),
+                        );
+
+                        let entity_count = region.entities.len() as u32;
+                        for we in &region.entities {
+                            if let Some(bevy_entity) = params.registry.get_entity(we.name.as_str())
+                            {
+                                commands.entity(bevy_entity).insert(RegionMember {
+                                    region_id: region_id.clone(),
+                                });
+                            }
+                        }
+
+                        GenResponse::RegionLoaded {
+                            region_id,
+                            entity_count,
+                        }
+                    }
+                }
+            }
+            GenCommand::UnloadRegion { region_id } => {
+                // Find all entities with matching RegionMember and despawn them
+                let mut to_remove: Vec<(Entity, String)> = Vec::new();
+                for (entity, member) in params.region_member_q.iter() {
+                    if member.region_id == region_id {
+                        if let Some(name) = params.registry.get_name(entity) {
+                            to_remove.push((entity, name.to_string()));
+                        } else {
+                            to_remove.push((entity, String::new()));
+                        }
+                    }
+                }
+
+                let count = to_remove.len() as u32;
+                for (entity, name) in &to_remove {
+                    if !name.is_empty() {
+                        params.registry.remove_by_name(name);
+                    }
+                    commands.entity(*entity).despawn();
+                }
+
+                GenResponse::RegionUnloaded {
+                    region_id,
+                    entities_removed: count,
+                }
+            }
+            GenCommand::PersistBlockout => {
+                match &params.current_blockout {
+                    Some(blockout) => {
+                        let ron_content = ron::ser::to_string_pretty(
+                            &blockout.spec,
+                            ron::ser::PrettyConfig::default(),
+                        )
+                        .unwrap_or_default();
+
+                        // Generate blockout.md with design intent
+                        let md_content = format!(
+                            "# Blockout Layout\n\n## Terrain\n\nType: {:?}\n\n## Regions\n\n{}\n\n## Paths\n\n{} connections\n",
+                            blockout.spec.terrain.terrain_type,
+                            blockout
+                                .spec
+                                .regions
+                                .iter()
+                                .map(|r| format!("- **{}**: {:?}", r.id, r.region_type))
+                                .collect::<Vec<_>>()
+                                .join("\n"),
+                            blockout.spec.paths.len(),
+                        );
+
+                        params
+                            .pending_writes
+                            .insert("layout/blockout", md_content, ron_content);
+
+                        GenResponse::BlockoutPersisted {
+                            md_path: "layout/blockout.md".to_string(),
+                            ron_path: "layout/blockout.ron".to_string(),
+                        }
+                    }
+                    None => GenResponse::Error {
+                        message: "No blockout to persist — run gen_plan_layout first".to_string(),
+                    },
+                }
+            }
+            GenCommand::WriteBehaviors {
+                name,
+                md_content,
+                ron_content,
+            } => {
+                let domain = format!("behaviors/{name}");
+                params
+                    .pending_writes
+                    .insert(&domain, md_content, ron_content);
+
+                GenResponse::BehaviorsWritten {
+                    name: name.clone(),
+                    md_path: format!("behaviors/{name}.md"),
+                    ron_path: format!("behaviors/{name}.ron"),
+                }
+            }
+            GenCommand::WriteAudio {
+                name,
+                md_content,
+                ron_content,
+            } => {
+                let domain = format!("audio/{name}");
+                params
+                    .pending_writes
+                    .insert(&domain, md_content, ron_content);
+
+                GenResponse::AudioWritten {
+                    name: name.clone(),
+                    md_path: format!("audio/{name}.md"),
+                    ron_path: format!("audio/{name}.ron"),
+                }
+            }
+            GenCommand::CheckDrift {
+                domain,
+                detail_level,
+            } => {
+                let world_dir = params
+                    .current_world
+                    .path
+                    .clone()
+                    .unwrap_or_else(|| params.workspace.path.join("skills").join("default"));
+                match super::sync::check_drift(&world_dir) {
+                    Ok(mut report) => {
+                        if let Some(ref d) = domain {
+                            report.domains.retain(|dd| dd.domain == *d);
+                        }
+                        params.generation_log.log(
+                            "gen_check_drift",
+                            &serde_json::json!({"domain": domain, "detail_level": detail_level}),
+                            None,
+                        );
+                        for dd in &report.domains {
+                            params.region_dirty_flags.clear(&dd.domain);
+                        }
+                        GenResponse::DriftReport(report)
+                    }
+                    Err(e) => GenResponse::Error { message: e },
+                }
+            }
+            GenCommand::Sync {
+                domain,
+                source,
+                preview,
+                resolve_conflicts,
+            } => {
+                let world_dir = params
+                    .current_world
+                    .path
+                    .clone()
+                    .unwrap_or_else(|| params.workspace.path.join("skills").join("default"));
+                match super::sync::apply_sync(
+                    &world_dir,
+                    &domain,
+                    &source,
+                    preview,
+                    &resolve_conflicts,
+                ) {
+                    Ok(super::sync::SyncResult::Preview(changes)) => {
+                        params.generation_log.log(
+                            "gen_sync",
+                            &serde_json::json!({"domain": domain, "source": source, "preview": true}),
+                            None,
+                        );
+                        GenResponse::SyncPreview { domain, changes }
+                    }
+                    Ok(super::sync::SyncResult::Applied { files_updated }) => {
+                        params.generation_log.log(
+                            "gen_sync",
+                            &serde_json::json!({"domain": domain, "source": source, "preview": false}),
+                            None,
+                        );
+                        GenResponse::SyncApplied {
+                            domain,
+                            files_updated,
+                        }
+                    }
+                    Err(e) => GenResponse::Error { message: e },
                 }
             }
         };

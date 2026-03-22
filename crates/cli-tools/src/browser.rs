@@ -73,7 +73,10 @@ impl BrowserTool {
                 let ws_url = wait_for_chrome(self.port).await?;
                 debug!("Chrome ready at {}", ws_url);
 
-                *state = BrowserState::Running { _process: process, ws_url: ws_url.clone() };
+                *state = BrowserState::Running {
+                    _process: process,
+                    ws_url: ws_url.clone(),
+                };
                 Ok(ws_url)
             }
         }
@@ -228,7 +231,10 @@ impl Tool for BrowserTool {
                     .ok_or_else(|| anyhow::anyhow!("click requires 'selector'"))?;
                 self.do_click(selector).await
             }
-            other => bail!("Unknown browser action: '{}'. Use: navigate, screenshot, text, click", other),
+            other => bail!(
+                "Unknown browser action: '{}'. Use: navigate, screenshot, text, click",
+                other
+            ),
         }
     }
 }
@@ -250,12 +256,9 @@ struct CdpConnection {
 
 impl CdpConnection {
     async fn connect(ws_url: &str) -> Result<Self> {
-        let (ws, _) = tokio::time::timeout(
-            CDP_TIMEOUT,
-            tokio_tungstenite::connect_async(ws_url),
-        )
-        .await
-        .map_err(|_| anyhow::anyhow!("CDP WebSocket connection timed out"))??;
+        let (ws, _) = tokio::time::timeout(CDP_TIMEOUT, tokio_tungstenite::connect_async(ws_url))
+            .await
+            .map_err(|_| anyhow::anyhow!("CDP WebSocket connection timed out"))??;
 
         Ok(Self { ws, next_id: 1 })
     }
@@ -392,19 +395,20 @@ mod tests {
     #[tokio::test]
     async fn test_browser_unknown_action() {
         let tool = BrowserTool::new(19222);
-        let result = tool
-            .execute(r#"{"action": "fly"}"#)
-            .await;
+        let result = tool.execute(r#"{"action": "fly"}"#).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown browser action"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown browser action")
+        );
     }
 
     #[tokio::test]
     async fn test_browser_navigate_missing_url() {
         let tool = BrowserTool::new(19222);
-        let result = tool
-            .execute(r#"{"action": "navigate"}"#)
-            .await;
+        let result = tool.execute(r#"{"action": "navigate"}"#).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("requires 'url'"));
     }
@@ -412,10 +416,13 @@ mod tests {
     #[tokio::test]
     async fn test_browser_click_missing_selector() {
         let tool = BrowserTool::new(19222);
-        let result = tool
-            .execute(r#"{"action": "click"}"#)
-            .await;
+        let result = tool.execute(r#"{"action": "click"}"#).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("requires 'selector'"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("requires 'selector'")
+        );
     }
 }

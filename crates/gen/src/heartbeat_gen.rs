@@ -83,6 +83,9 @@ fn boot_headless_and_create_tools(config: &Config) -> anyhow::Result<Vec<Box<dyn
     tools.extend(crate::mcp::physics_tools::create_physics_tools(
         bridge.clone(),
     ));
+    tools.extend(crate::mcp::multifile_tools::create_multifile_tools(
+        bridge.clone(),
+    ));
 
     Ok(tools)
 }

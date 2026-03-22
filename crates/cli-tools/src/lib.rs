@@ -132,7 +132,9 @@ pub fn create_cli_tools(config: &Config) -> Result<Vec<Box<dyn Tool>>> {
 
     // Conditionally add browser tool
     if config.tools.browser_enabled {
-        tools.push(Box::new(browser::BrowserTool::new(config.tools.browser_port)));
+        tools.push(Box::new(browser::BrowserTool::new(
+            config.tools.browser_port,
+        )));
     }
 
     Ok(tools)

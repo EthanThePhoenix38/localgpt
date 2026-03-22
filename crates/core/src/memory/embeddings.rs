@@ -632,7 +632,9 @@ struct GeminiContent {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum GeminiPart {
-    Text { text: String },
+    Text {
+        text: String,
+    },
     #[serde(rename_all = "camelCase")]
     InlineData {
         inline_data: GeminiInlineData,
@@ -830,8 +832,14 @@ mod tests {
         // Verify structure
         assert_eq!(json["taskType"], "RETRIEVAL_DOCUMENT");
         assert_eq!(json["content"]["parts"][0]["text"], "a photo of a cat");
-        assert_eq!(json["content"]["parts"][1]["inlineData"]["mimeType"], "image/jpeg");
-        assert_eq!(json["content"]["parts"][1]["inlineData"]["data"], "base64data");
+        assert_eq!(
+            json["content"]["parts"][1]["inlineData"]["mimeType"],
+            "image/jpeg"
+        );
+        assert_eq!(
+            json["content"]["parts"][1]["inlineData"]["data"],
+            "base64data"
+        );
     }
 
     #[test]
