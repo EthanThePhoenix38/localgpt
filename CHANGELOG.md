@@ -4,6 +4,94 @@ All notable changes to LocalGPT are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-03-22
+
+### Added
+
+- **WorldGen pipeline (WG1–WG7)** — procedural world-building: blockout layout planning (`gen_plan_layout`, `gen_apply_blockout`), navmesh with A* pathfinding, hierarchical entity placement (hero/medium/decorative), screenshot evaluation loop, blockout editing with incremental regeneration, scene decomposition with semantic roles, depth map rendering, and styled 2D preview generation.
+- **Gen gameplay runtime (P1–P5)** — NPC dialogue UI panel, teleport fade and collectible pickup effects, physics constraints, interaction triggers, and terrain runtime systems.
+- **Gen AI infrastructure** — AI1 local 3D asset generation scaffolding, AI2 AI NPC intelligence with dialogue and behaviors.
+- **Gen world inspector** — egui overlay panel with 3D viewport picking, WebSocket protocol for remote inspection, scene detection, transform streaming, entity focus. Native clients: SwiftUI (iOS/macOS), Compose (Android), GLB scene snapshot export.
+- **Gen headless mode** — headless generation pipeline with experiment queue for CI/batch workflows. CLI relay routes MCP tool calls to an existing Bevy window.
+- **Gen world forking** — `gen_fork_world` tool for world remix with attribution tracking.
+- **Gen noclip mode** — N key toggles noclip, V key toggles first/third-person POV.
+- **Gen physics** — avian3d 0.6 / bevy-tnua 0.30 physics integration with new physics tools.
+- **Gen gameplay triggers** — PlaySoundAction in triggers, key collection in collectibles.
+- **Gen multi-file worlds** — multi-file world generation with drift detection.
+- **Gen mesh segmentation** — optional mesh segmentation on glTF loading (WG6.3).
+- **Plugin system** — plugin CLI with `localgpt plugin enable/disable/list`, daemon-level plugin filtering.
+- **Pluggable memory backends** — `sqlite`, `markdown`, and `none` backends selectable via config.
+- **Post-compaction audit logging** — Merkle hash chain for tamper-evident audit trail after session compaction.
+- **Encryption at rest** — encrypted sessions and config secrets, `localgpt encrypt` CLI commands.
+- **Slack bridge** — Socket Mode integration for Slack workspaces.
+- **Telegram forum topics** — support for Telegram forum/topic-based conversations.
+- **Telegram reactions** — acknowledgment reactions on incoming user messages.
+- **Session branching** — fork conversation sessions into parallel branches.
+- **Self-repair and stuck recovery** — agent detects and recovers from stuck states automatically.
+- **LLM-based query expansion** — memory search queries expanded via LLM for better recall.
+- **Memory citation format** — search results include source citations.
+- **Multimodal embeddings** — Gemini embedding provider with multimodal support.
+- **Gemini embedding provider** — `gemini` as a new embedding backend.
+- **Session transcript indexing** — past session content indexed for memory search.
+- **Browser automation tool** — Chrome DevTools Protocol integration for web interaction.
+- **Docker/Podman sandbox** — container-based sandbox backend alongside Seatbelt/Landlock.
+- **Web UI settings panel** — config editing via `POST /api/config` and web UI.
+- **Channels status API** — `/api/channels/status` endpoint and web UI panel.
+- **`localgpt tool` CLI** — MCP server management from the command line.
+- **Webhook signature verification** — HMAC-SHA256 verification for incoming webhooks.
+- **Media processing cache** — file-hash-based cache for document/audio processing.
+- **Image optimization** — automatic image resizing/optimization for vision models.
+- **OpenRouter alias** — `openrouter/*` provider prefix for convenience.
+- **Streaming abort preservation** — partial output preserved when streaming is aborted.
+- **Post-compaction context injection** — AGENTS.md content injected after session compaction.
+- **Document and audio tools** — `document_load` and `transcribe_audio` wired as agent tools.
+- **Gemini CLI streaming** — gemini-cli tool extraction support in streaming UI.
+
+### Changed
+
+- **Legacy avatar system removed** — unified to Player + FreeFly camera modes.
+- **gen_package_world removed** — skill directories are now the sole distribution unit.
+
+### Fixed
+
+- **Gen physics** — Tnua `initiate_action_feeding` called every frame (not just on jump), physics engine plugins registered correctly, SpatialQuery made optional in camera follow system.
+- **Gen display** — player mesh hidden in first-person mode, all keyboard controls shown in startup help, 4 P0 creator workflow blockers resolved.
+- **Gen stability** — wgpu surface crash on Wayland avoided, audio buffer underruns fixed, MCP relay and GPU lock hardened, CLI backend MCP tool calls routed to existing Bevy window.
+- **Windows** — HANDLE type casting and BOOL API mismatch fixed for windows-sys 0.59, all compiler warnings resolved.
+- **CLI** — short flags removed from `tool add` to avoid clap conflict.
+
+## [0.3.4] - 2026-03-15
+
+### Added
+
+- **3D World Templates** — website section for browsable world templates.
+
+### Fixed
+
+- **Gen ECS** — resolved Bevy ECS query conflict B0001 in interaction systems.
+
+## [0.3.3] - 2026-03-14
+
+### Added
+
+- **Gen P1–P5 MCP tool specs** — NPC dialogue, interaction triggers, terrain, collectibles, portals, and physics constraint tools.
+- **Gen click triggers, portals, and sky lighting** — click-based interaction triggers, portal visuals, and sky lighting system.
+- **Gen 3D UI enhancements** — improved interaction effects with Apple SceneKit animation fixes.
+- **iPad/RealityKit** — RealityKit world generation with MCP tools on iPad, with macOS conditional compilation.
+- **Strict CORS** — enforced strict CORS origins for the HTTP server.
+- **Session management enhancements** — previews and history playback in the CLI.
+
+### Changed
+
+- **Physics made optional** — avian3d physics behind a feature gate for lighter builds.
+- **Interaction params** — replaced string-typed interaction parameters with enums and added terrain features.
+
+### Fixed
+
+- **Gen NPC idle** — avoided query conflict in npc idle system.
+- **Core clippy** — addressed clippy warnings across codebase.
+- **iPad** — Swift warnings for RealityKit resolved, macOS conditional compilation added.
+
 ## [0.3.2] - 2026-03-08
 
 ### Added
@@ -239,7 +327,10 @@ Initial release of LocalGPT — a local-only AI assistant with persistent markdo
 - **Zero-config startup** defaulting to `claude-cli/opus`.
 - **Auto-migration** from OpenClaw config if present.
 
-[Unreleased]: https://github.com/localgpt-app/localgpt/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/localgpt-app/localgpt/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/localgpt-app/localgpt/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/localgpt-app/localgpt/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/localgpt-app/localgpt/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/localgpt-app/localgpt/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/localgpt-app/localgpt/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/localgpt-app/localgpt/compare/v0.2.0...v0.3.0
