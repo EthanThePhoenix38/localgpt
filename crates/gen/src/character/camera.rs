@@ -158,7 +158,7 @@ pub fn camera_input_system(
 #[cfg(feature = "physics")]
 pub fn camera_follow_system(
     time: Res<Time>,
-    spatial_query: SpatialQuery,
+    spatial_query: Option<SpatialQuery>,
     player_query: Query<(Entity, &Transform), With<Player>>,
     mut camera_query: Query<(&mut Transform, &mut PlayerCamera), Without<Player>>,
 ) {
@@ -171,25 +171,27 @@ pub fn camera_follow_system(
 
         // Spring Arm (Collision Avoidance) for Third Person
         if camera.mode == CameraPov::ThirdPerson {
-            let origin = player_transform.translation + Vec3::new(0.0, 1.5, 0.0);
-            let dir = target_position - origin;
-            let dist = dir.length();
+            if let Some(ref spatial_query) = spatial_query {
+                let origin = player_transform.translation + Vec3::new(0.0, 1.5, 0.0);
+                let dir = target_position - origin;
+                let dist = dir.length();
 
-            if dist > 0.001 {
-                let direction = dir.normalize();
+                if dist > 0.001 {
+                    let direction = dir.normalize();
 
-                // Raycast to check for obstructions (filter out player entity)
-                let filter = SpatialQueryFilter::from_excluded_entities([player_entity]);
+                    // Raycast to check for obstructions (filter out player entity)
+                    let filter = SpatialQueryFilter::from_excluded_entities([player_entity]);
 
-                if let Some(hit) = spatial_query.cast_ray(
-                    origin,
-                    Dir3::new(direction).unwrap(),
-                    dist,
-                    true,
-                    &filter,
-                ) {
-                    // Hit something, pull camera in
-                    target_position = origin + direction * (hit.distance - 0.2).max(0.5);
+                    if let Some(hit) = spatial_query.cast_ray(
+                        origin,
+                        Dir3::new(direction).unwrap(),
+                        dist,
+                        true,
+                        &filter,
+                    ) {
+                        // Hit something, pull camera in
+                        target_position = origin + direction * (hit.distance - 0.2).max(0.5);
+                    }
                 }
             }
         }
