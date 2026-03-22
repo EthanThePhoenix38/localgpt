@@ -110,6 +110,9 @@ pub enum Commands {
     /// Manage MCP tool servers
     Tool(tool::ToolArgs),
 
+    /// Manage MCP tool servers (alias for 'tool')
+    Plugin(tool::ToolArgs),
+
     /// Generate shell completion scripts
     Completion(completion::CompletionArgs),
 

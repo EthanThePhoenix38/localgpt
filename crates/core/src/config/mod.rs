@@ -885,6 +885,10 @@ pub struct McpServerConfig {
 
     /// URL for SSE transport
     pub url: Option<String>,
+
+    /// Whether this MCP server is enabled (default: true)
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
 
 fn default_mcp_transport() -> String {
@@ -1517,3 +1521,92 @@ level = "info"
 # enabled = true
 # api_token = "${TELEGRAM_BOT_TOKEN}"
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mcp_server_config_enabled_default() {
+        // Deserialize without 'enabled' field — should default to true
+        let toml_str = r#"
+            name = "test-server"
+            transport = "stdio"
+            command = "echo"
+        "#;
+        let config: McpServerConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.name, "test-server");
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_mcp_server_config_enabled_explicit_false() {
+        let toml_str = r#"
+            name = "disabled-server"
+            transport = "stdio"
+            command = "echo"
+            enabled = false
+        "#;
+        let config: McpServerConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.name, "disabled-server");
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_mcp_server_config_enabled_explicit_true() {
+        let toml_str = r#"
+            name = "enabled-server"
+            transport = "stdio"
+            command = "echo"
+            enabled = true
+        "#;
+        let config: McpServerConfig = toml::from_str(toml_str).unwrap();
+        assert!(config.enabled);
+    }
+
+    #[test]
+    fn test_mcp_server_config_roundtrip() {
+        let config = McpServerConfig {
+            name: "roundtrip".to_string(),
+            transport: "stdio".to_string(),
+            command: Some("test-cmd".to_string()),
+            args: vec!["--flag".to_string()],
+            env: std::collections::HashMap::new(),
+            url: None,
+            enabled: false,
+        };
+        let serialized = toml::to_string(&config).unwrap();
+        assert!(serialized.contains("enabled = false"));
+
+        let deserialized: McpServerConfig = toml::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.name, "roundtrip");
+        assert!(!deserialized.enabled);
+    }
+
+    #[test]
+    fn test_mcp_config_with_mixed_enabled() {
+        let toml_str = r#"
+            [[servers]]
+            name = "active"
+            transport = "stdio"
+            command = "echo"
+            enabled = true
+
+            [[servers]]
+            name = "inactive"
+            transport = "stdio"
+            command = "echo"
+            enabled = false
+
+            [[servers]]
+            name = "default"
+            transport = "sse"
+            url = "http://localhost:8080"
+        "#;
+        let config: McpConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.servers.len(), 3);
+        assert!(config.servers[0].enabled);
+        assert!(!config.servers[1].enabled);
+        assert!(config.servers[2].enabled); // default
+    }
+}

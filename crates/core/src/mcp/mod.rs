@@ -34,7 +34,7 @@ impl McpManager {
         let mut clients = Vec::new();
         let mut all_tools: Vec<Box<dyn Tool>> = Vec::new();
 
-        for server in servers {
+        for server in servers.iter().filter(|s| s.enabled) {
             match connect_server(server).await {
                 Ok((client, tools)) => {
                     info!(

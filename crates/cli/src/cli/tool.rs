@@ -36,6 +36,16 @@ pub enum ToolCommand {
         /// Server name to remove
         name: String,
     },
+    /// Enable a disabled MCP tool server
+    Enable {
+        /// Server name to enable
+        name: String,
+    },
+    /// Disable an MCP tool server without removing it
+    Disable {
+        /// Server name to disable
+        name: String,
+    },
 }
 
 pub async fn run(args: ToolArgs) -> Result<()> {
@@ -49,6 +59,8 @@ pub async fn run(args: ToolArgs) -> Result<()> {
             args,
         } => cmd_add(&name, &transport, command.as_deref(), url.as_deref(), &args),
         ToolCommand::Remove { name } => cmd_remove(&name),
+        ToolCommand::Enable { name } => cmd_enable(&name),
+        ToolCommand::Disable { name } => cmd_disable(&name),
     }
 }
 
@@ -57,12 +69,15 @@ async fn cmd_list() -> Result<()> {
 
     if config.mcp.servers.is_empty() {
         println!("No MCP tool servers configured.");
-        println!("\nAdd one with: localgpt tool add <name> -c <command>");
+        println!("\nAdd one with: localgpt plugin add <name> -c <command>");
         return Ok(());
     }
 
-    println!("{:<20} {:<10} COMMAND/URL", "NAME", "TRANSPORT");
-    println!("{}", "-".repeat(60));
+    println!(
+        "{:<20} {:<10} {:<10} COMMAND/URL",
+        "NAME", "TRANSPORT", "STATUS"
+    );
+    println!("{}", "-".repeat(70));
 
     for server in &config.mcp.servers {
         let detail = if server.transport == "sse" {
@@ -77,13 +92,21 @@ async fn cmd_list() -> Result<()> {
             String::new()
         };
 
+        let status = if server.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        };
+
         println!(
-            "{:<20} {:<10} {}{}",
-            server.name, server.transport, detail, args_str
+            "{:<20} {:<10} {:<10} {}{}",
+            server.name, server.transport, status, detail, args_str
         );
     }
 
-    println!("\n{} server(s) configured", config.mcp.servers.len());
+    let enabled = config.mcp.servers.iter().filter(|s| s.enabled).count();
+    let total = config.mcp.servers.len();
+    println!("\n{} server(s) configured ({} enabled)", total, enabled);
 
     Ok(())
 }
@@ -173,6 +196,54 @@ fn cmd_remove(name: &str) -> Result<()> {
     std::fs::write(&config_path, new_content)?;
 
     println!("Removed MCP tool server '{}'", name);
+    println!("Restart the daemon to apply changes.");
+
+    Ok(())
+}
+
+fn cmd_enable(name: &str) -> Result<()> {
+    let mut config = Config::load()?;
+
+    let server = config
+        .mcp
+        .servers
+        .iter_mut()
+        .find(|s| s.name == name)
+        .ok_or_else(|| anyhow::anyhow!("Tool server '{}' not found", name))?;
+
+    if server.enabled {
+        println!("Tool server '{}' is already enabled.", name);
+        return Ok(());
+    }
+
+    server.enabled = true;
+    config.save()?;
+
+    println!("Enabled tool server '{}'", name);
+    println!("Restart the daemon to apply changes.");
+
+    Ok(())
+}
+
+fn cmd_disable(name: &str) -> Result<()> {
+    let mut config = Config::load()?;
+
+    let server = config
+        .mcp
+        .servers
+        .iter_mut()
+        .find(|s| s.name == name)
+        .ok_or_else(|| anyhow::anyhow!("Tool server '{}' not found", name))?;
+
+    if !server.enabled {
+        println!("Tool server '{}' is already disabled.", name);
+        return Ok(());
+    }
+
+    server.enabled = false;
+    config.save()?;
+
+    println!("Disabled tool server '{}'", name);
     println!("Restart the daemon to apply changes.");
 
     Ok(())
