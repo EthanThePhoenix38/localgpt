@@ -25,7 +25,8 @@ pub use sanitize::{
 pub use session::{
     DEFAULT_AGENT_ID, Session, SessionInfo, SessionMessage, SessionSearchResult, SessionStatus,
     get_last_session_id, get_last_session_id_for_agent, get_sessions_dir_for_agent, get_state_dir,
-    list_sessions, list_sessions_for_agent, search_sessions, search_sessions_for_agent,
+    list_sessions, list_sessions_for_agent, recover_orphaned_sessions, search_sessions,
+    search_sessions_for_agent,
 };
 pub use session_pruning::{PruneResult, preview_prune, prune_all_agents, prune_sessions};
 pub use session_store::{SessionEntry, SessionStore};
@@ -40,6 +41,7 @@ pub use tools::{
 };
 
 use anyhow::Result;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, info};
@@ -108,6 +110,8 @@ pub struct Agent {
     verified_security_policy: Option<String>,
     /// Loop detection for repeated tool calls
     loop_detector: LoopDetector,
+    /// Track consecutive tool errors per tool name
+    tool_error_tracker: ToolErrorTracker,
 }
 
 /// Detects when the agent is stuck in a tool-call loop
@@ -158,6 +162,63 @@ impl LoopDetector {
     /// Reset for a new turn
     fn reset(&mut self) {
         self.recent_calls.clear();
+    }
+}
+
+/// Tracks consecutive tool errors per tool name for self-repair.
+/// After `max_errors` consecutive failures of the same tool, it signals
+/// that the tool should be blocked for the rest of the session.
+struct ToolErrorTracker {
+    /// consecutive_errors[tool_name] = count
+    consecutive: HashMap<String, u32>,
+    /// Threshold for blocking a tool (from config, default 3)
+    max_errors: u32,
+    /// Tools that have been blocked
+    blocked: HashSet<String>,
+}
+
+impl ToolErrorTracker {
+    fn new(max_errors: u32) -> Self {
+        Self {
+            consecutive: HashMap::new(),
+            max_errors,
+            blocked: HashSet::new(),
+        }
+    }
+
+    /// Record a tool error. Returns true if the threshold was reached.
+    fn record_error(&mut self, tool_name: &str) -> bool {
+        if self.max_errors == 0 {
+            return false;
+        }
+        let count = self.consecutive.entry(tool_name.to_string()).or_insert(0);
+        *count += 1;
+        if *count >= self.max_errors {
+            self.blocked.insert(tool_name.to_string());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Record a tool success — resets the error counter for that tool.
+    fn record_success(&mut self, tool_name: &str) {
+        self.consecutive.remove(tool_name);
+    }
+
+    /// Check if a tool is blocked due to repeated errors.
+    fn is_blocked(&self, tool_name: &str) -> bool {
+        self.blocked.contains(tool_name)
+    }
+
+    /// Get the corrective system message when a tool is blocked.
+    fn blocked_message(tool_name: &str, max: u32) -> String {
+        format!(
+            "[System] Tool '{}' has failed {} times consecutively. \
+             This tool may be unavailable or its input may be incorrect. \
+             Do not call '{}' again in this session. Try an alternative approach.",
+            tool_name, max, tool_name
+        )
     }
 }
 
@@ -327,6 +388,7 @@ impl Agent {
             search_cost_usd: 0.0,
             verified_security_policy,
             loop_detector: LoopDetector::new(app_config.agent.max_tool_repeats),
+            tool_error_tracker: ToolErrorTracker::new(app_config.agent.max_tool_errors),
         })
     }
 
@@ -400,6 +462,7 @@ impl Agent {
             search_cost_usd: 0.0,
             verified_security_policy,
             loop_detector: LoopDetector::new(max_tool_repeats),
+            tool_error_tracker: ToolErrorTracker::new(3),
         })
     }
 
@@ -921,10 +984,37 @@ impl Agent {
                         return Ok(stuck_msg);
                     }
 
+                    // Check if tool is blocked by error tracker
+                    if self.tool_error_tracker.is_blocked(&call.name) {
+                        results.push(ToolResult {
+                            call_id: call.id.clone(),
+                            output: format!(
+                                "Error: Tool '{}' is blocked due to repeated failures.",
+                                call.name
+                            ),
+                        });
+                        continue;
+                    }
+
                     let result = self.execute_tool(call).await;
                     let output = match result {
-                        Ok((content, _warnings)) => content,
-                        Err(e) => format!("Error: {}", e),
+                        Ok((content, _warnings)) => {
+                            self.tool_error_tracker.record_success(&call.name);
+                            content
+                        }
+                        Err(e) => {
+                            let err_msg = format!("Error: {}", e);
+                            if self.tool_error_tracker.record_error(&call.name) {
+                                let blocked_msg = ToolErrorTracker::blocked_message(
+                                    &call.name,
+                                    self.tool_error_tracker.max_errors,
+                                );
+                                tracing::warn!("{}", blocked_msg);
+                                format!("{}\n\n{}", err_msg, blocked_msg)
+                            } else {
+                                err_msg
+                            }
+                        }
                     };
                     results.push(ToolResult {
                         call_id: call.id.clone(),
@@ -2071,7 +2161,7 @@ I'll save what I learn to MEMORY.md so I remember it next time."#;
 
 #[cfg(test)]
 mod tests {
-    use super::LoopDetector;
+    use super::{LoopDetector, ToolErrorTracker};
 
     #[test]
     fn loop_detector_triggers_at_threshold() {
@@ -2132,5 +2222,54 @@ mod tests {
         }
         ld.record("gen_scene_info", "{}");
         assert!(ld.is_stuck(), "should trigger at call 20");
+    }
+
+    // ToolErrorTracker tests
+
+    #[test]
+    fn tool_error_tracker_triggers_at_threshold() {
+        let mut tracker = ToolErrorTracker::new(3);
+        assert!(!tracker.record_error("web_fetch"));
+        assert!(!tracker.record_error("web_fetch"));
+        assert!(tracker.record_error("web_fetch"));
+        assert!(tracker.is_blocked("web_fetch"));
+    }
+
+    #[test]
+    fn tool_error_tracker_success_resets() {
+        let mut tracker = ToolErrorTracker::new(3);
+        tracker.record_error("web_fetch");
+        tracker.record_error("web_fetch");
+        tracker.record_success("web_fetch");
+        // Counter reset, need 3 more failures
+        assert!(!tracker.record_error("web_fetch"));
+        assert!(!tracker.is_blocked("web_fetch"));
+    }
+
+    #[test]
+    fn tool_error_tracker_independent_tools() {
+        let mut tracker = ToolErrorTracker::new(2);
+        tracker.record_error("tool_a");
+        tracker.record_error("tool_b");
+        // Neither tool has reached threshold independently
+        assert!(!tracker.is_blocked("tool_a"));
+        assert!(!tracker.is_blocked("tool_b"));
+    }
+
+    #[test]
+    fn tool_error_tracker_blocked_message_format() {
+        let msg = ToolErrorTracker::blocked_message("web_fetch", 3);
+        assert!(msg.contains("web_fetch"));
+        assert!(msg.contains("3 times"));
+        assert!(msg.contains("Do not call"));
+    }
+
+    #[test]
+    fn tool_error_tracker_disabled_when_zero() {
+        let mut tracker = ToolErrorTracker::new(0);
+        for _ in 0..100 {
+            assert!(!tracker.record_error("any_tool"));
+        }
+        assert!(!tracker.is_blocked("any_tool"));
     }
 }

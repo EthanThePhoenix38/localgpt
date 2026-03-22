@@ -29,6 +29,8 @@ pub struct Session {
     token_count: usize,
     compaction_count: u32,
     memory_flush_compaction_count: u32,
+    /// True if this session was interrupted mid-turn (daemon crash/restart)
+    pub aborted_last_run: bool,
 }
 
 /// Message with metadata for persistence
@@ -144,6 +146,7 @@ impl Session {
             token_count: 0,
             compaction_count: 0,
             memory_flush_compaction_count: 0,
+            aborted_last_run: false,
         }
     }
 
@@ -163,6 +166,7 @@ impl Session {
             token_count: self.token_count,
             compaction_count: self.compaction_count,
             memory_flush_compaction_count: self.memory_flush_compaction_count,
+            aborted_last_run: false,
         }
     }
 
@@ -469,6 +473,7 @@ impl Session {
             token_count: 0,
             compaction_count: 0,
             memory_flush_compaction_count: 0,
+            aborted_last_run: false,
         };
 
         for line in content.lines() {
@@ -595,6 +600,30 @@ impl Session {
         self.messages.len()
     }
 
+    /// Check if the last message is from the user (incomplete turn).
+    pub fn is_incomplete_turn(&self) -> bool {
+        self.messages
+            .last()
+            .map(|m| m.message.role == Role::User)
+            .unwrap_or(false)
+    }
+
+    /// Inject a recovery message for sessions interrupted mid-turn.
+    pub fn inject_recovery_message(&mut self) {
+        if self.is_incomplete_turn() {
+            self.add_message(Message {
+                role: Role::System,
+                content: "[System] The previous session was interrupted by a daemon restart. \
+                          Please continue from where you left off. Review the conversation \
+                          history above for context."
+                    .to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                images: Vec::new(),
+            });
+        }
+    }
+
     fn load_from_path(path: &PathBuf, session_id: &str) -> Result<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -608,6 +637,7 @@ impl Session {
             token_count: 0,
             compaction_count: 0,
             memory_flush_compaction_count: 0,
+            aborted_last_run: false,
         };
 
         for line in reader.lines() {
@@ -788,6 +818,42 @@ pub fn get_sessions_dir_for_agent(agent_id: &str) -> Result<PathBuf> {
 pub fn get_state_dir() -> Result<PathBuf> {
     let paths = crate::paths::Paths::resolve()?;
     Ok(paths.state_dir)
+}
+
+/// Scan session files for an agent and recover any that were interrupted mid-turn.
+/// Sets `aborted_last_run = false` and injects a recovery system message.
+/// Returns the number of sessions recovered.
+pub fn recover_orphaned_sessions(agent_id: &str) -> Result<usize> {
+    let sessions_dir = get_sessions_dir_for_agent(agent_id)?;
+    if !sessions_dir.exists() {
+        return Ok(0);
+    }
+
+    let mut recovered = 0;
+
+    for entry in fs::read_dir(&sessions_dir)? {
+        let path = entry?.path();
+        if path.extension().map(|e| e != "jsonl").unwrap_or(true) {
+            continue;
+        }
+
+        let session_id = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+
+        if let Ok(mut session) = Session::load_from_path(&path, &session_id) {
+            if session.aborted_last_run {
+                tracing::info!("Recovering orphaned session: {}", session.id);
+                session.aborted_last_run = false;
+                session.inject_recovery_message();
+                session.save_to_path(&path)?;
+                recovered += 1;
+            }
+        }
+    }
+
+    Ok(recovered)
 }
 
 fn estimate_tokens(text: &str) -> usize {

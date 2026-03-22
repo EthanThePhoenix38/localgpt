@@ -98,6 +98,16 @@ pub struct AgentConfig {
     #[serde(default = "default_max_tool_repeats")]
     pub max_tool_repeats: usize,
 
+    /// Maximum consecutive failures of the same tool before blocking it.
+    /// Default: 3. Set to 0 to disable tool error tracking.
+    #[serde(default = "default_max_tool_errors")]
+    pub max_tool_errors: u32,
+
+    /// Allow one retry when a tool call has malformed arguments.
+    /// Default: true. Set to false to fail immediately.
+    #[serde(default = "default_true")]
+    pub tool_retry_on_malformed: bool,
+
     /// Maximum age for session files before pruning (in seconds).
     /// 0 = keep forever. Default: 30 days.
     #[serde(default = "default_session_max_age")]
@@ -115,6 +125,10 @@ pub struct AgentConfig {
 }
 
 fn default_max_tool_repeats() -> usize {
+    3
+}
+
+fn default_max_tool_errors() -> u32 {
     3
 }
 
@@ -1034,6 +1048,8 @@ impl Default for AgentConfig {
             subagent_model: None,        // Use default_model if not specified
             fallback_models: Vec::new(), // No fallbacks by default
             max_tool_repeats: default_max_tool_repeats(), // Loop detection threshold
+            max_tool_errors: default_max_tool_errors(), // Error spiral detection
+            tool_retry_on_malformed: true,
             session_max_age: default_session_max_age(), // 30 days
             session_max_count: default_session_max_count(), // 500 sessions
             post_compaction_sections: default_post_compaction_sections(),
