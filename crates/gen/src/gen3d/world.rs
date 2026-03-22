@@ -1071,7 +1071,9 @@ pub fn handle_fork_world(
             }
         }
     } else {
-        warnings.push("No world.ron found in source — directory copied without manifest update".to_string());
+        warnings.push(
+            "No world.ron found in source — directory copied without manifest update".to_string(),
+        );
     }
 
     // 5. Update SKILL.md — replace title with new name

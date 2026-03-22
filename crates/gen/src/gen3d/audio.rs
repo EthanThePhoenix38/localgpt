@@ -76,7 +76,7 @@ impl AudioEngine {
     /// Creates a temporary emitter named "trigger_{sound}_{counter}" with
     /// a default volume and no spatial tracking (fire-and-forget).
     pub fn play_emitter_at(&mut self, sound_name: &str, position: Vec3) {
-        use super::commands::{EmitterSound, WaveformType, FilterType};
+        use super::commands::{EmitterSound, FilterType, WaveformType};
 
         let emitter_name = format!("trigger_{}_{}", sound_name, self.emitter_params.len());
         let volume = shared(0.6);
@@ -108,13 +108,8 @@ impl AudioEngine {
             pan_shared: pan.clone(),
         });
 
-        self.emitter_params.insert(
-            emitter_name.clone(),
-            EmitterSharedParams {
-                volume,
-                pan,
-            },
-        );
+        self.emitter_params
+            .insert(emitter_name.clone(), EmitterSharedParams { volume, pan });
         self.emitter_meta.insert(
             emitter_name,
             EmitterMeta {

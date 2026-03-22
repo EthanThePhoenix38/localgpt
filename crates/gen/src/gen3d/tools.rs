@@ -2441,10 +2441,11 @@ impl Tool for GenForkWorldTool {
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "gen_fork_world".into(),
-            description: "Fork (copy) an existing world skill to a new name with attribution metadata. \
+            description:
+                "Fork (copy) an existing world skill to a new name with attribution metadata. \
                 Creates a complete copy of the source world directory under a new skill name, \
                 updating world.ron metadata and SKILL.md title."
-                .into(),
+                    .into(),
             parameters: json!({
                 "type": "object",
                 "properties": {

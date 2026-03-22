@@ -557,10 +557,7 @@ pub fn proximity_trigger_system(
             }
         }
         if let Some(sound_action) = play_sound {
-            audio_engine.play_emitter_at(
-                &sound_action.sound,
-                transform.translation,
-            );
+            audio_engine.play_emitter_at(&sound_action.sound, transform.translation);
         }
 
         // Remove trigger if once
@@ -653,10 +650,7 @@ pub fn click_trigger_system(
             estate.insert(EntityState::default());
         }
         if let Some(sound_action) = play_sound {
-            audio_engine.play_emitter_at(
-                &sound_action.sound,
-                trigger_transform.translation,
-            );
+            audio_engine.play_emitter_at(&sound_action.sound, trigger_transform.translation);
         }
 
         if once.is_some() {
@@ -775,7 +769,13 @@ pub fn door_proximity_system(
 pub fn collectible_system(
     time: Res<Time>,
     player_query: Query<&Transform, With<crate::character::Player>>,
-    mut collectible_query: Query<(Entity, &Transform, &mut Collectible, &mut Visibility, Option<&Name>)>,
+    mut collectible_query: Query<(
+        Entity,
+        &Transform,
+        &mut Collectible,
+        &mut Visibility,
+        Option<&Name>,
+    )>,
     mut score_board: ResMut<ScoreBoard>,
     mut inventory: ResMut<PlayerInventory>,
     mut commands: Commands,

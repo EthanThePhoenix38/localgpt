@@ -352,9 +352,11 @@ pub fn player_movement_system(
             ..Default::default()
         };
 
+        // Must call every frame so Tnua knows when actions stop
+        controller.initiate_action_feeding();
+
         // Jump
         if input.jump {
-            controller.initiate_action_feeding();
             controller.action(PlayerScheme::Jump(TnuaBuiltinJump::default()));
         }
     }
