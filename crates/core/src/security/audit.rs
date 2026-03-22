@@ -80,6 +80,8 @@ pub enum AuditAction {
     PathDenied,
     /// Previous audit entry corrupted, new chain segment started.
     ChainRecovery,
+    /// Session context window was compacted (messages truncated + summarized).
+    Compaction,
 }
 
 /// Append a new entry to the audit log.
@@ -270,6 +272,96 @@ fn sha256_hex(data: &[u8]) -> String {
         .collect()
 }
 
+// ── Compaction Audit Helpers ────────────────────────────────────────
+
+/// Structured details for a compaction audit entry.
+///
+/// Serialized as JSON in the `detail` field of `AuditEntry`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompactionDetail {
+    pub session_id: String,
+    pub messages_before: usize,
+    pub messages_after: usize,
+    pub tokens_before: usize,
+    pub tokens_after: usize,
+    pub strategy: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub injected_sections: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub summary_preview: String,
+}
+
+/// Log a compaction event to the audit log.
+///
+/// Creates a `Compaction` audit entry with structured compaction details
+/// serialized as JSON in the `detail` field.
+pub fn append_compaction_entry(state_dir: &Path, detail: &CompactionDetail) -> Result<()> {
+    let detail_json =
+        serde_json::to_string(detail).context("Failed to serialize compaction detail")?;
+    append_audit_entry_with_detail(
+        state_dir,
+        AuditAction::Compaction,
+        "",
+        &format!("session:{}", detail.session_id),
+        Some(&detail_json),
+    )
+}
+
+/// Read compaction entries from the audit log.
+///
+/// Returns all entries with `action == Compaction`, with their
+/// `detail` field parsed into `CompactionDetail`.
+pub fn read_compaction_entries(
+    state_dir: &Path,
+) -> Result<Vec<(AuditEntry, Option<CompactionDetail>)>> {
+    let entries = read_audit_log(state_dir)?;
+    Ok(entries
+        .into_iter()
+        .filter(|e| e.action == AuditAction::Compaction)
+        .map(|e| {
+            let detail = e
+                .detail
+                .as_deref()
+                .and_then(|d| serde_json::from_str::<CompactionDetail>(d).ok());
+            (e, detail)
+        })
+        .collect())
+}
+
+/// Aggregate statistics for compaction events.
+#[derive(Debug)]
+pub struct CompactionStats {
+    pub total_events: usize,
+    pub total_messages_compacted: usize,
+    pub total_tokens_saved: usize,
+    pub last_compaction: Option<String>,
+}
+
+/// Compute aggregate statistics from compaction audit entries.
+pub fn compaction_stats(state_dir: &Path) -> Result<CompactionStats> {
+    let entries = read_compaction_entries(state_dir)?;
+
+    let total_events = entries.len();
+    let mut total_messages_compacted: usize = 0;
+    let mut total_tokens_saved: usize = 0;
+    let mut last_compaction: Option<String> = None;
+
+    for (entry, detail) in &entries {
+        if let Some(d) = detail {
+            total_messages_compacted += d.messages_before.saturating_sub(d.messages_after);
+            total_tokens_saved += d.tokens_before.saturating_sub(d.tokens_after);
+        }
+        last_compaction = Some(entry.ts.clone());
+    }
+
+    Ok(CompactionStats {
+        total_events,
+        total_messages_compacted,
+        total_tokens_saved,
+        last_compaction,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,5 +524,131 @@ mod tests {
         let entries = read_audit_log(tmp.path()).unwrap();
         // Signed + ChainRecovery + Verified = 3 (garbage line skipped)
         assert_eq!(entries.len(), 3);
+    }
+
+    // ── Compaction audit tests ──────────────────────────────────────
+
+    fn sample_compaction_detail(session_id: &str, before: usize, after: usize) -> CompactionDetail {
+        CompactionDetail {
+            session_id: session_id.to_string(),
+            messages_before: before,
+            messages_after: after,
+            tokens_before: before * 100,
+            tokens_after: after * 100,
+            strategy: "summarize_and_truncate".to_string(),
+            injected_sections: vec!["Session Startup".to_string()],
+            summary_preview: String::new(),
+        }
+    }
+
+    #[test]
+    fn compaction_log_and_read_back() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let detail = sample_compaction_detail("sess-1", 20, 5);
+        append_compaction_entry(tmp.path(), &detail).unwrap();
+
+        let entries = read_compaction_entries(tmp.path()).unwrap();
+        assert_eq!(entries.len(), 1);
+
+        let (entry, parsed) = &entries[0];
+        assert_eq!(entry.action, AuditAction::Compaction);
+        assert_eq!(entry.source, "session:sess-1");
+
+        let d = parsed.as_ref().unwrap();
+        assert_eq!(d.messages_before, 20);
+        assert_eq!(d.messages_after, 5);
+        assert_eq!(d.tokens_before, 2000);
+        assert_eq!(d.tokens_after, 500);
+        assert_eq!(d.strategy, "summarize_and_truncate");
+        assert_eq!(d.injected_sections, vec!["Session Startup"]);
+    }
+
+    #[test]
+    fn compaction_hash_chain_integrity() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Mix security and compaction entries
+        append_audit_entry(tmp.path(), AuditAction::Verified, "abc", "session_start").unwrap();
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s1", 30, 5)).unwrap();
+        append_audit_entry(tmp.path(), AuditAction::Verified, "def", "session_start").unwrap();
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s2", 40, 5)).unwrap();
+
+        // Full chain should be intact
+        let broken = verify_audit_chain(tmp.path()).unwrap();
+        assert!(broken.is_empty(), "Chain should be intact: {:?}", broken);
+
+        // Should have 4 total entries, 2 compaction
+        let all = read_audit_log(tmp.path()).unwrap();
+        assert_eq!(all.len(), 4);
+
+        let compactions = read_compaction_entries(tmp.path()).unwrap();
+        assert_eq!(compactions.len(), 2);
+    }
+
+    #[test]
+    fn compaction_tamper_detection() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s1", 20, 5)).unwrap();
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s2", 30, 5)).unwrap();
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s3", 40, 5)).unwrap();
+
+        // Tamper with the middle line by replacing a unique token in the source field
+        let path = audit_file_path(tmp.path());
+        let content = fs::read_to_string(&path).unwrap();
+        let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+
+        // Replace "session:s2" with "session:s2-hacked" in the second line
+        lines[1] = lines[1].replace("session:s2", "session:s2-hacked");
+        fs::write(&path, lines.join("\n") + "\n").unwrap();
+
+        let broken = verify_audit_chain(tmp.path()).unwrap();
+        assert!(!broken.is_empty(), "Should detect tampered entry");
+        assert!(
+            broken.contains(&2),
+            "Entry after tampered line should break"
+        );
+    }
+
+    #[test]
+    fn compaction_empty_log() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let entries = read_compaction_entries(tmp.path()).unwrap();
+        assert!(entries.is_empty());
+
+        let stats = compaction_stats(tmp.path()).unwrap();
+        assert_eq!(stats.total_events, 0);
+        assert_eq!(stats.total_messages_compacted, 0);
+        assert_eq!(stats.total_tokens_saved, 0);
+        assert!(stats.last_compaction.is_none());
+    }
+
+    #[test]
+    fn compaction_stats_computation() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // 3 compaction events: 20->5, 30->5, 40->5
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s1", 20, 5)).unwrap();
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s2", 30, 5)).unwrap();
+        append_compaction_entry(tmp.path(), &sample_compaction_detail("s3", 40, 5)).unwrap();
+
+        let stats = compaction_stats(tmp.path()).unwrap();
+        assert_eq!(stats.total_events, 3);
+        // Messages: (20-5) + (30-5) + (40-5) = 15 + 25 + 35 = 75
+        assert_eq!(stats.total_messages_compacted, 75);
+        // Tokens: (2000-500) + (3000-500) + (4000-500) = 1500 + 2500 + 3500 = 7500
+        assert_eq!(stats.total_tokens_saved, 7500);
+        assert!(stats.last_compaction.is_some());
+    }
+
+    #[test]
+    fn compaction_action_serializes_snake_case() {
+        let json = serde_json::to_string(&AuditAction::Compaction).unwrap();
+        assert_eq!(json, "\"compaction\"");
+
+        let parsed: AuditAction = serde_json::from_str("\"compaction\"").unwrap();
+        assert_eq!(parsed, AuditAction::Compaction);
     }
 }

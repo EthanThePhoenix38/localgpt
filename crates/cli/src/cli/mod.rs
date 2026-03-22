@@ -1,4 +1,5 @@
 pub mod ask;
+pub mod audit;
 pub mod bridge;
 pub mod chat;
 pub mod completion;
@@ -123,4 +124,7 @@ pub enum Commands {
 
     /// Manage sessions (list, branch)
     Session(session::SessionArgs),
+
+    /// Inspect compaction audit log (show, verify, stats)
+    Audit(audit::AuditArgs),
 }

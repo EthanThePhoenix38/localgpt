@@ -131,8 +131,9 @@ pub use super::signing::{
 // ── Audit Log ───────────────────────────────────────────────────────
 
 pub use super::audit::{
-    AuditAction, AuditEntry, append_audit_entry, append_audit_entry_with_detail, audit_file_path,
-    read_audit_log, verify_audit_chain,
+    AuditAction, AuditEntry, CompactionDetail, CompactionStats, append_audit_entry,
+    append_audit_entry_with_detail, append_compaction_entry, audit_file_path, compaction_stats,
+    read_audit_log, read_compaction_entries, verify_audit_chain,
 };
 
 // ── Protected Files ─────────────────────────────────────────────────

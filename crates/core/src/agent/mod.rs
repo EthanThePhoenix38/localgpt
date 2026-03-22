@@ -1477,7 +1477,8 @@ impl Agent {
     }
 
     pub async fn compact_session(&mut self) -> Result<(usize, usize)> {
-        let before = self.session.token_count();
+        let tokens_before = self.session.token_count();
+        let messages_before = self.session.message_count();
 
         // Trigger memory flush before compacting (if not already done)
         if self.session.should_memory_flush() {
@@ -1486,6 +1487,9 @@ impl Agent {
 
         // Compact the session
         self.session.compact(&*self.provider).await?;
+
+        // Track which sections get injected for audit detail
+        let mut injected_sections = Vec::new();
 
         // Inject post-compaction context from workspace files
         if !self.app_config.agent.post_compaction_sections.is_empty()
@@ -1498,6 +1502,7 @@ impl Agent {
                 "Injecting post-compaction context ({} chars)",
                 context.len()
             );
+            injected_sections.clone_from(&self.app_config.agent.post_compaction_sections);
             self.session.add_message(Message {
                 role: Role::System,
                 content: context,
@@ -1507,10 +1512,31 @@ impl Agent {
             });
         }
 
-        let after = self.session.token_count();
-        info!("Session compacted: {} -> {} tokens", before, after);
+        let tokens_after = self.session.token_count();
+        let messages_after = self.session.message_count();
+        info!(
+            "Session compacted: {} -> {} tokens",
+            tokens_before, tokens_after
+        );
 
-        Ok((before, after))
+        // Log compaction to the audit trail (best-effort, don't fail the compaction)
+        let detail = crate::security::CompactionDetail {
+            session_id: self.session.id().to_string(),
+            messages_before,
+            messages_after,
+            tokens_before,
+            tokens_after,
+            strategy: "summarize_and_truncate".to_string(),
+            injected_sections,
+            summary_preview: String::new(),
+        };
+        if let Err(e) =
+            crate::security::append_compaction_entry(&self.app_config.paths.state_dir, &detail)
+        {
+            tracing::warn!("Failed to write compaction audit entry: {}", e);
+        }
+
+        Ok((tokens_before, tokens_after))
     }
 
     /// Pre-compaction memory flush - prompts agent to save important info
