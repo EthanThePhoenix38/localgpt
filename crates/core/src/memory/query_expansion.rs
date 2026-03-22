@@ -54,6 +54,7 @@ pub fn expand_query_local(query: &str) -> ExpandedQuery {
 
 /// Language detected from script heuristics.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 enum Language {
     English,
     Spanish,
