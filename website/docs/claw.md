@@ -7,7 +7,7 @@ slug: /claw
 
 > **⚠️ AI-Generated Documentation:** This document was generated and is maintained by AI assistants. While efforts are made to ensure accuracy, many details must be outdated or incorrect as those projects are moving very fast. Please verify with the source repositories for the most current information.
 >
-> **Last updated:** 2026-03-17
+> **Last updated:** 2026-03-22
 
 This document tracks feature parity across fourteen implementations of the personal AI assistant architecture. OpenClaw (TypeScript) is the reference implementation; IronClaw, LocalGPT, Moltis, and ZeroClaw are Rust implementations; Nanobot, CoPaw, and Agent Zero are Python implementations; PicoClaw is Go; NullClaw is Zig; MimiClaw and ZClaw are C (ESP32); RosClaw is a TypeScript OpenClaw plugin for ROS2 robotics; TinyClaw is a TypeScript multi-agent orchestrator.
 
@@ -15,19 +15,19 @@ This document tracks feature parity across fourteen implementations of the perso
 
 | Project | Language | License | Summary |
 |---------|----------|---------|---------|
-| **OpenClaw** | TypeScript | MIT | Reference implementation (v2026.3.14); full-featured desktop AI assistant with 20+ messaging channels, WebSocket control plane, advanced hybrid memory system (multimodal embeddings, MMR, temporal decay, query expansion), and MCP integration |
-| **IronClaw** | Rust | MIT/Apache 2.0 | Security-focused (v0.19.0); WASM sandbox with capability-based permissions, Docker sandbox (orchestrator/worker), prompt injection defense, hybrid search memory (PostgreSQL + pgvector), self-repair, dynamic tool building, NEAR AI integration |
-| **LocalGPT** | Rust | Apache 2.0 | Local-first AI assistant with persistent markdown memory, Bevy 3D scene generation (Gen mode), optional autonomous heartbeat, and bridge daemon protocol |
+| **OpenClaw** | TypeScript | MIT | Reference implementation (v2026.3.22); full-featured desktop AI assistant with 20+ messaging channels, WebSocket control plane, advanced hybrid memory system (multimodal embeddings, MMR, temporal decay, query expansion), ClawHub plugin ecosystem, and MCP integration |
+| **IronClaw** | Rust | MIT/Apache 2.0 | Security-focused (v0.21.0); WASM sandbox with capability-based permissions, Docker sandbox (orchestrator/worker), prompt injection defense, hybrid search memory (PostgreSQL + pgvector), self-repair with fault injection testing, dynamic tool building, webhook relay, NEAR AI integration |
+| **LocalGPT** | Rust | Apache 2.0 | Local-first AI assistant with persistent markdown memory, Bevy 3D scene generation (Gen mode with physics), Slack/Telegram/Discord/WhatsApp bridges, Docker/Podman + OS-level sandbox, browser automation, encryption at rest, and optional autonomous heartbeat |
 | **Moltis** | Rust | MIT | Enterprise-ready 46-crate workspace (196K LoC, 2,300+ tests, zero unsafe); Docker + Apple Container sandbox, multi-channel (Telegram/Slack/HTTP/Teams/Discord), GraphQL API, TLS/WebAuthn auth, encryption-at-rest (XChaCha20-Poly1305) |
 | **Nanobot** | Python | MIT | Lightweight ~4K LOC implementation with 10+ chat channels and MCP integration; ideal for learning and rapid prototyping |
-| **CoPaw** | Python | Apache 2.0 | AgentScope/Alibaba-based (v0.0.6); native desktop installers (Win/Mac), console web UI, 10 channels (DingTalk/Feishu/QQ/Discord/iMessage/Telegram/Signal/Matrix/MQTT/Nostr), local models (llama.cpp/MLX/Ollama), ReMeLight memory, Twilio voice, daemon mode |
+| **CoPaw** | Python | Apache 2.0 | AgentScope/Alibaba-based (v0.1.0p1); native desktop installers (Win/Mac), console web UI with multimodal support, 10 channels (DingTalk/Feishu/QQ/Discord/iMessage/Telegram/Signal/Matrix/MQTT/Nostr), local models (llama.cpp/MLX/Ollama), ReMeLight memory, built-in glob/grep search tools, Twilio voice, daemon mode |
 | **PicoClaw** | Go | MIT | Minimal footprint (under 10MB RAM) with multi-arch support; WeCom enterprise messaging; targets resource-constrained environments |
-| **ZeroClaw** | Rust | MIT/Apache 2.0 | Ultra-lightweight (v0.1.8, &lt;5MB RAM, &lt;10ms startup, 1,017+ tests); trait-driven architecture, Prometheus metrics, research phase for proactive info gathering, extensive IoT protocol support (MQTT, Nextcloud Talk) |
-| **NullClaw** | Zig | MIT | 678KB binary, 50+ AI providers, 35+ tools, 10 memory engines, 5,300+ tests; multi-layer sandbox (Landlock/Firejail/Bubblewrap/Docker); I2C/SPI hardware; dual-backend SQLite + libSQL/Turso |
+| **ZeroClaw** | Rust | MIT/Apache 2.0 | Ultra-lightweight (v0.5.8, &lt;5MB RAM, &lt;10ms startup); trait-driven architecture, Extism WASM plugin system, ClaudeCodeTool delegation, Piper TTS/LocalWhisper STT, Gmail Pub/Sub, Live Canvas, Prometheus metrics, ARM cross-compilation, extensive IoT protocol support (MQTT, Nextcloud Talk) |
+| **NullClaw** | Zig | MIT | 678KB binary (v2026.3.21), 50+ AI providers, 35+ tools, 10 memory engines, 5,300+ tests; multi-layer sandbox (Landlock/Firejail/Bubblewrap/Docker/WASM3); NullHub ecosystem; Cron HTTP API; A2A protocol; I2C/SPI hardware; WeChat/WeCom; dual-backend SQLite + libSQL/Turso |
 | **MimiClaw** | C (ESP32) | MIT | Bare metal ESP32-S3 ($5), Telegram primary channel, OTA updates, serial CLI config; no OS/runtime overhead |
 | **RosClaw** | TypeScript + Python | Apache 2.0 | OpenClaw plugin for ROS2 robotics; rosbridge WebSocket, robot context injection, 3 transport modes |
-| **ZClaw** | C (ESP32) | MIT | 888KiB binary budget, 27 tools, 4 LLM providers, ESP32/C3/S3/C6 support, rate limiting, serial admin |
-| **TinyClaw** | TypeScript | MIT | Multi-agent team orchestrator (v0.0.10); TinyOffice dashboard (Next.js, 11 pages), Hono HTTP + REST API + WebSocket, SSE events, WhatsApp/Discord/Telegram integration |
+| **ZClaw** | C (ESP32) | MIT | 888KiB binary budget (v2.13.0), 27 tools, 4 LLM providers, ESP32/C3/S3/C6 support, DHT/I2C sensor tools, rate limiting, serial admin |
+| **TinyClaw** | TypeScript | MIT | Multi-agent team orchestrator (v0.0.16, rebranded to TinyAGI); TinyOffice dashboard (Next.js, 11 pages), Hono HTTP + REST API + WebSocket, SSE events with streaming execution progress, WhatsApp/Discord/Telegram integration, curl-based installer |
 | **Agent Zero** | Python | MIT | General-purpose agentic framework with hierarchical multi-agent cooperation, Docker sandbox, browser automation, SKILL.md skills, MCP client/server, and real-time Web UI |
 
 ### GitHub Repositories
@@ -87,7 +87,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Configuration hot-reload | ✅ | ❌ | ✅ | 🚧 | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: env vars via A0_SET_ |
 | Network modes (loopback/LAN/remote) | ✅ | 🚧 | 🚧 | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | RosClaw: 3 transport modes |
 | OpenAI-compatible HTTP API | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| Canvas hosting | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Canvas hosting | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: Live Canvas |
 | Gateway lock (PID-based) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | launchd/systemd integration | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | CoPaw: daemon mode; Agent Zero: Docker |
 | Bonjour/mDNS discovery | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
@@ -121,7 +121,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Telegram | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ✅ | ✅ | ❌ | - | ZClaw: long-polling |
 | Discord | ✅ | ❌ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ✅ | ❌ | P2 | TinyClaw: discord.js |
 | Signal | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | P2 | CoPaw: v0.0.6 |
-| Slack | ✅ | ✅ | ✅ | 🚧 | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | - | LocalGPT: Socket Mode, slack-morphism v2 |
+| Slack | ✅ | ✅ | ✅ | 🚧 | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | - | LocalGPT: bridge daemon, Socket Mode, slack-morphism v2, edit-in-place streaming, thread replies |
 | iMessage | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
 | Linq | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw only |
 | Feishu/Lark | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ❌ | ❌ | ❌ | P3 | |
@@ -136,7 +136,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Nostr | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | CoPaw: v0.0.6 |
 | QQ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | DingTalk | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
-| Email (IMAP/SMTP) | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
+| Email (IMAP/SMTP) | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw: also Gmail Pub/Sub push |
 | IRC | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | WeCom (企业微信) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | PicoClaw only |
 | MaixCam | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | Embedded camera |
@@ -153,10 +153,10 @@ This document tracks feature parity across fourteen implementations of the perso
 |---------|----------|----------|----------|--------|---------|-------|----------|----------|----------|----------|---------|-------|----------|------------|-------|
 | Forum topic creation | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | LocalGPT: /topic command + thread routing |
 | channel_post support | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| User message reactions | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| User message reactions | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | LocalGPT: ack reactions |
 | sendPoll | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Cron/heartbeat topic targeting | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| Streaming message edits | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Streaming message edits | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | PicoClaw: sendMessageDraft |
 
 ### Discord-Specific Features (since Feb 2025)
 
@@ -197,7 +197,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Command | OpenClaw | IronClaw | LocalGPT | Moltis | Nanobot | CoPaw | PicoClaw | ZeroClaw | NullClaw | MimiClaw | RosClaw | ZClaw | TinyClaw | Agent Zero | Priority | Notes |
 |---------|----------|----------|----------|--------|---------|-------|----------|----------|----------|----------|---------|-------|----------|------------|----------|-------|
 | `run` (agent) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | - | MimiClaw: always-on embedded; ZClaw: always-on; Agent Zero: run_ui.py |
-| `tool install/list/remove` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | |
+| `tool install/list/remove` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | LocalGPT: `localgpt tool list/add/remove` for MCP servers |
 | `gateway start/stop` | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | P2 | Agent Zero: Docker run |
 | `onboard` (wizard) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | - | Agent Zero: initialize.py |
 | `tui` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | - | CoPaw: Console web UI; Agent Zero: Web UI |
@@ -249,7 +249,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Session pruning | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | Agent Zero: context management |
 | Context compaction | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ✅ | ❌ | ✅ | RosClaw: via OpenClaw; Agent Zero: history truncation |
 | Post-compaction read audit | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| Post-compaction context injection | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Post-compaction context injection | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | LocalGPT: AGENTS.md injection |
 | Custom system prompts | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ✅ | ✅ | ✅ | RosClaw: via OpenClaw; Agent Zero: prompts/ folder |
 | Skills (modular capabilities) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ➖ | ✅ | ✅ | ✅ | MimiClaw: on-device skills; Agent Zero: SKILL.md standard; RosClaw: via OpenClaw |
 | Skill routing blocks | ✅ | 🚧 | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
@@ -291,9 +291,10 @@ This document tracks feature parity across fourteen implementations of the perso
 | Anthropic (Claude) | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ✅ | ✅ | ✅ | - | RosClaw: via OpenClaw; TinyClaw: Claude CLI; Agent Zero: LiteLLM |
 | OpenAI | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ➖ | ✅ | ✅ | ✅ | - | RosClaw: via OpenClaw; TinyClaw: Codex CLI; Agent Zero: LiteLLM |
 | AWS Bedrock | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
+| GCP Vertex AI | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | OpenClaw: Claude via Vertex |
 | Google Gemini | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ✅ | P3 | Agent Zero: LiteLLM |
 | NVIDIA API | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | P3 | |
-| OpenRouter | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ | ❌ | ✅ | - | Agent Zero: LiteLLM |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ | ❌ | ✅ | - | Agent Zero: LiteLLM |
 | Tinfoil | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | - | IronClaw-only |
 | OpenAI-compatible | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ✅ | ✅ | - | TinyClaw: custom providers; Agent Zero: LiteLLM |
 | Ollama (local) | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ | ❌ | ✅ | - | Agent Zero: LiteLLM |
@@ -316,6 +317,10 @@ This document tracks feature parity across fourteen implementations of the perso
 | vLLM | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | - | Agent Zero: LiteLLM |
 | Antigravity | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | PicoClaw only |
 | Telnyx | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | ZeroClaw: SMS/voice |
+| Novita AI | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | - | NullClaw + PicoClaw: OpenAI-compatible |
+| Xiaomi MiMo | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ➖ | ❌ | ❌ | ❌ | - | NullClaw: Xiaomi MiMo V2 |
+| DeepMyst/Avian | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | ZeroClaw: new providers |
+| Bailian (Aliyun) | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | ZeroClaw: Alibaba cloud |
 
 ### Model Features
 
@@ -341,7 +346,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Image processing (Sharp) | ✅ | ❌ | 🚧 | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ❌ | 🚧 | ❌ | 🚧 | ✅ | P2 | RosClaw: camera snapshot; Agent Zero: vision_load; TinyClaw: image processing |
 | Configurable image resize dims | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | Agent Zero: MAX_PIXELS config |
 | Multiple images per tool call | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | Agent Zero: vision_load paths list |
-| Audio transcription | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | CoPaw: Twilio voice; Agent Zero: STT; PicoClaw/ZeroClaw: transcription channel |
+| Audio transcription | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | LocalGPT: transcribe_audio tool; CoPaw: Twilio voice; Agent Zero: STT; ZeroClaw: LocalWhisper STT |
 | Video support | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | PDF parsing | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | ZeroClaw: pdf_read tool; Agent Zero: document_query |
 | MIME detection | ✅ | ❌ | 🚧 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | Agent Zero: mimetypes |
@@ -352,7 +357,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Incremental TTS playback | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P3 | Agent Zero: streaming TTS |
 | Sticker-to-image | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
 | Procedural audio synthesis | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | LocalGPT: FunDSP in Gen mode |
-| STT (multiple providers) | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | - | Agent Zero: speech-to-text |
+| STT (multiple providers) | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | - | ZeroClaw: LocalWhisper self-hosted; Agent Zero: speech-to-text |
 | Web content extraction | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | - | Agent Zero: browser_agent + document_query |
 | Screenshot capture | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | - | ZeroClaw/NullClaw: screenshot tool; Agent Zero: browser screenshots |
 
@@ -378,9 +383,9 @@ This document tracks feature parity across fourteen implementations of the perso
 | `before_message_write` hook | ✅ | ❌ | ❌ | 🚧 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: user_message_ui extensions |
 | `llm_input`/`llm_output` hooks | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | RosClaw: before_tool_call |
 | MCP support (stdio + HTTP/SSE) | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: MCP client + server |
-| Browser automation (CDP) | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: browser_agent (Playwright) |
+| Browser automation (CDP) | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | LocalGPT: Chrome DevTools Protocol; Agent Zero: Playwright |
 | Composio integration | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | NullClaw: composio tool |
-| WASM module tools | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: wasmi runtime |
+| WASM module tools | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: Extism WASM plugin system (WasmTool, WasmChannel) |
 
 ---
 
@@ -414,8 +419,8 @@ This document tracks feature parity across fourteen implementations of the perso
 | MMR re-ranking | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | LLM-based query expansion | ✅ | ❌ | ✅ | 🚧 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | LocalGPT: local + LLM expansion |
 | OpenAI embeddings | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ✅ | Agent Zero: sentence-transformers |
-| Gemini embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: gemini-embedding-2-preview |
-| Gemini multimodal embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: image + audio indexing via Gemini |
+| Gemini embeddings | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw + LocalGPT: Gemini embedding providers |
+| Gemini multimodal embeddings | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw + LocalGPT: image + audio indexing via Gemini |
 | Voyage AI embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Mistral embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Ollama embeddings | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
@@ -427,7 +432,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Atomic reindexing | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | |
 | Embeddings batching | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | ❌ | ❌ | ❌ | OpenClaw: batch-openai, batch-gemini, batch-voyage |
 | Citation support | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: on/off/auto modes per chat type |
-| Session memory indexing | 🚧 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: experimental, delta tracking with 100KB/50msg thresholds |
+| Session memory indexing | 🚧 | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: experimental; LocalGPT: session transcripts indexed for search |
 | Post-compaction memory sync | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: forced sync after compaction |
 | memory_get tool (snippet read) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | OpenClaw: path + from line + line count |
 | Memory CLI commands | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
@@ -493,16 +498,16 @@ This document tracks feature parity across fourteen implementations of the perso
 | Feature | OpenClaw | IronClaw | LocalGPT | Moltis | Nanobot | CoPaw | PicoClaw | ZeroClaw | NullClaw | MimiClaw | RosClaw | ZClaw | TinyClaw | Agent Zero | Priority | Notes |
 |---------|----------|----------|----------|--------|---------|-------|----------|----------|----------|----------|---------|-------|----------|------------|----------|-------|
 | Control UI Dashboard | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | - | Agent Zero: Flask Web UI; CoPaw: Console web UI; TinyClaw: TinyOffice |
-| Channel status view | ✅ | 🚧 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | - | Agent Zero: context list |
+| Channel status view | ✅ | 🚧 | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | - | LocalGPT: /api/channels/status + web UI panel; Agent Zero: context list |
 | Agent management | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | P3 | Agent Zero: context management |
 | Model selection | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | - | Agent Zero: settings UI |
-| Config editing | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | P3 | Agent Zero: settings UI |
+| Config editing | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | P3 | LocalGPT: POST /api/config + settings panel; Agent Zero: settings UI |
 | Debug/logs viewer | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | - | Agent Zero: logs/ folder |
 | WebChat interface | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | - | Agent Zero: main chat UI |
-| Canvas system (A2UI) | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | |
+| Canvas system (A2UI) | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | ZeroClaw: Live Canvas |
 | Control UI i18n | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | P3 | CoPaw: i18n support |
 | WebChat theme sync | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P3 | Agent Zero: dark/light mode |
-| Partial output on abort | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | Agent Zero: intervention handling |
+| Partial output on abort | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | P2 | LocalGPT: streaming abort handling; Agent Zero: intervention handling |
 | GraphQL playground | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | |
 | Session sharing via URL | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | - | |
 | Version update notifications | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | - | Agent Zero: update_check extension; CoPaw: v0.0.5 |
@@ -559,8 +564,8 @@ This document tracks feature parity across fourteen implementations of the perso
 | SSRF IPv6 transition bypass block | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Cron webhook SSRF guard | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Loopback-first | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ✅ | ✅ | ✅ | Agent Zero: localhost default |
-| Docker sandbox | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: recommended deployment |
-| Podman support | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: Podman compatible |
+| Docker sandbox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | LocalGPT: DockerSandbox backend (cap-drop ALL, network none, mem 512m); Agent Zero: recommended |
+| Podman support | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | LocalGPT: auto-detects docker/podman; Agent Zero: Podman compatible |
 | WASM sandbox | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: wasmi |
 | Sandbox env sanitization | ✅ | 🚧 | ✅ | 🚧 | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Tool policies | ✅ | ✅ | ✅ | ✅ | 🚧 | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | RosClaw: safety policies; ZClaw: GPIO safe range |
@@ -571,7 +576,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Credential theft via env injection | ✅ | 🚧 | ✅ | 🚧 | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: secrets manager |
 | Session file permissions (0o600) | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Skill download path restriction | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: skills/ folder |
-| Webhook signature verification | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
+| Webhook signature verification | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | LocalGPT: HMAC-SHA256 |
 | Media URL validation | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Prompt injection defense | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ➖ | ❌ | ❌ | ✅ | Agent Zero: system prompt isolation |
 | Leak detection | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | Agent Zero: key redaction; ZClaw: key redaction |
@@ -582,7 +587,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Apple Container sandbox | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | Zero unsafe code | ❌ | ❌ | ❌ | ✅ | ➖ | ➖ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ➖ | N/A for Python |
 | WebSocket origin validation | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| Encrypted secrets storage | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | Agent Zero: secrets manager; ZeroClaw/NullClaw: chacha20poly1305 AEAD; ZClaw: NVS encryption |
+| Encrypted secrets storage | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | LocalGPT: encryption at rest for sessions/config; ZeroClaw/NullClaw: chacha20poly1305 AEAD; ZClaw: NVS encryption; Agent Zero: secrets manager |
 
 ---
 
@@ -603,7 +608,7 @@ This document tracks feature parity across fourteen implementations of the perso
 | Docker: Chromium + Xvfb | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | Agent Zero: browser agent |
 | Docker: init scripts | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | |
 | Browser: extraArgs config | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
-| Workspace crate count | ➖ | 1 | 13 | 46 | ➖ | ➖ | ➖ | 2 | ➖ | ➖ | ➖ | ➖ | ➖ | ➖ | IronClaw: monolithic single crate; Moltis: 46 modular crates |
+| Workspace crate count | ➖ | 1 | 14 | 46 | ➖ | ➖ | ➖ | 2 | ➖ | ➖ | ➖ | ➖ | ➖ | ➖ | LocalGPT: 14 crates (added bridges/slack); Moltis: 46 modular crates |
 | Mobile build scripts | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ZeroClaw: ESP32/Nucleo firmware |
 | Nix/direnv support | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | |
 | mdBook documentation | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | |
@@ -662,25 +667,30 @@ This document tracks feature parity across fourteen implementations of the perso
 - ✅ Subagent support
 - ✅ Multi-provider LLM
 
-**IronClaw additionally:**
+**IronClaw additionally (v0.21.0):**
 - ✅ TUI (rustyline + termimad) + HTTP webhook + WASM sandbox
-- ✅ Web Control UI + WebChat + DM pairing
-- ✅ Gateway control plane + WebSocket
+- ✅ Web Control UI + WebChat + DM pairing + unified settings page
+- ✅ Gateway control plane + WebSocket + webhook relay events
 - ✅ Docker sandbox + cron scheduling
 - ✅ Tinfoil private inference
+- ✅ Self-repair with FaultInjector testing framework + LRU embedding cache
 
 **LocalGPT additionally:**
-- ✅ CLI chat + HTTP server + web UI
-- ✅ Telegram/Discord/WhatsApp bridges
+- ✅ CLI chat + HTTP server + web UI (config editing + channel status panels)
+- ✅ Telegram/Discord/WhatsApp/Slack bridges (tarpc IPC)
 - ✅ iOS/Android via UniFFI
-- ✅ Gen mode (Bevy 3D + FunDSP audio)
-- ✅ OS-level sandbox (Landlock/Seatbelt)
-- ✅ OAuth for 4+ providers
+- ✅ Gen mode (Bevy 3D + FunDSP audio + avian3d physics + world forking)
+- ✅ Multi-layer sandbox: OS-level (Landlock/Seatbelt) + Docker/Podman containers
+- ✅ Encryption at rest (sessions + config secrets)
+- ✅ Browser automation (Chrome DevTools Protocol)
+- ✅ Session transcript indexing + post-compaction context injection
+- ✅ Gemini multimodal embeddings + LLM query expansion
+- ✅ OAuth for 4+ providers + OpenRouter
 - ✅ Desktop GUI (egui)
 - ✅ OpenAI-compatible HTTP API (`/v1/chat/completions`, `/v1/models`)
-- ✅ MCP support (stdio + HTTP/SSE)
+- ✅ MCP support (stdio + HTTP/SSE) + `localgpt tool` CLI management
 - ✅ Cron scheduling + lifecycle hooks
-- ✅ Multi-provider failover + rate limiting + gateway auth
+- ✅ Multi-provider failover + rate limiting + gateway auth + webhook HMAC-SHA256
 - ✅ Config hot-reload + session pruning + doctor diagnostics
 
 **Moltis additionally:**
@@ -696,51 +706,67 @@ This document tracks feature parity across fourteen implementations of the perso
 
 **Nanobot additionally:**
 - ✅ 9 messaging channels + email
-- ✅ 15+ LLM providers (strong Chinese ecosystem)
-- ✅ MCP support (stdio + HTTP)
-- ✅ Cron with delivery routing
+- ✅ 15+ LLM providers (strong Chinese ecosystem) + Anthropic prompt cache optimization
+- ✅ Native multimodal tool perception (autonomous image/media processing)
+- ✅ Interactive onboard wizard with model autocomplete and field hints
+- ✅ /status command (model, channels, MCP tools, uptime)
+- ✅ MCP support (stdio + HTTP) + schema normalization for OpenAI-compatible
+- ✅ Cron with delivery routing + run history tracking
 - ✅ OAuth for GitHub Copilot + OpenAI Codex
 - ✅ Two-layer memory (MEMORY.md + HISTORY.md)
 
-**CoPaw additionally (v0.0.6):**
+**CoPaw additionally (v0.1.0p1):**
 - ✅ Native desktop installers (Windows/macOS one-click setup)
-- ✅ Console web UI with channel management (ModelScope Studio)
-- ✅ 10 channels: DingTalk, Feishu, QQ, Discord, iMessage, Telegram, Signal, Matrix, MQTT, Nostr
+- ✅ Console web UI with multimodal support (image/file uploads, ModelScope Studio)
+- ✅ 10+ channels: DingTalk, Feishu, QQ, Discord, iMessage, Telegram, Signal, Matrix, MQTT, Nostr, WeChat/WeCom QR
+- ✅ Built-in glob_search and grep_search tools for codebase exploration
+- ✅ Skills zip upload for importing skills
 - ✅ Local model support (llama.cpp, MLX, Ollama)
 - ✅ ReMeLight memory system with smart truncation
 - ✅ MCP support (stdio + HTTP)
 - ✅ Cron with delivery routing
-- ✅ Twilio voice channel
+- ✅ Twilio voice channel + Feishu voice processing
 - ✅ Daemon mode + DaemonAgent autonomous diagnostics
 - ✅ Agent interruption API
 - ✅ Russian + Japanese language support
 
 **PicoClaw additionally:**
 - ✅ Ultra-lightweight Go binary (&lt;10MB RAM, &lt;1s boot)
+- ✅ SubTurn evaluator-optimizer system with token budget tracking
+- ✅ TUI launcher with cyberpunk theme, config/gateway management
+- ✅ Event bus + hook manager foundation
 - ✅ Multi-arch: RISC-V, ARM, MIPS, x86
-- ✅ 10+ channels including WeCom, MaixCam, OneBot
-- ✅ CLI-based providers (claude-cli, codex-cli)
+- ✅ 10+ channels including WeCom, MaixCam, OneBot + Telegram streaming
+- ✅ CLI-based providers (claude-cli, codex-cli) + multiple API key failover
 - ✅ I2C hardware support
-- ✅ MCP support
+- ✅ MCP support (deferred mode per server)
 
-**ZeroClaw additionally:**
-- ✅ Ultra-lightweight Rust binary (&lt;5MB RAM)
-- ✅ 26 channels including MQTT, Nextcloud Talk, Linq
-- ✅ Matrix E2EE support
-- ✅ WASM sandbox (wasmi)
-- ✅ Robot kit (look/sense/drive/speak/listen/emote)
-- ✅ SOP (Standard Operating Procedures)
-- ✅ Goals system
+**ZeroClaw additionally (v0.5.8):**
+- ✅ Ultra-lightweight Rust binary (&lt;5MB RAM) with ARM cross-compilation
+- ✅ 26+ channels including MQTT, Nextcloud Talk, Linq, Slack, Gmail Pub/Sub
+- ✅ Matrix E2EE support with room-level gating
+- ✅ Extism WASM plugin system (WasmTool, WasmChannel bridges)
+- ✅ ClaudeCodeTool for two-tier agent delegation
+- ✅ Local TTS (Piper) + Local STT (LocalWhisper)
+- ✅ Live Canvas gateway feature
+- ✅ Voice wake word detection
+- ✅ Image generation via fal.ai
+- ✅ Robot kit (look/sense/drive/speak/listen/emote) + RPi GPIO, Aardvark I2C/SPI
+- ✅ SOP (Standard Operating Procedures) + autonomous skill creation
+- ✅ PostgreSQL memory backend (alongside SQLite)
 - ✅ RAG system
 - ✅ ESP32/Nucleo firmware
 - ✅ Encrypted secrets (chacha20poly1305)
 
-**NullClaw additionally:**
+**NullClaw additionally (v2026.3.21):**
 - ✅ Ultra-lightweight Zig binary (678KB, ~1MB RAM, &lt;2ms boot)
-- ✅ 19 channels + 50+ providers + 35+ tools
+- ✅ 19 channels + 50+ providers + 35+ tools + WeChat/WeCom
+- ✅ NullHub ecosystem branding and documentation
 - ✅ 10 memory engines (SQLite hybrid, Markdown, ClickHouse, PostgreSQL, Redis, LanceDB, Lucid, LRU, API, None)
 - ✅ Hybrid vector+FTS5 memory with Reciprocal Rank Fusion
-- ✅ Multi-layer sandbox (landlock, firejail, bubblewrap, docker)
+- ✅ Multi-layer sandbox (Landlock, Firejail, Bubblewrap, Docker, WASM3)
+- ✅ A2A protocol v0.3.0 with task states and history
+- ✅ Cron HTTP API with session target routing
 - ✅ Dual-backend persistence (SQLite + libSQL/Turso)
 - ✅ Hardware peripherals (I2C, SPI)
 - ✅ Composio integration
@@ -766,10 +792,10 @@ This document tracks feature parity across fourteen implementations of the perso
 - ✅ Robot capability auto-discovery with caching
 - ✅ before_agent_start context injection
 
-**ZClaw additionally:**
+**ZClaw additionally (v2.13.0):**
 - ✅ Ultra-minimalist ESP32 AI assistant (888 KiB firmware budget)
 - ✅ 4 LLM providers (Anthropic, OpenAI, OpenRouter, Ollama)
-- ✅ 27 built-in tools + 8 user-defined tools
+- ✅ 27 built-in tools + 8 user-defined tools + DHT/generic I2C sensor tools
 - ✅ Telegram + Serial/USB + Web Relay channels
 - ✅ NVS encrypted persistent storage
 - ✅ Timezone-aware cron (periodic/daily/once)
@@ -778,18 +804,20 @@ This document tracks feature parity across fourteen implementations of the perso
 - ✅ Rate limiting (100/hr, 1000/day)
 - ✅ OTA firmware updates
 - ✅ QEMU host-side testing
+- ✅ T-Relay board preset
 
-**TinyClaw additionally:**
+**TinyClaw additionally (v0.0.16, rebranded to TinyAGI):**
 - ✅ Multi-agent, multi-team orchestrator
 - ✅ 3 channel implementations (Discord, Telegram, WhatsApp)
 - ✅ SQLite message queue with dead-letter handling
 - ✅ Team collaboration (chain execution, fan-out mentions)
 - ✅ Async chatrooms per team
-- ✅ TinyOffice web dashboard (Next.js, 11 pages)
+- ✅ TinyOffice live workspace with streaming execution progress
+- ✅ Curl-based installer + simplified single-command onboarding
 - ✅ Plugin system with message hooks
 - ✅ Pairing-based access control
 - ✅ CLI-based providers (Claude, Codex, OpenCode)
-- ✅ SSE real-time event streaming
+- ✅ SSE real-time streaming of agent execution progress
 
 **Agent Zero additionally:**
 - ✅ Hierarchical multi-agent with subagent spawning
@@ -826,29 +854,29 @@ This document tracks feature parity across fourteen implementations of the perso
 
 ## 18. Development Activity
 
-Git repository activity metrics as of 2026-03-17.
+Git repository activity metrics as of 2026-03-22.
 
 ### Commit Activity
 
 | Project | Language | Total Commits | Last 90d | Last 30d | Last 7d | First Commit | Last Commit |
 |---------|----------|---------------|----------|----------|---------|--------------|-------------|
-| **OpenClaw** | TypeScript | 20,074 | 18,431 | 9,001 | 2,085 | 2025-11-24 | 2026-03-18 |
-| **ZeroClaw** | Rust | 1,762 | 1,762 | 1,570 | 0 | 2026-02-13 | 2026-03-05 |
-| **NullClaw** | Zig | 1,661 | 1,661 | 1,661 | 364 | 2026-02-16 | 2026-03-17 |
-| **Moltis** | Rust | 1,528 | 1,528 | 365 | 29 | 2026-01-28 | 2026-03-15 |
-| **Agent Zero** | Python | 1,345 | 366 | 6 | 0 | 2024-06-10 | 2026-02-24 |
-| **Nanobot** | Python | 1,332 | 1,332 | 963 | 185 | 2026-02-01 | 2026-03-18 |
-| **PicoClaw** | Go | 1,016 | 1,016 | 769 | 0 | 2026-02-09 | 2026-03-10 |
-| **IronClaw** | Rust | 645 | 645 | 520 | 197 | 2026-02-02 | 2026-03-17 |
-| **CoPaw** | Python | 237 | 237 | 237 | 0 | 2026-02-27 | 2026-03-11 |
-| **MimiClaw** | C (ESP32) | 214 | 214 | 149 | 8 | 2026-02-04 | 2026-03-17 |
-| **ZClaw** | C (ESP32) | 186 | 186 | 186 | 0 | 2026-02-20 | 2026-03-08 |
-| **TinyClaw** | TypeScript | 107 | 107 | 47 | 0 | 2026-02-09 | 2026-03-11 |
-| **RosClaw** | TypeScript + Python | 23 | 23 | 19 | 0 | 2026-02-15 | 2026-03-03 |
+| **OpenClaw** | TypeScript | 21,079 | 19,011 | 8,204 | 1,055 | 2025-11-24 | 2026-03-22 |
+| **ZeroClaw** | Rust | 2,224 | 2,224 | 1,179 | 308 | 2026-02-13 | 2026-03-22 |
+| **NullClaw** | Zig | 1,922 | 1,922 | 1,792 | 239 | 2026-02-16 | 2026-03-21 |
+| **Moltis** | Rust | 1,528 | 1,528 | 271 | 0 | 2026-01-28 | 2026-03-15 |
+| **Nanobot** | Python | 1,397 | 1,397 | 791 | 61 | 2026-02-01 | 2026-03-22 |
+| **PicoClaw** | Go | 1,350 | 1,350 | 873 | 156 | 2026-02-09 | 2026-03-22 |
+| **Agent Zero** | Python | 1,345 | 344 | 3 | 0 | 2024-06-10 | 2026-02-24 |
+| **IronClaw** | Rust | 695 | 695 | 504 | 50 | 2026-02-02 | 2026-03-20 |
+| **CoPaw** | Python | 447 | 447 | 447 | 94 | 2026-02-27 | 2026-03-23 |
+| **MimiClaw** | C (ESP32) | 214 | 214 | 91 | 0 | 2026-02-04 | 2026-03-17 |
+| **ZClaw** | C (ESP32) | 198 | 198 | 197 | 12 | 2026-02-20 | 2026-03-22 |
+| **TinyClaw** | TypeScript | 167 | 167 | 96 | 22 | 2026-02-09 | 2026-03-22 |
+| **RosClaw** | TypeScript + Python | 23 | 23 | 2 | 0 | 2026-02-15 | 2026-03-03 |
 
 ### Contributor Activity (Last 90 Days)
 
-> Contributor counts from GitHub API as of 2026-03-10. Some projects squash commits, so per-contributor rates vary.
+> Contributor counts from GitHub API as of 2026-03-22. Some projects squash commits, so per-contributor rates vary.
 
 | Project | Active Contributors | Total Contributors | Commits/Contributor (90d) |
 |---------|---------------------|-------------------|---------------------------|
@@ -870,37 +898,37 @@ Git repository activity metrics as of 2026-03-17.
 ### Velocity Tiers
 
 **Tier 1 — Hyperactive (>1000 commits/30d):**
-- **OpenClaw** (9,001) — Reference implementation, massive community
-- **NullClaw** (1,661) — Zig upstart, sustained fast growth
-- **ZeroClaw** (1,570) — Rapid development, large community
+- **OpenClaw** (8,204) — Reference implementation, massive community
+- **NullClaw** (1,792) — Zig upstart, sustained fast growth
+- **ZeroClaw** (1,179) — Rapid development, WASM plugins + Live Canvas
 
 **Tier 2 — Very Active (500-1000 commits/30d):**
-- **Nanobot** (963) — Python lightweight
-- **PicoClaw** (769) — Go embedded
-- **IronClaw** (520) — Security-focused Rust, accelerating
+- **PicoClaw** (873) — Go embedded, TUI launcher + SubTurn system
+- **Nanobot** (791) — Python lightweight, multimodal perception
+- **IronClaw** (504) — Security-focused Rust, v0.21.0
 
 **Tier 3 — Moderate (100-500 commits/30d):**
-- **Moltis** (365) — Feature-rich Rust implementation
-- **CoPaw** (237) — Growing fast since Feb 27 launch
-- **ZClaw** (186) — Ultra-minimal ESP32
-- **MimiClaw** (149) — ESP32 embedded
+- **CoPaw** (447) — Growing fast, v0.1.0 release
+- **Moltis** (271) — Feature-rich Rust (slowing)
+- **ZClaw** (197) — Ultra-minimal ESP32, DHT/I2C sensors
+- **TinyClaw** (96) — Rebranded to TinyAGI
+- **MimiClaw** (91) — ESP32 embedded
 
 **Tier 4 — Steady (&lt;100 commits/30d):**
-- **TinyClaw** (47) — Multi-agent orchestrator
-- **RosClaw** (19) — OpenClaw robotics plugin, re-architecture in progress
-- **Agent Zero** (6) — Established Python framework (since 2024), slowing
+- **Agent Zero** (3) — Established Python framework (since 2024), dormant
+- **RosClaw** (2) — OpenClaw robotics plugin, re-architecture in progress
 
 ### Development Patterns
 
 | Pattern | Projects | Notes |
 |---------|----------|-------|
 | **Community-driven** | OpenClaw, Nanobot, PicoClaw, ZeroClaw | 100+ contributors, distributed development |
-| **Small team** | Moltis, MimiClaw, LocalGPT, TinyClaw, Agent Zero | &lt;100 contributors, concentrated development |
+| **Small team** | Moltis, MimiClaw, LocalGPT, TinyClaw (TinyAGI), Agent Zero | &lt;100 contributors, concentrated development |
 | **Corporate-backed** | OpenClaw, CoPaw | OpenClaw: established; CoPaw: Alibaba/AgentScope |
 | **Solo/small founder** | MimiClaw, NullClaw, ZClaw, RosClaw | &lt;10 contributors, focused vision |
 | **Established (pre-2026)** | Agent Zero | Started June 2024, mature codebase |
 | **Recent launches (Feb 2026)** | NullClaw, PicoClaw, ZeroClaw, CoPaw, MimiClaw, LocalGPT, RosClaw, ZClaw, TinyClaw | New wave of implementations |
-| **Specialized** | RosClaw (robotics), TinyClaw (multi-agent), Agent Zero (hierarchical agents) | Domain-specific extensions of the claw pattern |
+| **Specialized** | RosClaw (robotics), TinyClaw/TinyAGI (multi-agent), Agent Zero (hierarchical agents) | Domain-specific extensions of the claw pattern |
 
 ---
 
@@ -922,21 +950,26 @@ Git repository activity metrics as of 2026-03-17.
 2. **Docker sandbox** — Orchestrator/worker pattern with per-job tokens
 3. **NEAR AI focus** — Primary provider with browser OAuth
 4. **Tinfoil private inference** — Hardware-attested TEE provider
-5. **Self-repair** — Automatic detection and recovery of stuck operations
+5. **Self-repair with fault injection** — Automatic stuck detection/recovery + FaultInjector testing framework
 6. **Dynamic tool building** — Describe tools in natural language
 7. **Parallel job execution** — Isolated contexts per job
-8. **PostgreSQL + pgvector** — Vector search with Reciprocal Rank Fusion
-9. **Rich terminal UI** — rustyline + termimad with approval overlays
+8. **PostgreSQL + pgvector** — Vector search with Reciprocal Rank Fusion + LRU embedding cache
+9. **Rich terminal UI** — rustyline + termimad with approval overlays + unified settings page
+10. **Webhook relay events** — Receive relay events via webhook callbacks
 
 ### LocalGPT
-1. **Gen mode** — Bevy 3D scene generation + FunDSP procedural audio synthesis
-2. **Bridge daemon architecture** — tarpc-based IPC for channel isolation (Telegram, Discord, WhatsApp)
+1. **Gen mode** — Bevy 3D scene generation + FunDSP procedural audio + avian3d physics + world forking with attribution
+2. **Bridge daemon architecture** — tarpc-based IPC for channel isolation (Telegram, Discord, WhatsApp, Slack)
 3. **UniFFI mobile bindings** — Native iOS (Swift) + Android (Kotlin) from shared Rust core
-4. **OS-level sandboxing** — Landlock (Linux) + Seatbelt (macOS) for process isolation without Docker
-5. **Policy signing** — HMAC-SHA256 signed LocalGPT.md workspace security policies
-6. **CLI-based providers** — Subprocess delegation to claude-cli, gemini-cli, codex-cli
-7. **Desktop GUI** — Cross-platform egui/eframe application
-8. **Profile isolation** — `--profile` flag for completely isolated config/data directories
+4. **Multi-layer sandboxing** — OS-level (Landlock/Seatbelt) + Docker/Podman containers (cap-drop ALL, network isolation)
+5. **Encryption at rest** — Session and config secret encryption with `localgpt encrypt` CLI
+6. **Browser automation** — Chrome DevTools Protocol tool for web interaction
+7. **Session transcript indexing** — Session transcripts indexed for memory search alongside workspace files
+8. **Post-compaction context injection** — AGENTS.md context injected after session compaction
+9. **Gemini multimodal embeddings** — Image + audio indexing via Gemini embedding provider
+10. **Policy signing** — HMAC-SHA256 signed LocalGPT.md workspace security policies
+11. **MCP server management** — `localgpt tool list/add/remove` CLI for managing MCP server configurations
+12. **Profile isolation** — `--profile` flag for completely isolated config/data directories
 
 ### Moltis
 1. **46-crate workspace** — 196K lines of core code, 2,300+ tests, highly modular
@@ -962,49 +995,64 @@ Git repository activity metrics as of 2026-03-17.
 7. **Cron delivery routing** — Scheduled task results routed to specific messaging channels
 
 ### CoPaw
-1. **AgentScope/Alibaba ecosystem** — Built by Alibaba's AgentScope team with enterprise focus (v0.0.6)
+1. **AgentScope/Alibaba ecosystem** — Built by Alibaba's AgentScope team with enterprise focus (v0.1.0p1)
 2. **Native desktop installers** — One-click setup for Windows and macOS
-3. **Console web UI** — Full-featured browser-based management interface (ModelScope Studio)
-4. **10 channels** — DingTalk, Feishu, QQ, Discord, iMessage, Telegram, Signal, Matrix, MQTT, Nostr
-5. **Local model support** — llama.cpp, MLX, Ollama for on-device inference
-6. **ReMeLight memory** — Smart truncation and memory optimization system
-7. **DaemonAgent** — Autonomous diagnostics agent
-8. **Twilio voice** — Voice call channel via Twilio
-9. **Agent interruption API** — Ability to interrupt running agents
-10. **i18n support** — Russian, Japanese, and CJK language support in web UI
+3. **Console web UI** — Full-featured browser-based management with multimodal support (image/file uploads)
+4. **Built-in code search** — glob_search and grep_search tools for codebase exploration
+5. **10 channels** — DingTalk, Feishu, QQ, Discord, iMessage, Telegram, Signal, Matrix, MQTT, Nostr + WeChat/WeCom QR access
+6. **Local model support** — llama.cpp, MLX, Ollama for on-device inference
+7. **ReMeLight memory** — Smart truncation and memory optimization system
+8. **Skills zip upload** — Import skills from zip archives
+9. **DaemonAgent** — Autonomous diagnostics agent
+10. **Twilio voice** — Voice call channel via Twilio
+11. **Agent interruption API** — Ability to interrupt running agents
+12. **i18n support** — Russian, Japanese, and CJK language support in web UI
 
 ### PicoClaw
 1. **Go-native ultra-lightweight** — &lt;10MB RAM, &lt;1s boot, single binary
-2. **Multi-architecture** — RISC-V, ARM, MIPS, x86 from Sipeed
-3. **$10 hardware target** — Designed for cheapest Linux boards
-4. **WeCom support** — Enterprise WeChat (企业微信) channel
-5. **MaixCam integration** — Embedded camera platform
-6. **AI-bootstrapped development** — 95% agent-generated core code
-7. **Antigravity provider** — Unique provider integration
+2. **SubTurn evaluator-optimizer** — Proof-of-concept for iterative agent refinement with token budget tracking
+3. **TUI launcher** — Full picoclaw-launcher-tui with cyberpunk theme, config management, gateway/channels pages
+4. **Event bus + hook manager** — Foundation for configurable lifecycle hooks with centralized turn events
+5. **Multi-architecture** — RISC-V, ARM, MIPS, x86 from Sipeed
+6. **$10 hardware target** — Designed for cheapest Linux boards
+7. **Telegram streaming** — LLM response streaming via sendMessageDraft
+8. **WebSocket outbound channel** — pico_client outbound for real-time connections
+9. **WeCom support** — Enterprise WeChat (企业微信) channel + long-connection mode
+10. **AI-bootstrapped development** — 95% agent-generated core code
 
 ### ZeroClaw
-1. **Robot kit** — look/sense/drive/speak/listen/emote for physical robots
-2. **ESP32 + Nucleo firmware** — Embedded hardware support
-3. **MQTT channel** — IoT messaging protocol
-4. **Matrix E2EE** — End-to-end encrypted Matrix support
-5. **SOP system** — Standard Operating Procedures for repeatable workflows
-6. **Goals system** — Goal tracking and management
-7. **WASM sandbox** — wasmi runtime for sandboxed tool execution
-8. **Telnyx integration** — SMS/voice via Telnyx
-9. **Linq channel** — Unique messaging platform
+1. **Extism WASM plugin system** — Full plugin host with WasmTool, WasmChannel bridges and example weather plugin (upgraded from wasmi)
+2. **ClaudeCodeTool** — Two-tier agent delegation to Claude Code for complex coding tasks
+3. **Local TTS/STT** — Piper TTS for self-hosted text-to-speech + LocalWhisper for self-hosted speech-to-text
+4. **Live Canvas** — Real-time collaborative gateway feature
+5. **Gmail Pub/Sub push** — Push-based email channel
+6. **Voice wake word detection** — New channel feature for always-listening activation
+7. **Image generation** — Standalone tool via fal.ai
+8. **Robot kit** — look/sense/drive/speak/listen/emote for physical robots
+9. **Hardware integration** — RPi GPIO, Aardvark I2C/SPI/GPIO, hardware plugin system
+10. **ARM cross-compilation** — armv7 and SBC targets in CI
+11. **Slack support** — Thread replies, Assistants API status indicators, native markdown blocks
+12. **Autonomous skills** — Skill creation from multi-step tasks
+13. **PostgreSQL memory backend** — Added alongside existing SQLite
+14. **SOP system** — Standard Operating Procedures for repeatable workflows
+15. **Matrix E2EE** — End-to-end encrypted Matrix support with room-level gating
 
 ### NullClaw
 1. **Zig ultra-lightweight** — 678KB binary, ~1MB RAM, &lt;2ms boot (smallest)
 2. **5,300+ tests** — Most comprehensive test coverage (~250 source files)
-3. **50+ AI providers** — OpenRouter, Anthropic, OpenAI, Ollama, Venice, Groq, Mistral, and many more
-4. **10 memory engines** — SQLite hybrid search, Markdown, ClickHouse, PostgreSQL, Redis, LanceDB, Lucid, LRU, API, None
-5. **35+ tools** — Comprehensive built-in tool set with explicit allowlists
-6. **Multi-layer sandbox** — landlock, firejail, bubblewrap, docker options
-7. **Dual-backend persistence** — SQLite + libSQL/Turso
-8. **Composio integration** — Third-party tool integration platform
-9. **Hardware peripherals** — I2C, SPI, screenshot tools
-10. **True portability** — ARM, x86, RISC-V single binary
-11. **$5 hardware target** — Cheapest possible deployment
+3. **50+ AI providers** — OpenRouter, Anthropic, OpenAI, Ollama, Venice, Groq, Mistral, Xiaomi MiMo, Novita AI, and many more
+4. **NullHub ecosystem** — Branded ecosystem entrypoint with documentation
+5. **10 memory engines** — SQLite hybrid search, Markdown, ClickHouse, PostgreSQL, Redis, LanceDB, Lucid, LRU, API, None
+6. **35+ tools** — Comprehensive built-in tool set with explicit allowlists
+7. **Multi-layer sandbox** — Landlock, Firejail, Bubblewrap, Docker, WASM3 (embedded default)
+8. **A2A protocol** — v0.3.0 agent-to-agent communication with task states and history
+9. **Cron HTTP API** — Live scheduler exposed via HTTP endpoints with session target routing
+10. **Dual-backend persistence** — SQLite + libSQL/Turso
+11. **WeChat/WeCom** — Secure callbacks, DingTalk ops readiness
+12. **Composio integration** — Third-party tool integration platform
+13. **Hardware peripherals** — I2C, SPI, screenshot tools
+14. **True portability** — ARM, x86, RISC-V single binary
+15. **$5 hardware target** — Cheapest possible deployment
 
 ### MimiClaw
 1. **ESP32 bare metal** — No Linux, no Node.js, pure C on ESP-IDF
@@ -1039,17 +1087,18 @@ Git repository activity metrics as of 2026-03-17.
 9. **Telegram poll intelligence** — Exponential backoff (5s→5min), stale poll detection, heap-aware timeout adjustment per target
 10. **Persona system** — Neutral/friendly/technical/witty tone, persistent across reboots
 
-### TinyClaw
+### TinyClaw (rebranded to TinyAGI)
 1. **Multi-agent teams** — Named teams with leader agents, chain execution, and fan-out parallel mentions
 2. **Bracket-tagged mentions** — `[@agent: message]` syntax for agent-to-agent communication within responses
-3. **Async chatrooms** — Persistent per-team chat rooms with real-time CLI viewer (`tinyclaw chatroom`)
-4. **TinyOffice dashboard** — Next.js web portal with 11 pages: dashboard, agents, teams, tasks (kanban), settings, logs, console, office, chat
-5. **SQLite message queue** — Atomic transactions with WAL mode, 5-retry dead-letter, stale message recovery every 5 minutes
-6. **CLI provider delegation** — Spawns `claude`, `codex`, or `opencode` CLIs as subprocesses; custom providers via base_url + api_key
-7. **Plugin system** — Auto-loaded from ~/.tinyclaw/plugins/, transformIncoming/transformOutgoing hooks, event listeners
-8. **Pairing access control** — 8-char random codes, admin approval via CLI, per-sender per-channel allowlist
-9. **SSE event streaming** — Real-time event broadcast (response_ready, chain_step_done, team_chain_end) to all clients
-10. **Tmux deployment** — 24/7 operation via tmux session with queue, channels, heartbeat, and logs in separate panes
+3. **Async chatrooms** — Persistent per-team chat rooms with real-time CLI viewer (`tinyagi chatroom`)
+4. **TinyOffice dashboard** — Next.js web portal with live office workspace, streaming execution progress, and SSE events
+5. **Curl-based installer** — Simplified onboarding to single `tinyagi` command
+6. **SQLite message queue** — Atomic transactions with WAL mode, 5-retry dead-letter, stale message recovery every 5 minutes
+7. **CLI provider delegation** — Spawns `claude`, `codex`, or `opencode` CLIs as subprocesses; custom providers via base_url + api_key
+8. **Plugin system** — Auto-loaded from ~/.tinyagi/plugins/, transformIncoming/transformOutgoing hooks, event listeners
+9. **Pairing access control** — 8-char random codes, admin approval via CLI, per-sender per-channel allowlist
+10. **SSE event streaming** — Real-time streaming of agent execution progress to all clients
+11. **Tmux deployment** — 24/7 operation via tmux session with queue, channels, heartbeat, and logs in separate panes
 
 ### Agent Zero
 1. **Hierarchical multi-agent** — Spawn subagents with delegated tasks via `Agent.Zero` framework pattern

@@ -15,6 +15,31 @@ use crate::env::LOCALGPT_WORKSPACE;
 use crate::paths::Paths;
 use crate::paths::{DEFAULT_DATA_DIR_STR, DEFAULT_STATE_DIR_STR};
 
+/// Memory search backend kind.
+///
+/// Determines which storage engine is used for the memory search index:
+/// - `sqlite` (default): Full-featured FTS5 + optional vector search via SQLite
+/// - `markdown`: Lightweight grep-based search over workspace `.md` files
+/// - `none`: Memory search disabled (workspace file reading still works)
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MemoryBackendKind {
+    #[default]
+    Sqlite,
+    Markdown,
+    None,
+}
+
+impl std::fmt::Display for MemoryBackendKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sqlite => write!(f, "sqlite"),
+            Self::Markdown => write!(f, "markdown"),
+            Self::None => write!(f, "none"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     /// Resolved XDG-compliant paths (not serialized)
@@ -626,6 +651,10 @@ pub struct ActiveHours {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
+    /// Memory search backend: "sqlite" (default), "markdown", or "none"
+    #[serde(default)]
+    pub backend: MemoryBackendKind,
+
     #[serde(default = "default_workspace")]
     pub workspace: String,
 
@@ -1096,6 +1125,7 @@ impl Default for HeartbeatConfig {
 impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
+            backend: MemoryBackendKind::default(),
             workspace: default_workspace(),
             embedding_provider: default_embedding_provider(),
             embedding_model: default_embedding_model(),

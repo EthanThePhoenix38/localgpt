@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use super::MemoryIndex;
+use super::backend::MemoryBackend;
 
 /// Maximum exchanges per chunk (user + assistant = 1 exchange).
 const EXCHANGES_PER_CHUNK: usize = 3;
@@ -20,7 +20,7 @@ const STATE_FILE: &str = "indexed_sessions.json";
 
 /// Session indexer — indexes completed session transcripts into memory search.
 pub struct SessionIndexer<'a> {
-    index: &'a MemoryIndex,
+    backend: &'a dyn MemoryBackend,
     state_path: PathBuf,
     state: IndexState,
 }
@@ -36,7 +36,7 @@ impl<'a> SessionIndexer<'a> {
     ///
     /// `cache_dir` is where the indexing state file is stored
     /// (e.g., `~/.cache/localgpt/memory/`).
-    pub fn new(index: &'a MemoryIndex, cache_dir: &Path) -> Result<Self> {
+    pub fn new(backend: &'a dyn MemoryBackend, cache_dir: &Path) -> Result<Self> {
         let state_path = cache_dir.join(STATE_FILE);
         let state = if state_path.exists() {
             let content = std::fs::read_to_string(&state_path)?;
@@ -45,7 +45,7 @@ impl<'a> SessionIndexer<'a> {
             IndexState::default()
         };
         Ok(Self {
-            index,
+            backend,
             state_path,
             state,
         })
@@ -130,9 +130,9 @@ impl<'a> SessionIndexer<'a> {
             let line_start = i * EXCHANGES_PER_CHUNK * 2 + 1;
             let line_end = line_start + EXCHANGES_PER_CHUNK * 2;
 
-            if let Err(e) = self
-                .index
-                .insert_chunk(&virtual_path, chunk_text, line_start, line_end)
+            if let Err(e) =
+                self.backend
+                    .insert_chunk(&virtual_path, chunk_text, line_start, line_end)
             {
                 warn!("Failed to insert session chunk: {}", e);
                 continue;

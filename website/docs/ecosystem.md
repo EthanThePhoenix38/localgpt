@@ -9,7 +9,7 @@ Explore the broader ecosystem of AI assistant implementations and explorable wor
 
 ## Claw Ecosystem
 
-Feature parity matrix comparing ten implementations of the personal AI assistant architecture across multiple languages (TypeScript, Rust, Python, Go, Zig, C).
+Feature parity matrix comparing fourteen implementations of the personal AI assistant architecture across multiple languages (TypeScript, Rust, Python, Go, Zig, C).
 
 [View Claw Feature Parity Matrix →](/docs/claw)
 

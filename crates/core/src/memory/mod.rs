@@ -1,3 +1,7 @@
+pub mod backend;
+mod backend_markdown;
+mod backend_none;
+mod backend_sqlite;
 mod embeddings;
 mod index;
 pub mod query_expansion;
@@ -6,6 +10,10 @@ pub mod session_index;
 mod watcher;
 mod workspace;
 
+pub use backend::{MemoryBackend, MemoryBackendKind};
+pub use backend_markdown::MarkdownBackend;
+pub use backend_none::NoneBackend;
+pub use backend_sqlite::SqliteBackend;
 #[cfg(feature = "embeddings-local")]
 pub use embeddings::FastEmbedProvider;
 #[cfg(feature = "gguf")]
@@ -34,7 +42,7 @@ use crate::config::{Config, MemoryConfig};
 pub struct MemoryManager {
     workspace: PathBuf,
     db_path: PathBuf,
-    index: MemoryIndex,
+    backend: Arc<dyn MemoryBackend>,
     config: MemoryConfig,
     /// Optional embedding provider for semantic search
     embedding_provider: Option<Arc<dyn EmbeddingProvider>>,
@@ -114,8 +122,16 @@ impl MemoryManager {
             std::fs::create_dir_all(parent)?;
         }
 
-        let index = MemoryIndex::new_with_db_path(&workspace, &db_path)?
-            .with_chunk_config(memory_config.chunk_size, memory_config.chunk_overlap);
+        // Create the search backend based on config
+        let backend: Arc<dyn MemoryBackend> = match memory_config.backend {
+            MemoryBackendKind::Sqlite => {
+                let index = MemoryIndex::new_with_db_path(&workspace, &db_path)?
+                    .with_chunk_config(memory_config.chunk_size, memory_config.chunk_overlap);
+                Arc::new(SqliteBackend::new(index))
+            }
+            MemoryBackendKind::Markdown => Arc::new(MarkdownBackend::new(workspace.clone())),
+            MemoryBackendKind::None => Arc::new(NoneBackend::new()),
+        };
 
         // Create embedding provider based on config
         let embedding_provider: Option<Arc<dyn EmbeddingProvider>> = match memory_config
@@ -263,7 +279,7 @@ impl MemoryManager {
         Ok(Self {
             workspace,
             db_path,
-            index,
+            backend,
             config: memory_config.clone(),
             embedding_provider,
             is_brand_new,
@@ -283,6 +299,11 @@ impl MemoryManager {
 
     pub fn workspace(&self) -> &PathBuf {
         &self.workspace
+    }
+
+    /// Get a reference to the active memory backend.
+    pub fn backend(&self) -> &dyn MemoryBackend {
+        self.backend.as_ref()
     }
 
     /// Read the main MEMORY.md file
@@ -442,7 +463,7 @@ impl MemoryManager {
                 if let Ok(embedding) = embedding_result {
                     debug!("Using hybrid search with {} dimensions", embedding.len());
                     // Use expanded query for FTS component, original for embeddings
-                    return self.index.search_hybrid(
+                    return self.backend.search_hybrid(
                         fts_query,
                         Some(&embedding),
                         &model,
@@ -455,17 +476,17 @@ impl MemoryManager {
         }
 
         // Fallback to FTS-only search with expanded query
-        self.index.search_fts_raw(fts_query, limit)
+        self.backend.search_fts_raw(fts_query, limit)
     }
 
     /// Search memory using FTS only (faster, no API calls)
     pub fn search_fts(&self, query: &str, limit: usize) -> Result<Vec<MemoryChunk>> {
-        self.index.search(query, limit)
+        self.backend.search(query, limit)
     }
 
     /// Get total chunk count
     pub fn chunk_count(&self) -> Result<usize> {
-        self.index.chunk_count()
+        self.backend.chunk_count()
     }
 
     /// Reindex all memory files
@@ -493,7 +514,7 @@ impl MemoryManager {
         {
             if entry.is_file() {
                 stats.files_processed += 1;
-                if self.index.index_file(&entry, force)? {
+                if self.backend.index_file(&entry, force)? {
                     stats.files_updated += 1;
                 }
             }
@@ -528,14 +549,14 @@ impl MemoryManager {
             {
                 if entry.is_file() {
                     stats.files_processed += 1;
-                    if self.index.index_file(&entry, force)? {
+                    if self.backend.index_file(&entry, force)? {
                         stats.files_updated += 1;
                     }
                 }
             }
         }
 
-        stats.chunks_indexed = self.index.chunk_count()?;
+        stats.chunks_indexed = self.backend.chunk_count()?;
         stats.duration = start.elapsed();
 
         info!("Reindex complete: {:?}", stats);
@@ -544,14 +565,14 @@ impl MemoryManager {
 
     /// Remove files from index that no longer exist on disk
     fn cleanup_deleted_files(&self) -> Result<usize> {
-        let indexed_files = self.index.indexed_files()?;
+        let indexed_files = self.backend.indexed_files()?;
         let mut removed = 0;
 
         for relative_path in indexed_files {
             let full_path = self.workspace.join(&relative_path);
             if !full_path.exists() {
                 debug!("Cleaning up deleted file: {}", relative_path);
-                self.index.remove_file(&relative_path)?;
+                self.backend.remove_file(&relative_path)?;
                 removed += 1;
             }
         }
@@ -574,7 +595,7 @@ impl MemoryManager {
             if entry.is_file() {
                 let content = fs::read_to_string(&entry)?;
                 let lines = content.lines().count();
-                let chunks = self.index.file_chunk_count(&entry)?;
+                let chunks = self.backend.file_chunk_count(&entry)?;
                 total_chunks += chunks;
 
                 let display_name = entry
@@ -618,7 +639,7 @@ impl MemoryManager {
                 if entry.is_file() {
                     let content = fs::read_to_string(&entry)?;
                     let lines = content.lines().count();
-                    let chunks = self.index.file_chunk_count(&entry)?;
+                    let chunks = self.backend.file_chunk_count(&entry)?;
                     total_chunks += chunks;
 
                     let display_name = if let Ok(rel) = entry.strip_prefix(&base_path) {
@@ -636,7 +657,7 @@ impl MemoryManager {
             }
         }
 
-        let index_size = self.index.size_bytes()? / 1024;
+        let index_size = self.backend.size_bytes()? / 1024;
 
         Ok(MemoryStats {
             workspace: self.workspace.display().to_string(),
@@ -690,8 +711,17 @@ impl MemoryManager {
         Ok(entries)
     }
 
-    /// Start file watcher for automatic reindexing
+    /// Start file watcher for automatic reindexing.
+    ///
+    /// The file watcher is only supported with the SQLite backend because
+    /// it creates its own `MemoryIndex` connection for the background thread.
     pub fn start_watcher(&self) -> Result<MemoryWatcher> {
+        if self.backend.kind() != MemoryBackendKind::Sqlite {
+            return Err(anyhow::anyhow!(
+                "File watcher is only supported with the SQLite backend (current: {})",
+                self.backend.kind()
+            ));
+        }
         MemoryWatcher::new(
             self.workspace.clone(),
             self.db_path.clone(),
@@ -719,7 +749,7 @@ impl MemoryManager {
 
         loop {
             // Get chunks without embeddings
-            let chunks = self.index.chunks_without_embeddings(batch_size)?;
+            let chunks = self.backend.chunks_without_embeddings(batch_size)?;
             if chunks.is_empty() {
                 break;
             }
@@ -735,7 +765,7 @@ impl MemoryManager {
 
                 // Check cache first
                 if let Ok(Some(cached)) =
-                    self.index
+                    self.backend
                         .get_cached_embedding(&provider_id, &model, &text_hash)
                 {
                     from_cache.push((chunk_id.clone(), cached));
@@ -747,7 +777,7 @@ impl MemoryManager {
 
             // Store cached embeddings
             for (chunk_id, embedding) in from_cache {
-                if let Err(e) = self.index.store_embedding(&chunk_id, &embedding, &model) {
+                if let Err(e) = self.backend.store_embedding(&chunk_id, &embedding, &model) {
                     warn!(
                         "Failed to store cached embedding for chunk {}: {}",
                         chunk_id, e
@@ -767,7 +797,8 @@ impl MemoryManager {
                             to_embed.iter().zip(embeddings.iter())
                         {
                             // Store in chunk
-                            if let Err(e) = self.index.store_embedding(chunk_id, embedding, &model)
+                            if let Err(e) =
+                                self.backend.store_embedding(chunk_id, embedding, &model)
                             {
                                 warn!("Failed to store embedding for chunk {}: {}", chunk_id, e);
                             } else {
@@ -775,7 +806,7 @@ impl MemoryManager {
                             }
 
                             // Store in cache for future reuse
-                            if let Err(e) = self.index.cache_embedding(
+                            if let Err(e) = self.backend.cache_embedding(
                                 &provider_id,
                                 &model,
                                 "", // provider_key (API key identifier, can be empty)
@@ -819,6 +850,6 @@ impl MemoryManager {
             .as_ref()
             .map(|p| p.model().to_string())
             .unwrap_or_default();
-        self.index.embedded_chunk_count(&model)
+        self.backend.embedded_chunk_count(&model)
     }
 }
