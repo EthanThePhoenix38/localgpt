@@ -22,10 +22,10 @@ pub enum ToolCommand {
         #[arg(short, long, default_value = "stdio")]
         transport: String,
         /// Command to run (for stdio transport)
-        #[arg(short, long)]
+        #[arg(long)]
         command: Option<String>,
         /// URL (for sse transport)
-        #[arg(short, long)]
+        #[arg(long)]
         url: Option<String>,
         /// Arguments for the command
         #[arg(last = true)]
