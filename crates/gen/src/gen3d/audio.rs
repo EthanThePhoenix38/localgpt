@@ -70,6 +70,64 @@ pub struct EmitterMeta {
 }
 
 impl AudioEngine {
+    /// Play a one-shot sound emitter at a world position.
+    ///
+    /// Used by trigger systems (proximity, click) to fire PlaySoundAction.
+    /// Creates a temporary emitter named "trigger_{sound}_{counter}" with
+    /// a default volume and no spatial tracking (fire-and-forget).
+    pub fn play_emitter_at(&mut self, sound_name: &str, position: Vec3) {
+        use super::commands::{EmitterSound, WaveformType, FilterType};
+
+        let emitter_name = format!("trigger_{}_{}", sound_name, self.emitter_params.len());
+        let volume = shared(0.6);
+        let pan = shared(0.0); // center pan for one-shots
+
+        // Infer EmitterSound from the name
+        let sound = match sound_name {
+            "water" => EmitterSound::Water { turbulence: 0.5 },
+            "fire" => EmitterSound::Fire {
+                intensity: 0.7,
+                crackle: 0.5,
+            },
+            "hum" => EmitterSound::Hum {
+                frequency: 220.0,
+                warmth: 0.5,
+            },
+            "wind" => EmitterSound::Wind { pitch: 300.0 },
+            _ => EmitterSound::Custom {
+                waveform: WaveformType::WhiteNoise,
+                filter_cutoff: 2000.0,
+                filter_type: FilterType::Lowpass,
+            },
+        };
+
+        let _ = self.graph_tx.send(AudioGraphUpdate::AddEmitter {
+            name: emitter_name.clone(),
+            sound: sound.clone(),
+            volume_shared: volume.clone(),
+            pan_shared: pan.clone(),
+        });
+
+        self.emitter_params.insert(
+            emitter_name.clone(),
+            EmitterSharedParams {
+                volume,
+                pan,
+            },
+        );
+        self.emitter_meta.insert(
+            emitter_name,
+            EmitterMeta {
+                sound_type: sound_name.to_string(),
+                sound,
+                base_volume: 0.6,
+                radius: 10.0,
+                attached_to: None,
+                position: Some([position.x, position.y, position.z]),
+            },
+        );
+    }
+
     /// Stop all audio: remove all emitters and clear ambience state.
     pub fn stop_all(&mut self) {
         let emitter_names: Vec<String> = self.emitter_params.keys().cloned().collect();

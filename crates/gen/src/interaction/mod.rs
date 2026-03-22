@@ -497,11 +497,13 @@ pub fn proximity_trigger_system(
         Option<&TeleportAction>,
         Option<&AddScoreAction>,
         Option<&ToggleStateAction>,
+        Option<&PlaySoundAction>,
         Option<&OnceTrigger>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
     mut trigger_events: MessageWriter<TriggerFired>,
     mut commands: Commands,
+    mut audio_engine: ResMut<crate::gen3d::audio::AudioEngine>,
 ) {
     let player_pos = if let Ok(player_transform) = player_query.single() {
         player_transform.translation
@@ -510,7 +512,8 @@ pub fn proximity_trigger_system(
     };
     let now = time.elapsed_secs();
 
-    for (entity, transform, mut trigger, teleport, score, toggle, once) in trigger_query.iter_mut()
+    for (entity, transform, mut trigger, teleport, score, toggle, play_sound, once) in
+        trigger_query.iter_mut()
     {
         let distance = player_pos.distance(transform.translation);
         if distance > trigger.radius {
@@ -553,6 +556,12 @@ pub fn proximity_trigger_system(
                 estate.insert(EntityState::default());
             }
         }
+        if let Some(sound_action) = play_sound {
+            audio_engine.play_emitter_at(
+                &sound_action.sound,
+                transform.translation,
+            );
+        }
 
         // Remove trigger if once
         if once.is_some() {
@@ -577,11 +586,13 @@ pub fn click_trigger_system(
         Option<&TeleportAction>,
         Option<&AddScoreAction>,
         Option<&ToggleStateAction>,
+        Option<&PlaySoundAction>,
         Option<&OnceTrigger>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
     mut trigger_events: MessageWriter<TriggerFired>,
     mut commands: Commands,
+    mut audio_engine: ResMut<crate::gen3d::audio::AudioEngine>,
 ) {
     if !keyboard.just_pressed(KeyCode::KeyE) {
         return;
@@ -595,7 +606,7 @@ pub fn click_trigger_system(
 
     // Find the closest click-triggerable entity within range
     let mut closest: Option<(Entity, f32)> = None;
-    for (entity, transform, trigger, _, _, _, _) in click_query.iter() {
+    for (entity, transform, trigger, _, _, _, _, _) in click_query.iter() {
         let distance = player_pos.distance(transform.translation);
         if distance <= trigger.max_distance && (closest.is_none() || distance < closest.unwrap().1)
         {
@@ -608,7 +619,7 @@ pub fn click_trigger_system(
     };
 
     // Fire actions on the closest entity
-    if let Ok((entity, _transform, _trigger, teleport, score, toggle, once)) =
+    if let Ok((entity, trigger_transform, _trigger, teleport, score, toggle, play_sound, once)) =
         click_query.get(target_entity)
     {
         // Emit trigger event (for EntityLink chain reactions)
@@ -640,6 +651,12 @@ pub fn click_trigger_system(
             && let Ok(mut estate) = commands.get_entity(entity)
         {
             estate.insert(EntityState::default());
+        }
+        if let Some(sound_action) = play_sound {
+            audio_engine.play_emitter_at(
+                &sound_action.sound,
+                trigger_transform.translation,
+            );
         }
 
         if once.is_some() {
@@ -758,8 +775,9 @@ pub fn door_proximity_system(
 pub fn collectible_system(
     time: Res<Time>,
     player_query: Query<&Transform, With<crate::character::Player>>,
-    mut collectible_query: Query<(Entity, &Transform, &mut Collectible, &mut Visibility)>,
+    mut collectible_query: Query<(Entity, &Transform, &mut Collectible, &mut Visibility, Option<&Name>)>,
     mut score_board: ResMut<ScoreBoard>,
+    mut inventory: ResMut<PlayerInventory>,
     mut commands: Commands,
 ) {
     let Ok(player_transform) = player_query.single() else {
@@ -767,7 +785,7 @@ pub fn collectible_system(
     };
     let player_pos = player_transform.translation;
 
-    for (entity, transform, mut collectible, mut visibility) in collectible_query.iter_mut() {
+    for (entity, transform, mut collectible, mut visibility, name) in collectible_query.iter_mut() {
         // Handle respawn timer
         if let Some(ref mut timer) = collectible.respawn_timer {
             timer.tick(time.delta());
@@ -794,6 +812,14 @@ pub fn collectible_system(
             .entry(collectible.category.clone())
             .or_insert(0);
         *entry += collectible.value;
+
+        // Add to inventory if category is "key" (unlocks doors with requires_key)
+        if collectible.category == "key" {
+            let key_name = name
+                .map(|n| n.as_str().to_string())
+                .unwrap_or_else(|| format!("key_{}", entity.index()));
+            inventory.add_item(key_name);
+        }
 
         // Apply pickup effect
         match collectible.pickup_effect {
