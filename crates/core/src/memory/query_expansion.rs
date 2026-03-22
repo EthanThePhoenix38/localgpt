@@ -76,7 +76,7 @@ fn detect_language(text: &str) -> Language {
         match c as u32 {
             0x4E00..=0x9FFF | 0x3400..=0x4DBF => cjk += 1,
             0xAC00..=0xD7AF | 0x1100..=0x11FF => hangul += 1,
-            0x3040..=0x309F | 0x30A0..=0x30FF => hiragana_katakana += 1,
+            0x3040..=0x30FF => hiragana_katakana += 1,
             0x0600..=0x06FF => arabic += 1,
             _ => {}
         }

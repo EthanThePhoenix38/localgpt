@@ -300,6 +300,7 @@ pub fn get_terrain_material_color(material: TerrainMaterial) -> Color {
 /// Extracts vertex positions and triangle indices from the mesh asset
 /// and creates a `Collider::trimesh` so physics bodies don't fall through.
 #[cfg(feature = "physics")]
+#[allow(clippy::type_complexity)]
 pub fn terrain_collider_system(
     mut commands: Commands,
     query: Query<(Entity, &Mesh3d), (Added<Terrain>, Without<Collider>)>,

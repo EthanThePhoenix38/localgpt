@@ -77,56 +77,57 @@ pub fn extract_structural_claims(
         let line = line.trim();
 
         // Check for <!-- sync: {...} --> HTML comments (authoritative)
-        if let Some(sync_start) = line.find("<!-- sync:") {
-            if let Some(sync_end) = line[sync_start..].find("-->") {
-                let json_str = line[sync_start + 10..sync_start + sync_end].trim();
-                if let Ok(claim) = serde_json::from_str::<StructuralClaim>(json_str) {
-                    claims.push(claim);
-                    continue;
-                }
+        if let Some(sync_start) = line.find("<!-- sync:")
+            && let Some(sync_end) = line[sync_start..].find("-->")
+        {
+            let json_str = line[sync_start + 10..sync_start + sync_end].trim();
+            if let Ok(claim) = serde_json::from_str::<StructuralClaim>(json_str) {
+                claims.push(claim);
+                continue;
             }
         }
 
         // Fallback: parse "- **name** — description" lines
-        if line.starts_with("- **") {
-            if let Some(name_end) = line[4..].find("**") {
-                let entity_name = line[4..4 + name_end].to_string();
-                let rest = &line[4 + name_end + 2..];
+        if line.starts_with("- **")
+            && let Some(name_end) = line[4..].find("**")
+        {
+            let entity_name = line[4..4 + name_end].to_string();
+            let rest = &line[4 + name_end + 2..];
 
-                let mut claim = StructuralClaim {
-                    entity_name: Some(entity_name),
-                    count: None,
-                    position: None,
-                    dimensions: None,
-                    tier: None,
-                    material_hint: None,
-                    behavior_hint: None,
-                };
+            let mut claim = StructuralClaim {
+                entity_name: Some(entity_name),
+                count: None,
+                position: None,
+                dimensions: None,
+                tier: None,
+                material_hint: None,
+                behavior_hint: None,
+            };
 
-                // Parse backtick-delimited position: `[x, y, z]`
-                if let Some(pos) = extract_backtick_array(rest) {
-                    claim.position = Some(pos);
-                }
-
-                // Parse dimensions: NxNxNm
-                if let Some(dims) = extract_dimensions(rest) {
-                    claim.dimensions = Some(dims);
-                }
-
-                // Parse material hint: last comma-separated phrase
-                if let Some(hint) = extract_material_hint(rest) {
-                    claim.material_hint = Some(hint);
-                }
-
-                claims.push(claim);
+            // Parse backtick-delimited position: `[x, y, z]`
+            if let Some(pos) = extract_backtick_array(rest) {
+                claim.position = Some(pos);
             }
+
+            // Parse dimensions: NxNxNm
+            if let Some(dims) = extract_dimensions(rest) {
+                claim.dimensions = Some(dims);
+            }
+
+            // Parse material hint: last comma-separated phrase
+            if let Some(hint) = extract_material_hint(rest) {
+                claim.material_hint = Some(hint);
+            }
+
+            claims.push(claim);
         }
 
         // Parse count patterns: "4x market stalls..."
-        if line.starts_with("- ") && !line.starts_with("- **") {
-            if let Some(count_claim) = parse_count_line(&line[2..]) {
-                claims.push(count_claim);
-            }
+        if line.starts_with("- ")
+            && !line.starts_with("- **")
+            && let Some(count_claim) = parse_count_line(&line[2..])
+        {
+            claims.push(count_claim);
         }
     }
 
@@ -190,7 +191,6 @@ fn parse_count_line(text: &str) -> Option<StructuralClaim> {
     let x_pos = text.find('x')?;
     let count: u32 = text[..x_pos].trim().parse().ok()?;
     let name_part = text[x_pos + 1..]
-        .trim()
         .split_whitespace()
         .take(3)
         .collect::<Vec<_>>()
@@ -221,7 +221,7 @@ pub fn load_sync_manifest(meta_dir: &Path) -> Option<SyncManifest> {
 pub fn save_sync_manifest(meta_dir: &Path, manifest: &SyncManifest) -> std::io::Result<()> {
     std::fs::create_dir_all(meta_dir)?;
     let ron_str = ron::ser::to_string_pretty(manifest, ron::ser::PrettyConfig::default())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
     std::fs::write(meta_dir.join(".sync.ron"), ron_str)
 }
 

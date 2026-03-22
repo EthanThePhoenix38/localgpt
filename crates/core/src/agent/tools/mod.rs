@@ -595,10 +595,10 @@ impl Tool for DocumentLoadTool {
         }
 
         // Check cache
-        if let Some(ref cache) = self.cache {
-            if let Some(cached) = cache.get(&resolved) {
-                return Ok(cached);
-            }
+        if let Some(ref cache) = self.cache
+            && let Some(cached) = cache.get(&resolved)
+        {
+            return Ok(cached);
         }
 
         debug!("Loading document: {} ({})", resolved.display(), ext);
@@ -710,10 +710,10 @@ impl Tool for AudioTranscribeTool {
         }
 
         // Check cache
-        if let Some(ref cache) = self.cache {
-            if let Some(cached) = cache.get(&resolved) {
-                return Ok(cached);
-            }
+        if let Some(ref cache) = self.cache
+            && let Some(cached) = cache.get(&resolved)
+        {
+            return Ok(cached);
         }
 
         let audio_data = fs::read(&resolved)?;

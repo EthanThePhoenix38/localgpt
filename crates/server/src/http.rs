@@ -1391,23 +1391,23 @@ fn apply_config_value(content: &str, key: &str, value: &str) -> String {
         }
 
         // Replace matching key in target section
-        if in_target_section && !value_set && trimmed.starts_with(field) {
-            if let Some((key_part, _)) = trimmed.split_once('=') {
-                if key_part.trim() == field {
-                    let indent = &line[..line.len() - trimmed.len()];
-                    // Determine if value needs quoting
-                    let formatted =
-                        if value.parse::<f64>().is_ok() || value == "true" || value == "false" {
-                            format!("{}{} = {}", indent, field, value)
-                        } else {
-                            format!("{}{} = \"{}\"", indent, field, value)
-                        };
-                    result.push_str(&formatted);
-                    result.push('\n');
-                    value_set = true;
-                    continue;
-                }
-            }
+        if in_target_section
+            && !value_set
+            && trimmed.starts_with(field)
+            && let Some((key_part, _)) = trimmed.split_once('=')
+            && key_part.trim() == field
+        {
+            let indent = &line[..line.len() - trimmed.len()];
+            // Determine if value needs quoting
+            let formatted = if value.parse::<f64>().is_ok() || value == "true" || value == "false" {
+                format!("{}{} = {}", indent, field, value)
+            } else {
+                format!("{}{} = \"{}\"", indent, field, value)
+            };
+            result.push_str(&formatted);
+            result.push('\n');
+            value_set = true;
+            continue;
         }
 
         result.push_str(line);

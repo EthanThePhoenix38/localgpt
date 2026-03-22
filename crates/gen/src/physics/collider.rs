@@ -135,6 +135,7 @@ pub fn collider_setup_system(
 /// and inserts a matching Avian `Collider` so physics bodies don't fall through.
 /// Complex shapes (torus, pyramid, tetrahedron, wedge) use AABB bounding box fallback.
 #[cfg(feature = "physics")]
+#[allow(clippy::type_complexity)]
 pub fn auto_collider_system(
     mut commands: Commands,
     query: Query<
@@ -184,6 +185,7 @@ pub fn auto_collider_system(
 /// and generates trimesh colliders from vertex/index data, identical to the
 /// terrain collider approach.
 #[cfg(feature = "physics")]
+#[allow(clippy::type_complexity)]
 pub fn gltf_mesh_collider_system(
     mut commands: Commands,
     query: Query<

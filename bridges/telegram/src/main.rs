@@ -596,10 +596,10 @@ async fn handle_command(
 /// Check if a Chat is a forum-enabled supergroup.
 fn is_forum_chat(chat: &teloxide::types::Chat) -> bool {
     use teloxide::types::{ChatKind, PublicChatKind};
-    if let ChatKind::Public(public) = &chat.kind {
-        if let PublicChatKind::Supergroup(sg) = &public.kind {
-            return sg.is_forum;
-        }
+    if let ChatKind::Public(public) = &chat.kind
+        && let PublicChatKind::Supergroup(sg) = &public.kind
+    {
+        return sg.is_forum;
     }
     false
 }
@@ -623,10 +623,10 @@ async fn is_forum_chat_remote(bot: &Bot, chat_id: ChatId) -> bool {
     use teloxide::types::{ChatFullInfoKind, ChatFullInfoPublicKind};
     match bot.get_chat(chat_id).await {
         Ok(chat) => {
-            if let ChatFullInfoKind::Public(public) = &chat.kind {
-                if let ChatFullInfoPublicKind::Supergroup(sg) = &public.kind {
-                    return sg.is_forum;
-                }
+            if let ChatFullInfoKind::Public(public) = &chat.kind
+                && let ChatFullInfoPublicKind::Supergroup(sg) = &public.kind
+            {
+                return sg.is_forum;
             }
             false
         }

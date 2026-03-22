@@ -842,14 +842,14 @@ pub fn recover_orphaned_sessions(agent_id: &str) -> Result<usize> {
             None => continue,
         };
 
-        if let Ok(mut session) = Session::load_from_path(&path, &session_id) {
-            if session.aborted_last_run {
-                tracing::info!("Recovering orphaned session: {}", session.id);
-                session.aborted_last_run = false;
-                session.inject_recovery_message();
-                session.save_to_path(&path)?;
-                recovered += 1;
-            }
+        if let Ok(mut session) = Session::load_from_path(&path, &session_id)
+            && session.aborted_last_run
+        {
+            tracing::info!("Recovering orphaned session: {}", session.id);
+            session.aborted_last_run = false;
+            session.inject_recovery_message();
+            session.save_to_path(&path)?;
+            recovered += 1;
         }
     }
 

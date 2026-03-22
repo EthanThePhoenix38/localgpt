@@ -236,10 +236,11 @@ async fn handle_message_event(state: Arc<BotState>, msg: SlackMessageEvent) {
     }
 
     // Mention gate for group channels
-    if !is_dm && state.slack_config.mention_mode == MentionMode::Mention {
-        if !is_mentioned(&state.bot_user_id, text) {
-            return;
-        }
+    if !is_dm
+        && state.slack_config.mention_mode == MentionMode::Mention
+        && !is_mentioned(&state.bot_user_id, text)
+    {
+        return;
     }
 
     let text = strip_mention(&state.bot_user_id, text);
@@ -529,10 +530,10 @@ async fn main() -> Result<()> {
             guard.get_user_state::<Arc<BotState>>().cloned()
         };
 
-        if let Some(state) = bot_state {
-            if let SlackEventCallbackBody::Message(msg) = event.event {
-                handle_message_event(state, msg).await;
-            }
+        if let Some(state) = bot_state
+            && let SlackEventCallbackBody::Message(msg) = event.event
+        {
+            handle_message_event(state, msg).await;
         }
         Ok(())
     }

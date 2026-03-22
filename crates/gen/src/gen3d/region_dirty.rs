@@ -34,6 +34,7 @@ impl RegionDirtyFlags {
 }
 
 /// System that runs each frame to detect entity changes and latch dirty flags.
+#[allow(clippy::type_complexity)]
 pub fn track_region_dirty(
     mut flags: ResMut<RegionDirtyFlags>,
     changed: Query<&RegionMember, Or<(Changed<Transform>, Changed<Visibility>)>>,

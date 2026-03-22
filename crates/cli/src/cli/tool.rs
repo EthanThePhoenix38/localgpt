@@ -61,7 +61,7 @@ async fn cmd_list() -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<10} {}", "NAME", "TRANSPORT", "COMMAND/URL");
+    println!("{:<20} {:<10} COMMAND/URL", "NAME", "TRANSPORT");
     println!("{}", "-".repeat(60));
 
     for server in &config.mcp.servers {
