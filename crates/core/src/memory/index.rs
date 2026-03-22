@@ -427,6 +427,48 @@ impl MemoryIndex {
         Ok(results)
     }
 
+    /// Search using a pre-built FTS5 query string (bypasses build_fts_query).
+    /// Used by query expansion which provides its own OR-joined keyword query.
+    pub fn search_fts_raw(&self, fts_query: &str, limit: usize) -> Result<Vec<MemoryChunk>> {
+        if fts_query.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT fts.path, fts.start_line, fts.end_line, fts.text, bm25(chunks_fts) as score, c.updated_at
+            FROM chunks_fts fts
+            JOIN chunks c ON c.id = fts.id
+            WHERE chunks_fts MATCH ?1
+            ORDER BY score
+            LIMIT ?2
+            "#,
+        )?;
+
+        let rows = stmt.query_map(params![fts_query, limit as i64], |row| {
+            Ok(MemoryChunk {
+                file: row.get(0)?,
+                line_start: row.get(1)?,
+                line_end: row.get(2)?,
+                content: row.get(3)?,
+                score: row.get::<_, f64>(4)?.abs(),
+                updated_at: row.get(5)?,
+            })
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+
+        Ok(results)
+    }
+
     /// Get total chunk count
     pub fn chunk_count(&self) -> Result<usize> {
         let conn = self
@@ -909,15 +951,15 @@ impl MemoryIndex {
     /// Hybrid search: combine FTS and vector results
     pub fn search_hybrid(
         &self,
-        query: &str,
+        fts_query: &str,
         query_embedding: Option<&[f32]>,
         model: &str,
         limit: usize,
         text_weight: f32,
         vector_weight: f32,
     ) -> Result<Vec<MemoryChunk>> {
-        // Get FTS results
-        let fts_results = self.search(query, limit * 2)?;
+        // Get FTS results using pre-built query (from query expansion or raw)
+        let fts_results = self.search_fts_raw(fts_query, limit * 2)?;
 
         // Get vector results if embedding provided
         let vector_results = if let Some(embedding) = query_embedding {

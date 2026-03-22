@@ -1,5 +1,6 @@
 mod embeddings;
 mod index;
+pub mod query_expansion;
 mod search;
 pub mod session_index;
 mod watcher;
@@ -13,6 +14,7 @@ pub use embeddings::{
     EmbeddingProvider, GeminiEmbeddingProvider, OpenAIEmbeddingProvider, hash_text,
 };
 pub use index::{MemoryIndex, ReindexStats};
+pub use query_expansion::{ExpandedQuery, expand_query_local, parse_llm_keywords, EXPAND_PROMPT};
 pub use search::MemoryChunk;
 pub use watcher::MemoryWatcher;
 pub use workspace::{init_state_dir, init_workspace};
@@ -413,6 +415,15 @@ impl MemoryManager {
 
     /// Search memory without temporal decay (internal use)
     fn search_raw(&self, query: &str, limit: usize) -> Result<Vec<MemoryChunk>> {
+        // Expand query for better FTS5 keyword matching
+        let expanded = query_expansion::expand_query_local(query);
+        let fts_query = &expanded.fts_query;
+        debug!(
+            "Query expanded: {:?} -> {} keywords",
+            query,
+            expanded.keywords.len()
+        );
+
         // If we have an embedding provider, try hybrid search
         if let Some(ref provider) = self.embedding_provider {
             // Try to get query embedding (may fail if no API key, rate limited, etc.)
@@ -430,8 +441,9 @@ impl MemoryManager {
 
                 if let Ok(embedding) = embedding_result {
                     debug!("Using hybrid search with {} dimensions", embedding.len());
+                    // Use expanded query for FTS component, original for embeddings
                     return self.index.search_hybrid(
-                        query,
+                        fts_query,
                         Some(&embedding),
                         &model,
                         limit,
@@ -442,8 +454,8 @@ impl MemoryManager {
             }
         }
 
-        // Fallback to FTS-only search
-        self.index.search(query, limit)
+        // Fallback to FTS-only search with expanded query
+        self.index.search_fts_raw(fts_query, limit)
     }
 
     /// Search memory using FTS only (faster, no API calls)

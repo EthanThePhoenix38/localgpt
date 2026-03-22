@@ -668,6 +668,12 @@ pub struct MemoryConfig {
     /// 0.05 = ~50% penalty for 14-day old memory
     #[serde(default)]
     pub temporal_decay_lambda: f64,
+
+    /// Enable LLM-based query expansion for memory search.
+    /// Costs one extra LLM call per search but produces better keywords
+    /// from conversational queries. Default: false.
+    #[serde(default)]
+    pub llm_query_expansion: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1087,6 +1093,7 @@ impl Default for MemoryConfig {
             gemini_api_key: None,
             index_sessions: false,
             multimodal_embeddings: false,
+            llm_query_expansion: false,
         }
     }
 }
