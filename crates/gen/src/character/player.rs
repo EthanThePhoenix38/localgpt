@@ -623,8 +623,7 @@ pub fn noclip_movement_system(
         let move_dir = forward * input.move_forward + right * input.move_right;
         let move_dir = move_dir.normalize_or_zero();
 
-        let velocity =
-            Vec3::new(move_dir.x, input.move_up, move_dir.y) * speed * time.delta_secs();
+        let velocity = Vec3::new(move_dir.x, input.move_up, move_dir.y) * speed * time.delta_secs();
         transform.translation += velocity;
     }
 }

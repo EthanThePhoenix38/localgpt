@@ -170,28 +170,28 @@ pub fn camera_follow_system(
         let mut target_position = compute_target_position(&camera, player_transform);
 
         // Spring Arm (Collision Avoidance) for Third Person
-        if camera.mode == CameraPov::ThirdPerson {
-            if let Some(ref spatial_query) = spatial_query {
-                let origin = player_transform.translation + Vec3::new(0.0, 1.5, 0.0);
-                let dir = target_position - origin;
-                let dist = dir.length();
+        if camera.mode == CameraPov::ThirdPerson
+            && let Some(ref spatial_query) = spatial_query
+        {
+            let origin = player_transform.translation + Vec3::new(0.0, 1.5, 0.0);
+            let dir = target_position - origin;
+            let dist = dir.length();
 
-                if dist > 0.001 {
-                    let direction = dir.normalize();
+            if dist > 0.001 {
+                let direction = dir.normalize();
 
-                    // Raycast to check for obstructions (filter out player entity)
-                    let filter = SpatialQueryFilter::from_excluded_entities([player_entity]);
+                // Raycast to check for obstructions (filter out player entity)
+                let filter = SpatialQueryFilter::from_excluded_entities([player_entity]);
 
-                    if let Some(hit) = spatial_query.cast_ray(
-                        origin,
-                        Dir3::new(direction).unwrap(),
-                        dist,
-                        true,
-                        &filter,
-                    ) {
-                        // Hit something, pull camera in
-                        target_position = origin + direction * (hit.distance - 0.2).max(0.5);
-                    }
+                if let Some(hit) = spatial_query.cast_ray(
+                    origin,
+                    Dir3::new(direction).unwrap(),
+                    dist,
+                    true,
+                    &filter,
+                ) {
+                    // Hit something, pull camera in
+                    target_position = origin + direction * (hit.distance - 0.2).max(0.5);
                 }
             }
         }
