@@ -17,22 +17,24 @@ A comparison of AI systems that generate or interact with 3D explorable worlds.
 | [Artcraft](https://artcraft.ai/) | Text | Images, Video | Cloud | Creative IDE for AI media |
 | [Intangible](https://www.intangible.ai/) | Text | 3D Scenes | Cloud | Camera-centric scene composition |
 | [SceneCraft](https://www.scenecraft.org/) | Text | Interactive narratives | Cloud | AI storytelling for education |
+| [Unity AI Beta](https://discussions.unity.com/t/unity-ai-beta-2026-is-here/1703625) | Text | 3D Scenes | Cloud + Local | AI-assisted game development |
+| [Roblox AI](https://www.developer-tech.com/news/roblox-brings-ai-generated-game-objects-to-its-developer-tools/) | Text | Game Objects | Cloud | AI-generated game objects |
 | **LocalGPT Gen** | Text | Interactive 3D (glTF) | Local | Open-source world building |
 
 ## Feature Comparison
 
-| Feature | Genie 3 | SIMA 2 | WorldGen | Marble | Artcraft | Intangible | SceneCraft | LocalGPT Gen |
-|---------|---------|--------|----------|--------|----------|------------|------------|--------------|
-| Text-to-3D | ✓ | — | ✓ | ✓ | — | ✓ | — | ✓ |
-| Image-to-3D | ✓ | — | — | ✓ | — | — | — | — |
-| Interactive playback | ✓ | ✓ | — | — | — | ✓ | ✓ | ✓ |
-| Real-time simulation | ✓ | ✓ | — | — | — | — | — | ✓ |
-| Structured generation | — | — | ✓ | — | — | — | ✓ | ✓ |
-| Local execution | — | — | — | — | — | — | — | ✓ |
-| Open source | — | — | — | — | — | — | — | ✓ |
-| Procedural audio | — | — | — | — | — | — | — | ✓ |
-| glTF/USD export | — | — | ✓ | ✓ | — | ✓ | — | ✓ |
-| Agent control | — | ✓ | — | — | — | — | — | ✓ |
+| Feature | Genie 3 | SIMA 2 | WorldGen | Marble | Artcraft | Intangible | SceneCraft | Unity AI | Roblox AI | LocalGPT Gen |
+|---------|---------|--------|----------|--------|----------|------------|------------|----------|-----------|--------------|
+| Text-to-3D | ✓ | — | ✓ | ✓ | — | ✓ | — | ✓ | ✓ | ✓ |
+| Image-to-3D | ✓ | — | — | ✓ | — | — | — | — | — | — |
+| Interactive playback | ✓ | ✓ | — | — | — | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Real-time simulation | ✓ | ✓ | — | — | — | — | — | ✓ | ✓ | ✓ |
+| Structured generation | — | — | ✓ | — | — | — | ✓ | ✓ | ✓ | ✓ |
+| Local execution | — | — | — | — | — | — | — | ✓ | — | ✓ |
+| Open source | — | — | — | — | — | — | — | — | — | ✓ |
+| Procedural audio | — | — | — | — | — | — | — | — | — | ✓ |
+| glTF/USD export | — | — | ✓ | ✓ | — | ✓ | — | ✓ | — | ✓ |
+| Agent control | — | ✓ | — | — | — | — | — | — | — | ✓ |
 
 ## System Highlights
 
@@ -67,6 +69,18 @@ AI-powered storytelling platform that generates interactive, narrative-based lea
 - [scenecraft.org](https://www.scenecraft.org/)
 - [Authoring tool](https://scenecraft.csc.ncsu.edu/scenecraft/home)
 - [EngageAI publications](https://engageai.org/publications)
+
+### Unity AI Beta
+
+Unity's 2026 AI Beta integrates AI-powered tools directly into the Unity Editor for generating and modifying game objects, scenes, and assets from natural language prompts. Combines cloud AI services with local editor execution.
+
+- [Unity AI Beta 2026 announcement](https://discussions.unity.com/t/unity-ai-beta-2026-is-here/1703625)
+
+### Roblox AI
+
+Roblox brings AI-generated game objects to its developer tools, enabling creators to generate 3D objects, textures, and game assets from text descriptions directly within Roblox Studio.
+
+- [Roblox AI-generated game objects](https://www.developer-tech.com/news/roblox-brings-ai-generated-game-objects-to-its-developer-tools/)
 
 ### LocalGPT Gen
 
