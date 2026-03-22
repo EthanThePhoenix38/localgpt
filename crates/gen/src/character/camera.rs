@@ -186,7 +186,7 @@ pub fn camera_follow_system(
                     Dir3::new(direction).unwrap(),
                     dist,
                     true,
-                    filter,
+                    &filter,
                 ) {
                     // Hit something, pull camera in
                     target_position = origin + direction * (hit.distance - 0.2).max(0.5);

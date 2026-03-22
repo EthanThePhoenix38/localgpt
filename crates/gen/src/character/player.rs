@@ -8,9 +8,21 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "physics")]
 use avian3d::prelude::*;
 #[cfg(feature = "physics")]
+use bevy_tnua::TnuaScheme;
+#[cfg(feature = "physics")]
 use bevy_tnua::prelude::*;
 #[cfg(feature = "physics")]
 use bevy_tnua_avian3d::*;
+
+/// Player character control scheme for bevy-tnua.
+///
+/// Defines Walk as the basis and Jump as the single action.
+#[cfg(feature = "physics")]
+#[derive(TnuaScheme)]
+#[scheme(basis = TnuaBuiltinWalk)]
+pub enum PlayerScheme {
+    Jump(TnuaBuiltinJump),
+}
 
 /// Marker component for the player entity.
 #[derive(Component)]
@@ -199,7 +211,7 @@ pub fn spawn_player(
             ),
             LockedAxes::new().lock_rotation_x().lock_rotation_z(),
             // Controller: Tnua
-            TnuaController::default(),
+            TnuaController::<PlayerScheme>::default(),
             TnuaAvian3dSensorShape(Collider::cylinder(params.collision_radius * 0.95, 0.0)),
         ))
         .id()
@@ -285,7 +297,15 @@ pub fn player_input_system(
 /// System to apply player movement via Tnua (physics mode).
 #[cfg(feature = "physics")]
 pub fn player_movement_system(
-    mut query: Query<(&PlayerConfig, &PlayerInput, &mut TnuaController, &Transform), With<Player>>,
+    mut query: Query<
+        (
+            &PlayerConfig,
+            &PlayerInput,
+            &mut TnuaController<PlayerScheme>,
+            &Transform,
+        ),
+        With<Player>,
+    >,
 ) {
     for (config, input, mut controller, transform) in query.iter_mut() {
         // Calculate movement direction relative to player facing direction
@@ -302,21 +322,18 @@ pub fn player_movement_system(
         // Calculate desired velocity (2D → 3D)
         let move_dir = forward * input.move_forward + right * input.move_right;
         let move_dir = move_dir.normalize_or_zero();
-        let desired_velocity = Vec3::new(move_dir.x, 0.0, move_dir.y) * speed;
+        let desired_motion = Vec3::new(move_dir.x, 0.0, move_dir.y) * speed;
 
-        // Apply to Tnua controller
-        controller.basis(TnuaBuiltinWalk {
-            desired_velocity,
-            float_height: 1.0,
+        // Apply to Tnua controller — set the basis input directly
+        controller.basis = TnuaBuiltinWalk {
+            desired_motion,
             ..Default::default()
-        });
+        };
 
         // Jump
         if input.jump {
-            controller.action(TnuaBuiltinJump {
-                height: config.jump_force,
-                ..Default::default()
-            });
+            controller.initiate_action_feeding();
+            controller.action(PlayerScheme::Jump(TnuaBuiltinJump::default()));
         }
     }
 }

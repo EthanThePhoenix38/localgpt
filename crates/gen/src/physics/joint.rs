@@ -108,15 +108,15 @@ pub fn joint_setup_system(
             JointType::Fixed => {
                 commands.entity(joint_entity).insert(
                     FixedJoint::new(config.entity_a, config.entity_b)
-                        .with_local_anchor_1(config.anchor_a)
-                        .with_local_anchor_2(config.anchor_b),
+                        .with_local_anchor1(config.anchor_a)
+                        .with_local_anchor2(config.anchor_b),
                 );
             }
             JointType::Revolute => {
                 let mut joint = RevoluteJoint::new(config.entity_a, config.entity_b)
-                    .with_aligned_axis(config.axis)
-                    .with_local_anchor_1(config.anchor_a)
-                    .with_local_anchor_2(config.anchor_b);
+                    .with_hinge_axis(config.axis)
+                    .with_local_anchor1(config.anchor_a)
+                    .with_local_anchor2(config.anchor_b);
                 if let Some(limits) = config.limits {
                     joint = joint.with_angle_limits(limits.x.to_radians(), limits.y.to_radians());
                 }
@@ -125,15 +125,15 @@ pub fn joint_setup_system(
             JointType::Spherical => {
                 commands.entity(joint_entity).insert(
                     SphericalJoint::new(config.entity_a, config.entity_b)
-                        .with_local_anchor_1(config.anchor_a)
-                        .with_local_anchor_2(config.anchor_b),
+                        .with_local_anchor1(config.anchor_a)
+                        .with_local_anchor2(config.anchor_b),
                 );
             }
             JointType::Prismatic => {
                 let mut joint = PrismaticJoint::new(config.entity_a, config.entity_b)
-                    .with_free_axis(config.axis)
-                    .with_local_anchor_1(config.anchor_a)
-                    .with_local_anchor_2(config.anchor_b);
+                    .with_slider_axis(config.axis)
+                    .with_local_anchor1(config.anchor_a)
+                    .with_local_anchor2(config.anchor_b);
                 if let Some(limits) = config.limits {
                     joint = joint.with_limits(limits.x, limits.y);
                 }
@@ -141,8 +141,8 @@ pub fn joint_setup_system(
             }
             JointType::Spring => {
                 let mut joint = DistanceJoint::new(config.entity_a, config.entity_b)
-                    .with_local_anchor_1(config.anchor_a)
-                    .with_local_anchor_2(config.anchor_b);
+                    .with_local_anchor1(config.anchor_a)
+                    .with_local_anchor2(config.anchor_b);
                 if let Some(stiffness) = config.stiffness {
                     // Compliance = 1/stiffness
                     let compliance = if stiffness > 0.0 {

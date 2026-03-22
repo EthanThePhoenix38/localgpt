@@ -123,14 +123,14 @@ use crate::character::Player;
 #[cfg(feature = "physics")]
 use avian3d::prelude::*;
 
-/// System to apply force fields via Avian ExternalForce (physics mode).
+/// System to apply force fields via Avian Forces QueryData (physics mode).
 ///
 /// Queries dynamic rigid bodies within each ForceField's radius and applies
-/// directional/attract/repel/vortex forces using Avian's ExternalForce component.
+/// directional/attract/repel/vortex forces using Avian's Forces QueryData.
 #[cfg(feature = "physics")]
 pub fn force_field_physics_system(
     force_fields: Query<(Entity, &Transform, &ForceField)>,
-    mut body_query: Query<(Entity, &Transform, &mut ExternalForce), With<RigidBody>>,
+    mut body_query: Query<(Entity, &Transform, Forces), With<RigidBody>>,
     player_query: Query<Entity, With<Player>>,
 ) {
     for (_field_entity, field_transform, field) in force_fields.iter() {
@@ -138,7 +138,7 @@ pub fn force_field_physics_system(
             continue;
         }
 
-        for (body_entity, body_transform, mut ext_force) in body_query.iter_mut() {
+        for (body_entity, body_transform, mut forces) in body_query.iter_mut() {
             if !field.affects_player && player_query.contains(body_entity) {
                 continue;
             }
@@ -172,7 +172,7 @@ pub fn force_field_physics_system(
                 ForceType::Impulse => continue,
             };
 
-            ext_force.apply_force(force_direction * force_magnitude);
+            forces.apply_force(force_direction * force_magnitude);
         }
     }
 }

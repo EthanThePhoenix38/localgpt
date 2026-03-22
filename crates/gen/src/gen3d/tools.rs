@@ -54,7 +54,13 @@ pub fn create_gen_tools(bridge: Arc<GenBridge>) -> Vec<Box<dyn Tool>> {
         // Undo/Redo
         Box::new(GenUndoTool::new(bridge.clone())),
         Box::new(GenRedoTool::new(bridge.clone())),
-        Box::new(GenUndoInfoTool::new(bridge)),
+        Box::new(GenUndoInfoTool::new(bridge.clone())),
+        // Physics tools (P5)
+        Box::new(GenSetPhysicsTool::new(bridge.clone())),
+        Box::new(GenAddColliderTool::new(bridge.clone())),
+        Box::new(GenAddJointTool::new(bridge.clone())),
+        Box::new(GenAddForceTool::new(bridge.clone())),
+        Box::new(GenSetGravityTool::new(bridge)),
     ]
 }
 
@@ -2591,6 +2597,529 @@ impl Tool for GenUndoInfoTool {
             } => Ok(format!(
                 "Undo: {} undoable, {} redoable | Scene: {} entities ({} unsaved)",
                 undo_count, redo_count, entity_count, dirty_count
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_set_physics
+// ===========================================================================
+
+struct GenSetPhysicsTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSetPhysicsTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSetPhysicsTool {
+    fn name(&self) -> &str {
+        "gen_set_physics"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_set_physics".into(),
+            description: "Enable physics simulation on an entity. Sets body type (dynamic/static/kinematic), mass, friction, bounciness, and damping.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity_id": {
+                        "type": "string",
+                        "description": "Target entity name"
+                    },
+                    "body_type": {
+                        "type": "string",
+                        "enum": ["dynamic", "static", "kinematic"],
+                        "default": "dynamic",
+                        "description": "Physics body type"
+                    },
+                    "mass": {
+                        "type": "number",
+                        "description": "Mass in kg (auto-calculated if omitted)"
+                    },
+                    "restitution": {
+                        "type": "number",
+                        "default": 0.3,
+                        "description": "Bounciness (0-1)"
+                    },
+                    "friction": {
+                        "type": "number",
+                        "default": 0.5,
+                        "description": "Surface friction (0-1)"
+                    },
+                    "gravity_scale": {
+                        "type": "number",
+                        "default": 1.0,
+                        "description": "Gravity multiplier"
+                    },
+                    "linear_damping": {
+                        "type": "number",
+                        "default": 0.1,
+                        "description": "Linear air resistance"
+                    },
+                    "angular_damping": {
+                        "type": "number",
+                        "default": 0.1,
+                        "description": "Angular air resistance"
+                    },
+                    "lock_rotation": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Prevent rotation"
+                    }
+                },
+                "required": ["entity_id"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let params = crate::physics::PhysicsParams {
+            entity_id: args["entity_id"].as_str().unwrap_or("").to_string(),
+            body_type: match args["body_type"].as_str().unwrap_or("dynamic") {
+                "static" => crate::physics::BodyType::Static,
+                "kinematic" => crate::physics::BodyType::Kinematic,
+                _ => crate::physics::BodyType::Dynamic,
+            },
+            mass: args["mass"].as_f64().map(|v| v as f32),
+            restitution: args["restitution"].as_f64().unwrap_or(0.3) as f32,
+            friction: args["friction"].as_f64().unwrap_or(0.5) as f32,
+            gravity_scale: args["gravity_scale"].as_f64().unwrap_or(1.0) as f32,
+            linear_damping: args["linear_damping"].as_f64().unwrap_or(0.1) as f32,
+            angular_damping: args["angular_damping"].as_f64().unwrap_or(0.1) as f32,
+            lock_rotation: args["lock_rotation"].as_bool().unwrap_or(false),
+        };
+        match self.bridge.send(GenCommand::SetPhysics(params)).await? {
+            GenResponse::Modified { name } => Ok(format!("Physics enabled on '{}'", name)),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_add_collider
+// ===========================================================================
+
+struct GenAddColliderTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenAddColliderTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenAddColliderTool {
+    fn name(&self) -> &str {
+        "gen_add_collider"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_add_collider".into(),
+            description: "Add a collision shape to an entity. Shapes: box, sphere, capsule, cylinder, mesh. Can be a sensor (trigger-only, no physics response).".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity_id": {
+                        "type": "string",
+                        "description": "Target entity name"
+                    },
+                    "shape": {
+                        "type": "string",
+                        "enum": ["box", "sphere", "capsule", "cylinder", "mesh"],
+                        "default": "box",
+                        "description": "Collider shape type"
+                    },
+                    "size": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "description": "Dimensions [x, y, z] (auto-fit to mesh if omitted)"
+                    },
+                    "offset": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "default": [0, 0, 0],
+                        "description": "Offset from entity origin"
+                    },
+                    "is_trigger": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Sensor only (detect overlap, no physics response)"
+                    }
+                },
+                "required": ["entity_id"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let size = args["size"].as_array().map(|arr| {
+            bevy::math::Vec3::new(
+                arr.first().and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+                arr.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+                arr.get(2).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+            )
+        });
+        let offset_arr = parse_f32_array(&args["offset"], [0.0, 0.0, 0.0]);
+        let params = crate::physics::ColliderParams {
+            entity_id: args["entity_id"].as_str().unwrap_or("").to_string(),
+            shape: match args["shape"].as_str().unwrap_or("box") {
+                "sphere" => crate::physics::ColliderShape::Sphere,
+                "capsule" => crate::physics::ColliderShape::Capsule,
+                "cylinder" => crate::physics::ColliderShape::Cylinder,
+                "mesh" => crate::physics::ColliderShape::Mesh,
+                _ => crate::physics::ColliderShape::Box,
+            },
+            size,
+            offset: bevy::math::Vec3::from_array(offset_arr),
+            is_trigger: args["is_trigger"].as_bool().unwrap_or(false),
+            visible_in_debug: true,
+        };
+        match self.bridge.send(GenCommand::AddCollider(params)).await? {
+            GenResponse::Modified { name } => Ok(format!("Collider added to '{}'", name)),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_add_joint
+// ===========================================================================
+
+struct GenAddJointTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenAddJointTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenAddJointTool {
+    fn name(&self) -> &str {
+        "gen_add_joint"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_add_joint".into(),
+            description: "Create a physical joint/constraint between two entities. Types: fixed, revolute (hinge), spherical (ball), prismatic (slider), spring.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity_a": {
+                        "type": "string",
+                        "description": "First entity name"
+                    },
+                    "entity_b": {
+                        "type": "string",
+                        "description": "Second entity name"
+                    },
+                    "joint_type": {
+                        "type": "string",
+                        "enum": ["fixed", "revolute", "spherical", "prismatic", "spring"],
+                        "default": "fixed",
+                        "description": "Joint type"
+                    },
+                    "anchor_a": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "default": [0, 0, 0],
+                        "description": "Anchor on entity A (local space)"
+                    },
+                    "anchor_b": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "default": [0, 0, 0],
+                        "description": "Anchor on entity B (local space)"
+                    },
+                    "axis": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "default": [0, 1, 0],
+                        "description": "Rotation/slide axis"
+                    },
+                    "limits": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 2, "maxItems": 2,
+                        "description": "Angle limits [min, max] in degrees"
+                    },
+                    "stiffness": {
+                        "type": "number",
+                        "description": "Spring stiffness"
+                    },
+                    "damping": {
+                        "type": "number",
+                        "description": "Spring damping"
+                    }
+                },
+                "required": ["entity_a", "entity_b"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let anchor_a = parse_f32_array(&args["anchor_a"], [0.0, 0.0, 0.0]);
+        let anchor_b = parse_f32_array(&args["anchor_b"], [0.0, 0.0, 0.0]);
+        let axis = parse_f32_array(&args["axis"], [0.0, 1.0, 0.0]);
+        let limits = args["limits"].as_array().map(|arr| {
+            bevy::math::Vec2::new(
+                arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+                arr.get(1).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+            )
+        });
+        let params = crate::physics::JointParams {
+            entity_a: args["entity_a"].as_str().unwrap_or("").to_string(),
+            entity_b: args["entity_b"].as_str().unwrap_or("").to_string(),
+            joint_type: match args["joint_type"].as_str().unwrap_or("fixed") {
+                "revolute" => crate::physics::JointType::Revolute,
+                "spherical" => crate::physics::JointType::Spherical,
+                "prismatic" => crate::physics::JointType::Prismatic,
+                "spring" => crate::physics::JointType::Spring,
+                _ => crate::physics::JointType::Fixed,
+            },
+            anchor_a: bevy::math::Vec3::from_array(anchor_a),
+            anchor_b: bevy::math::Vec3::from_array(anchor_b),
+            axis: bevy::math::Vec3::from_array(axis),
+            limits,
+            stiffness: args["stiffness"].as_f64().map(|v| v as f32),
+            damping: args["damping"].as_f64().map(|v| v as f32),
+        };
+        match self.bridge.send(GenCommand::AddJoint(params)).await? {
+            GenResponse::Spawned { name, entity_id } => {
+                Ok(format!("Joint created: '{}' (id: {})", name, entity_id))
+            }
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_add_force
+// ===========================================================================
+
+struct GenAddForceTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenAddForceTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenAddForceTool {
+    fn name(&self) -> &str {
+        "gen_add_force"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_add_force".into(),
+            description: "Create a force field or apply an impulse. Types: directional, point_attract, point_repel, vortex, impulse.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "description": "World position [x, y, z]"
+                    },
+                    "force_type": {
+                        "type": "string",
+                        "enum": ["directional", "point_attract", "point_repel", "vortex", "impulse"],
+                        "default": "directional",
+                        "description": "Force field type"
+                    },
+                    "strength": {
+                        "type": "number",
+                        "default": 10.0,
+                        "description": "Force strength"
+                    },
+                    "radius": {
+                        "type": "number",
+                        "default": 5.0,
+                        "description": "Area of effect radius"
+                    },
+                    "direction": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "description": "Force direction (directional type only)"
+                    },
+                    "falloff": {
+                        "type": "string",
+                        "enum": ["none", "linear", "quadratic"],
+                        "default": "linear",
+                        "description": "Distance falloff type"
+                    },
+                    "affects_player": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Whether force affects the player"
+                    },
+                    "continuous": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Continuous force (vs one-shot impulse)"
+                    }
+                },
+                "required": ["position"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let pos = parse_f32_array(&args["position"], [0.0, 0.0, 0.0]);
+        let dir = args["direction"].as_array().map(|arr| {
+            bevy::math::Vec3::new(
+                arr.first().and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+                arr.get(1).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+                arr.get(2).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+            )
+        });
+        let params = crate::physics::ForceParams {
+            position: bevy::math::Vec3::from_array(pos),
+            force_type: match args["force_type"].as_str().unwrap_or("directional") {
+                "point_attract" => crate::physics::ForceType::PointAttract,
+                "point_repel" => crate::physics::ForceType::PointRepel,
+                "vortex" => crate::physics::ForceType::Vortex,
+                "impulse" => crate::physics::ForceType::Impulse,
+                _ => crate::physics::ForceType::Directional,
+            },
+            strength: args["strength"].as_f64().unwrap_or(10.0) as f32,
+            radius: args["radius"].as_f64().unwrap_or(5.0) as f32,
+            direction: dir,
+            falloff: match args["falloff"].as_str().unwrap_or("linear") {
+                "none" => crate::physics::FalloffType::None,
+                "quadratic" => crate::physics::FalloffType::Quadratic,
+                _ => crate::physics::FalloffType::Linear,
+            },
+            affects_player: args["affects_player"].as_bool().unwrap_or(true),
+            continuous: args["continuous"].as_bool().unwrap_or(true),
+        };
+        match self.bridge.send(GenCommand::AddForce(params)).await? {
+            GenResponse::Spawned { name, entity_id } => Ok(format!(
+                "Force field created: '{}' (id: {})",
+                name, entity_id
+            )),
+            GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
+            other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),
+        }
+    }
+}
+
+// ===========================================================================
+// gen_set_gravity
+// ===========================================================================
+
+struct GenSetGravityTool {
+    bridge: Arc<GenBridge>,
+}
+
+impl GenSetGravityTool {
+    fn new(bridge: Arc<GenBridge>) -> Self {
+        Self { bridge }
+    }
+}
+
+#[async_trait]
+impl Tool for GenSetGravityTool {
+    fn name(&self) -> &str {
+        "gen_set_gravity"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "gen_set_gravity".into(),
+            description: "Set gravity direction and strength. Can affect the whole scene or create a localized gravity zone.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "entity_id": {
+                        "type": "string",
+                        "description": "Target entity (omit for global gravity)"
+                    },
+                    "direction": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "default": [0, -1, 0],
+                        "description": "Gravity direction (normalized)"
+                    },
+                    "strength": {
+                        "type": "number",
+                        "default": 9.81,
+                        "description": "Gravity strength in m/s²"
+                    },
+                    "zone_position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3, "maxItems": 3,
+                        "description": "Create gravity zone at this position"
+                    },
+                    "zone_radius": {
+                        "type": "number",
+                        "description": "Gravity zone radius"
+                    },
+                    "transition_duration": {
+                        "type": "number",
+                        "default": 0.5,
+                        "description": "Transition time in seconds"
+                    }
+                }
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments).unwrap_or_default();
+        let dir = parse_f32_array(&args["direction"], [0.0, -1.0, 0.0]);
+        let zone_pos =
+            parse_opt_f32_array(&args["zone_position"]).map(bevy::math::Vec3::from_array);
+        let params = crate::physics::GravityParams {
+            entity_id: args["entity_id"].as_str().map(String::from),
+            direction: bevy::math::Vec3::from_array(dir),
+            strength: args["strength"].as_f64().unwrap_or(9.81) as f32,
+            zone_position: zone_pos,
+            zone_radius: args["zone_radius"].as_f64().map(|v| v as f32),
+            transition_duration: args["transition_duration"].as_f64().unwrap_or(0.5) as f32,
+        };
+        match self.bridge.send(GenCommand::SetGravity(params)).await? {
+            GenResponse::EnvironmentSet => Ok("Gravity updated".to_string()),
+            GenResponse::Spawned { name, entity_id } => Ok(format!(
+                "Gravity zone created: '{}' (id: {})",
+                name, entity_id
             )),
             GenResponse::Error { message } => Err(anyhow::anyhow!("{}", message)),
             other => Err(anyhow::anyhow!("Unexpected response: {:?}", other)),

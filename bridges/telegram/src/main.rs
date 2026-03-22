@@ -402,8 +402,13 @@ async fn handle_command(
                             .await?;
                         }
                         Err(e) => {
-                            send_in_thread(bot, chat_id, thread_id, &format!("Compact failed: {}", e))
-                                .await?;
+                            send_in_thread(
+                                bot,
+                                chat_id,
+                                thread_id,
+                                &format!("Compact failed: {}", e),
+                            )
+                            .await?;
                         }
                     }
                 }
@@ -417,16 +422,14 @@ async fn handle_command(
             if let Some(entry) = sessions.get_mut(&chat_id.0) {
                 entry.agent.clear_session();
                 entry.last_accessed = Instant::now();
-                send_in_thread(bot, chat_id, thread_id, "Session history cleared.")
-                    .await?;
+                send_in_thread(bot, chat_id, thread_id, "Session history cleared.").await?;
             } else {
                 send_in_thread(bot, chat_id, thread_id, "No active session.").await?;
             }
         }
         "/memory" => {
             if args.is_empty() {
-                send_in_thread(bot, chat_id, thread_id, "Usage: /memory <search query>")
-                    .await?;
+                send_in_thread(bot, chat_id, thread_id, "Usage: /memory <search query>").await?;
             } else {
                 match state.memory.search(args, 5) {
                     Ok(results) => {
@@ -473,12 +476,22 @@ async fn handle_command(
                 if let Some(entry) = sessions.get_mut(&chat_id.0) {
                     match entry.agent.set_model(args) {
                         Ok(()) => {
-                            send_in_thread(bot, chat_id, thread_id, &format!("Switched to model: {}", args))
-                                .await?;
+                            send_in_thread(
+                                bot,
+                                chat_id,
+                                thread_id,
+                                &format!("Switched to model: {}", args),
+                            )
+                            .await?;
                         }
                         Err(e) => {
-                            send_in_thread(bot, chat_id, thread_id, &format!("Failed to switch model: {}", e))
-                                .await?;
+                            send_in_thread(
+                                bot,
+                                chat_id,
+                                thread_id,
+                                &format!("Failed to switch model: {}", e),
+                            )
+                            .await?;
                         }
                     }
                 } else {
@@ -504,8 +517,13 @@ async fn handle_command(
                     }
                 }
                 Err(e) => {
-                    send_in_thread(bot, chat_id, thread_id, &format!("Failed to load skills: {}", e))
-                        .await?;
+                    send_in_thread(
+                        bot,
+                        chat_id,
+                        thread_id,
+                        &format!("Failed to load skills: {}", e),
+                    )
+                    .await?;
                 }
             }
         }
@@ -513,7 +531,13 @@ async fn handle_command(
             if args.is_empty() {
                 send_in_thread(bot, chat_id, thread_id, "Usage: /topic <name>").await?;
             } else if !is_forum_chat_remote(bot, chat_id).await {
-                send_in_thread(bot, chat_id, thread_id, "This chat is not a forum group. /topic only works in forum-enabled groups.").await?;
+                send_in_thread(
+                    bot,
+                    chat_id,
+                    thread_id,
+                    "This chat is not a forum group. /topic only works in forum-enabled groups.",
+                )
+                .await?;
             } else {
                 match bot.create_forum_topic(chat_id, args).await {
                     Ok(topic) => {
@@ -521,11 +545,21 @@ async fn handle_command(
                             bot,
                             chat_id,
                             Some(topic.thread_id),
-                            &format!("Topic '{}' created. Send messages here to chat with LocalGPT.", args),
-                        ).await?;
+                            &format!(
+                                "Topic '{}' created. Send messages here to chat with LocalGPT.",
+                                args
+                            ),
+                        )
+                        .await?;
                     }
                     Err(e) => {
-                        send_in_thread(bot, chat_id, thread_id, &format!("Failed to create topic: {}", e)).await?;
+                        send_in_thread(
+                            bot,
+                            chat_id,
+                            thread_id,
+                            &format!("Failed to create topic: {}", e),
+                        )
+                        .await?;
                     }
                 }
             }
@@ -685,7 +719,8 @@ async fn handle_chat(
                             if let Some(id) = msg_id {
                                 let _ = bot.edit_message_text(chat_id, id, &display).await;
                             } else {
-                                let sent = send_in_thread(bot, chat_id, thread_id, &display).await?;
+                                let sent =
+                                    send_in_thread(bot, chat_id, thread_id, &display).await?;
                                 msg_id = Some(sent.id);
                             }
                             last_edit = Instant::now();
@@ -722,7 +757,8 @@ async fn handle_chat(
                             if let Some(id) = msg_id {
                                 let _ = bot.edit_message_text(chat_id, id, &display).await;
                             } else {
-                                let sent = send_in_thread(bot, chat_id, thread_id, &display).await?;
+                                let sent =
+                                    send_in_thread(bot, chat_id, thread_id, &display).await?;
                                 msg_id = Some(sent.id);
                             }
                             last_edit = Instant::now();
@@ -835,9 +871,7 @@ async fn send_or_edit_html(
             .parse_mode(ParseMode::Html)
             .await
     } else {
-        let mut req = bot
-            .send_message(chat_id, &html)
-            .parse_mode(ParseMode::Html);
+        let mut req = bot.send_message(chat_id, &html).parse_mode(ParseMode::Html);
         if let Some(tid) = thread_id {
             req = req.message_thread_id(tid);
         }

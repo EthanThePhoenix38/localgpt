@@ -40,12 +40,7 @@ pub async fn run(args: SessionArgs) -> Result<()> {
             } else {
                 println!("Sessions for agent '{}':", agent);
                 for (i, info) in sessions.iter().enumerate().take(20) {
-                    println!(
-                        "  {}. {} ({})",
-                        i + 1,
-                        info.id,
-                        info.created_at
-                    );
+                    println!("  {}. {} ({})", i + 1, info.id, info.created_at);
                 }
                 if sessions.len() > 20 {
                     println!("  ... and {} more", sessions.len() - 20);

@@ -208,12 +208,21 @@ async fn handle_message_event(state: Arc<BotState>, msg: SlackMessageEvent) {
         None => return,
     };
 
-    let channel_id = msg.origin.channel.as_ref().map(|c| c.to_string()).unwrap_or_default();
+    let channel_id = msg
+        .origin
+        .channel
+        .as_ref()
+        .map(|c| c.to_string())
+        .unwrap_or_default();
     if channel_id.is_empty() {
         return;
     }
 
-    let text = msg.content.as_ref().and_then(|c| c.text.as_deref()).unwrap_or("");
+    let text = msg
+        .content
+        .as_ref()
+        .and_then(|c| c.text.as_deref())
+        .unwrap_or("");
     if text.is_empty() {
         return;
     }
@@ -237,7 +246,10 @@ async fn handle_message_event(state: Arc<BotState>, msg: SlackMessageEvent) {
 
     // Thread support: reply in the original message's thread or start a new one
     let thread_ts = if state.slack_config.thread_replies {
-        msg.origin.thread_ts.clone().or_else(|| Some(msg.origin.ts.clone()))
+        msg.origin
+            .thread_ts
+            .clone()
+            .or_else(|| Some(msg.origin.ts.clone()))
     } else {
         None
     };
@@ -290,8 +302,13 @@ async fn run_agent_streaming(
         match Agent::new(agent_config, &state.config, Arc::new(state.memory.clone())).await {
             Ok(mut agent) => {
                 if let Err(err) = agent.new_session().await {
-                    edit_message(&state, channel_id, placeholder_ts, &format!("Error: {}", err))
-                        .await;
+                    edit_message(
+                        &state,
+                        channel_id,
+                        placeholder_ts,
+                        &format!("Error: {}", err),
+                    )
+                    .await;
                     return;
                 }
                 sessions.insert(
@@ -304,8 +321,13 @@ async fn run_agent_streaming(
             }
             Err(err) => {
                 error!("Failed to create agent: {}", err);
-                edit_message(&state, channel_id, placeholder_ts, &format!("Error: {}", err))
-                    .await;
+                edit_message(
+                    &state,
+                    channel_id,
+                    placeholder_ts,
+                    &format!("Error: {}", err),
+                )
+                .await;
                 return;
             }
         }
@@ -457,9 +479,7 @@ async fn main() -> Result<()> {
     info!("Successfully retrieved Slack credentials.");
 
     // 4. Initialize Slack client and authenticate
-    let slack_client = Arc::new(SlackClient::new(
-        SlackClientHyperConnector::new()?,
-    ));
+    let slack_client = Arc::new(SlackClient::new(SlackClientHyperConnector::new()?));
     let bot_token = SlackApiToken::new(SlackApiTokenValue::from(slack_config.bot_token.clone()));
 
     let session = slack_client.open_session(&bot_token);
@@ -517,8 +537,7 @@ async fn main() -> Result<()> {
         Ok(())
     }
 
-    let callbacks = SlackSocketModeListenerCallbacks::new()
-        .with_push_events(push_events_fn);
+    let callbacks = SlackSocketModeListenerCallbacks::new().with_push_events(push_events_fn);
 
     let listener_environment = Arc::new(
         SlackClientEventsListenerEnvironment::new(slack_client.clone())
@@ -570,10 +589,7 @@ mod tests {
             strip_mention("U12345", "Hello <@U12345> world"),
             "Hello  world"
         );
-        assert_eq!(
-            strip_mention("U12345", "<@U12345> do this"),
-            "do this"
-        );
+        assert_eq!(strip_mention("U12345", "<@U12345> do this"), "do this");
         assert_eq!(strip_mention("U12345", "no mention"), "no mention");
     }
 

@@ -14,7 +14,7 @@ pub use embeddings::{
     EmbeddingProvider, GeminiEmbeddingProvider, OpenAIEmbeddingProvider, hash_text,
 };
 pub use index::{MemoryIndex, ReindexStats};
-pub use query_expansion::{ExpandedQuery, expand_query_local, parse_llm_keywords, EXPAND_PROMPT};
+pub use query_expansion::{EXPAND_PROMPT, ExpandedQuery, expand_query_local, parse_llm_keywords};
 pub use search::MemoryChunk;
 pub use watcher::MemoryWatcher;
 pub use workspace::{init_state_dir, init_workspace};

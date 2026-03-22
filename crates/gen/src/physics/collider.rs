@@ -129,13 +129,64 @@ pub fn collider_setup_system(
     }
 }
 
+/// Auto-attaches colliders to newly spawned parametric shapes.
+///
+/// Mirrors `terrain_collider_system` pattern: reacts to `Added<ParametricShape>`
+/// and inserts a matching Avian `Collider` so physics bodies don't fall through.
+/// Complex shapes (torus, pyramid, tetrahedron, wedge) use AABB bounding box fallback.
+#[cfg(feature = "physics")]
+pub fn auto_collider_system(
+    mut commands: Commands,
+    query: Query<
+        (Entity, &crate::gen3d::registry::ParametricShape),
+        (
+            Added<crate::gen3d::registry::ParametricShape>,
+            Without<Collider>,
+        ),
+    >,
+) {
+    use localgpt_world_types::Shape;
+
+    for (entity, param) in query.iter() {
+        let collider = match &param.shape {
+            Shape::Cuboid { x, y, z } => Collider::cuboid(x / 2.0, y / 2.0, z / 2.0),
+            Shape::Sphere { radius } => Collider::sphere(*radius),
+            Shape::Cylinder { radius, height } => Collider::cylinder(*radius, height / 2.0),
+            Shape::Cone { radius, height } => {
+                // Avian has no cone collider; approximate with cylinder
+                Collider::cylinder(*radius, height / 2.0)
+            }
+            Shape::Capsule {
+                radius,
+                half_length,
+            } => Collider::capsule(*radius, *half_length),
+            Shape::Icosahedron { radius } => Collider::sphere(*radius),
+            Shape::Plane { x, z } => Collider::cuboid(x / 2.0, 0.005, z / 2.0),
+            // Complex shapes: use AABB bounding box
+            Shape::Torus { .. }
+            | Shape::Pyramid { .. }
+            | Shape::Tetrahedron { .. }
+            | Shape::Wedge { .. } => {
+                let h = param.shape.local_aabb_half();
+                Collider::cuboid(h[0], h[1].max(0.005), h[2])
+            }
+        };
+        commands
+            .entity(entity)
+            .insert((RigidBody::Static, collider));
+    }
+}
+
 /// Plugin for collider systems.
 pub struct ColliderPlugin;
 
 impl Plugin for ColliderPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "physics")]
-        app.add_systems(Update, collider_setup_system);
+        {
+            app.add_systems(Update, collider_setup_system);
+            app.add_systems(Update, auto_collider_system);
+        }
 
         let _ = app;
     }

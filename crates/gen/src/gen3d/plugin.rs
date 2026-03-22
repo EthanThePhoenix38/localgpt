@@ -358,6 +358,9 @@ fn setup_default_scene(
                 entity_type: GenEntityType::Primitive,
                 world_id: ground_id,
             },
+            crate::gen3d::registry::ParametricShape {
+                shape: localgpt_world_types::Shape::Plane { x: 20.0, z: 20.0 },
+            },
         ))
         .id();
     registry.insert_with_id("ground_plane".into(), ground, ground_id);
