@@ -118,11 +118,6 @@ pub enum GenCommand {
         /// New world name.
         new_name: String,
     },
-    PackageWorld {
-        /// Optional custom output path for the .zip file.
-        output_path: Option<String>,
-    },
-
     // Tier 8: Scene management
     ClearScene {
         keep_camera: bool,

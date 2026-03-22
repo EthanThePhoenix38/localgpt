@@ -58,9 +58,6 @@ hex = "0.4"
 # Timestamps for experiment tracking
 chrono = { workspace = true }
 
-# ZIP packaging for world distribution
-zip = "2"
-
 # File locking for GPU exclusivity (unix only, used by gpu_lock)
 libc = "0.2"
 

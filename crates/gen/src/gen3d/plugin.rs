@@ -1338,16 +1338,6 @@ fn process_gen_commands(
                     Err(e) => GenResponse::Error { message: e },
                 }
             }
-            GenCommand::PackageWorld { output_path } => {
-                match super::world::handle_package_world(
-                    output_path.as_deref(),
-                    &params.workspace,
-                    &params.current_world,
-                ) {
-                    Ok(path) => GenResponse::Exported { path },
-                    Err(e) => GenResponse::Error { message: e },
-                }
-            }
             GenCommand::LoadWorld { path, clear } => {
                 // Clear existing scene before loading if requested.
                 if clear {
