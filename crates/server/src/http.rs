@@ -331,6 +331,7 @@ async fn auth_middleware(
 /// Checks `X-Signature-256` header against HMAC-SHA256(secret, body).
 /// Returns Ok(()) if valid, Err(StatusCode) if invalid.
 /// If no webhook_secret is configured, always passes.
+#[allow(dead_code)]
 pub fn verify_webhook_signature(
     secret: Option<&str>,
     signature_header: Option<&str>,
