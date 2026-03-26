@@ -1,6 +1,6 @@
 # RFC: XDG Base Directory Specification Compliance
 
-**Status:** Draft
+**Status:** Implemented (Archived 2026-03-25). See `crates/core/src/paths.rs`.
 **Author:** Yi
 **Created:** 2026-02-13
 **Supersedes:** Monolithic `~/.localgpt/` layout

@@ -1,6 +1,6 @@
 # RFC: Iterative Multi-File World Generation Pipeline
 
-**Status:** Draft
+**Status:** Implemented (Archived 2026-03-25). See `crates/gen/src/gen3d/` for multi-file worldgen.
 **Author:** Yi + Claude
 **Date:** 2026-03-21
 **Scope:** `crates/gen/src/gen3d/world.rs`, `crates/gen/src/mcp/worldgen_tools.rs`, `localgpt-world-types`

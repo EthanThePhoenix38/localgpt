@@ -1,6 +1,6 @@
 # RFC Addendum: Drift Detection and Reconciliation Between .md, .ron, and Live Scene
 
-**Status:** Draft
+**Status:** Implemented (Archived 2026-03-25). See drift detection in `crates/gen/src/gen3d/`.
 **Parent RFC:** RFC-Iterative-Multi-File-WorldGen
 **Date:** 2026-03-21
 **Dependencies:** Parent RFC Phase 2 (MCP tools: `gen_write_region`, `gen_load_region`, `gen_unload_region` must land first). Drift tools cannot begin implementation until those are available.

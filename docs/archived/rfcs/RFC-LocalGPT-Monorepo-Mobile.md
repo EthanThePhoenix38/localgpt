@@ -1,6 +1,6 @@
 # RFC: LocalGPT Monorepo Restructure for Mobile
 
-**Status:** Draft
+**Status:** Implemented (Archived 2026-03-25). All 10 workspace crates exist and compile.
 **Author:** LocalGPT Team
 **Date:** 2026-02-16
 **Target version:** v0.3.0

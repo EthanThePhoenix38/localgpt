@@ -1,6 +1,6 @@
 # RFC: `LocalGPT.md` — Workspace Security Policy File
 
-**Status:** Draft
+**Status:** Implemented (Archived 2026-03-25). See `crates/core/src/security/signing.rs` and `security/audit.rs`.
 **Author:** Yi
 **Created:** 2026-02-09
 **Affects:** `src/agent/system_prompt.rs`, `src/agent/mod.rs`, `src/agent/sanitize.rs`, `src/agent/tools.rs`, `src/memory/workspace.rs`, `src/cli/`

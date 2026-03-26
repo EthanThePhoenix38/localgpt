@@ -1,5 +1,7 @@
 # Designing a world package format for LocalGPT Gen
 
+> **Note:** This document consolidates research from the former "World packaging formats for AI-driven 3D creation.md" (deleted as ~85% duplicate). The landscape survey content from that doc is preserved below where unique.
+
 **A local-first, AI-generated 3D world needs a format that bundles scene data, deterministic tool call logs, audio, and sandboxed behaviors into a single shareable archive.** No existing format does all of this. But glTF's extension model, ComfyUI's reproducible DAG serialization, OpenClaw's progressive-disclosure skill packaging, and Godot's human-readable TSCN scenes collectively provide a proven design vocabulary. This report distills research across five domains into actionable architecture guidance for a Bevy/Rust world package format.
 
 The core insight: the format should be a **ZIP archive with aligned entries** (inspired by USDZ's mmap-friendly approach), containing a RON/JSON scene manifest, embedded assets, behavior scripts, and a deterministic tool call log that records exactly how the AI generated the world. This combination makes worlds reproducible, shareable, editable, and self-contained.

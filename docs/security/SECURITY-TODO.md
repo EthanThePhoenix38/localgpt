@@ -2,7 +2,25 @@
 
 Security considerations for enterprise deployment of LocalGPT.
 
-> **See also**: [SECURITY-COMPARISON.md](./SECURITY-COMPARISON.md) for detailed LocalGPT vs OpenClaw feature comparison and parity tracking.
+> Consolidated from the former `SECURITY-COMPARISON.md` (archived). Updated 2026-03-25.
+
+## Progress Summary (vs OpenClaw)
+
+| Category | LocalGPT | OpenClaw | Status |
+|----------|----------|----------|--------|
+| Prompt Injection | 12 markers, 10 patterns | 10+ patterns | **PARITY** |
+| Content Delimiters | 3 types | Similar | **PARITY** |
+| Shell Sandbox | Landlock + seccomp (Linux), Seatbelt (macOS) | Docker-ready | **AHEAD** |
+| Encryption at Rest | XChaCha20-Poly1305 + Argon2id | Mentioned in TODO | **AHEAD** |
+| Rate Limiting | Per-IP rate limiting | Telegram throttler | **PARITY** |
+| Input Validation | JSON only | Zod schemas | **BEHIND** |
+| Tool Policies | require_approval only | Full allowlist/denylist | **BEHIND** |
+| SSRF Protection | None | Full (DNS pinning, redirect validation) | **BEHIND** |
+| Authentication | API key/token auth | Device identity, OAuth, webhook sigs | **PARTIAL** |
+| Audit System | Policy signing + audit chain | 50+ security checks | **PARTIAL** |
+| Secret Detection | Env var expansion | detect-secrets CI | **BEHIND** |
+
+**Legend**: AHEAD / PARITY / PARTIAL / BEHIND
 
 ## Critical (Must Have)
 

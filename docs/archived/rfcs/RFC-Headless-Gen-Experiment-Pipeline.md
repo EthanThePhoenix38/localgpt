@@ -1,6 +1,6 @@
 # RFC: Headless Generation, Experiment Queue, and Async Creative Pipeline
 
-**Status:** Draft  
+**Status:** Implemented (Archived 2026-03-25). See `crates/gen/src/experiment.rs` and `--headless` CLI flag.
 **Author:** Yi  
 **Date:** 2026-03-16  
 **Target crates:** `localgpt-gen`, `localgpt-core` (heartbeat), `localgpt-world-types`  
