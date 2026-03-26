@@ -747,7 +747,8 @@ pub struct ServerConfig {
     #[serde(default)]
     pub rate_limit: RateLimitConfig,
 
-    /// Allowed CORS origins. If empty, defaults to local access.
+    /// Allowed CORS origins. If empty, defaults to localhost only (any port,
+    /// http/https, 127.0.0.1, localhost, and [::1]).
     #[serde(default)]
     pub cors_origins: Vec<String>,
 
@@ -1473,6 +1474,8 @@ port = 31327
 bind = "127.0.0.1"
 # Optional bearer token for API authentication
 # auth_token = "${LOCALGPT_AUTH_TOKEN}"
+# Allowed CORS origins. If empty (default), allows localhost only (any port).
+# cors_origins = ["https://myapp.example.com", "http://localhost:5173"]
 
 [logging]
 level = "info"

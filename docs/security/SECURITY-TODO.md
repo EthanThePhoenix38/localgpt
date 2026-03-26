@@ -15,7 +15,7 @@ Security considerations for enterprise deployment of LocalGPT.
 | Rate Limiting | Per-IP rate limiting | Telegram throttler | **PARITY** |
 | Input Validation | JSON only | Zod schemas | **BEHIND** |
 | Tool Policies | require_approval only | Full allowlist/denylist | **BEHIND** |
-| SSRF Protection | None | Full (DNS pinning, redirect validation) | **BEHIND** |
+| SSRF Protection | Full (private IP, DNS pinning, redirect validation) | Full (DNS pinning, redirect validation) | **PARITY** |
 | Authentication | API key/token auth | Device identity, OAuth, webhook sigs | **PARTIAL** |
 | Audit System | Policy signing + audit chain | 50+ security checks | **PARTIAL** |
 | Secret Detection | Env var expansion | detect-secrets CI | **BEHIND** |
@@ -47,11 +47,13 @@ Security considerations for enterprise deployment of LocalGPT.
 - [x] Oversized payload guard — `2-oversized-payload` ✅
 - [ ] For multi-user: add TLS termination — `2-tls-auto` ❌
 - [ ] Remove permissive CORS (`allow_origin(Any)`)
-- [ ] **SSRF protection** for web_fetch tool:
-  - [ ] Block private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x)
-  - [ ] Block metadata endpoints (169.254.169.254, metadata.google.internal)
-  - [ ] DNS pinning (resolve and validate before fetch)
-  - [ ] Redirect validation
+- [x] **SSRF protection** for web_fetch tool — `ssrf.rs` module ✅
+  - [x] Block private IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 0.x, CGNAT, multicast, reserved)
+  - [x] Block metadata endpoints (169.254.169.254, metadata.google.internal)
+  - [x] DNS pinning (resolve and validate before fetch)
+  - [x] Redirect validation (each hop re-validated via `ssrf::validate_url`)
+  - [x] IPv4-mapped IPv6 (::ffff:x.x.x.x) checked against IPv4 rules
+  - [x] Scheme restriction (http/https only)
 
 ## High Priority
 
@@ -68,7 +70,7 @@ Security considerations for enterprise deployment of LocalGPT.
 
 **Remaining gaps** (behind OpenClaw):
 - [ ] Sandbox bash execution (Docker, seccomp, AppArmor)
-- [ ] SSRF protection for web_fetch (private IP blocking, DNS pinning)
+- [x] SSRF protection for web_fetch (private IP blocking, DNS pinning) — `ssrf.rs` ✅
 - [ ] Tool call ID validation
 - [x] Path traversal prevention — `memory_get` tool has workspace bounds checking ✅
 - [ ] Memory file sanitization (currently trusted)

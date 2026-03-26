@@ -311,6 +311,7 @@ pub fn setup_gen_app(
         // P1: Character plugins
         .add_plugins(crate::character::PlayerPlugin)
         .add_plugins(crate::character::NpcPlugin)
+        .add_plugins(crate::character::npc_brain::NpcBrainPlugin)
         .add_plugins(crate::character::CameraPlugin)
         .add_plugins(crate::character::DialoguePlugin)
         .add_plugins(crate::character::SpawnPointPlugin)
@@ -492,6 +493,8 @@ struct GenCommandParams<'w, 's> {
     player_camera_query: Query<'w, 's, &'static mut crate::character::PlayerCamera>,
     terrain_q: Query<'w, 's, (&'static crate::terrain::Terrain, &'static Transform)>,
     npc_behaviors: Query<'w, 's, &'static mut crate::character::npc::NpcBehavior>,
+    npc_brains: Query<'w, 's, &'static crate::character::npc_brain::NpcBrainState>,
+    npc_memories: Query<'w, 's, &'static crate::character::npc_memory::NpcMemory>,
     blockout_generated_q: Query<'w, 's, (Entity, &'static crate::worldgen::BlockoutGenerated)>,
     current_blockout: Option<Res<'w, crate::worldgen::CurrentBlockout>>,
     tier_q: Query<'w, 's, &'static crate::worldgen::PlacementTier>,
@@ -1356,6 +1359,8 @@ fn process_gen_commands(
                     None,
                     &params.world_tours.tours,
                     &params.undo_stack.history,
+                    &params.npc_brains,
+                    &params.npc_memories,
                 )
             }
             GenCommand::ExportWorld { format } => handle_export_world(
@@ -1462,6 +1467,60 @@ fn process_gen_commands(
                         } else {
                             // No saved history — start fresh
                             params.undo_stack.history = wt::EditHistory::default();
+                        }
+
+                        // Restore NPC brain/memory components from npcs.ron data
+                        for npc_def in &world_load.npc_data {
+                            if let Some(bevy_entity) =
+                                params.registry.get_entity(&npc_def.entity_name)
+                            {
+                                if let Some(ref brain_def) = npc_def.brain {
+                                    let config = crate::character::npc_brain::NpcBrainConfig {
+                                        personality: brain_def.personality.clone(),
+                                        model: brain_def.model.clone(),
+                                        tick_rate: brain_def.tick_rate,
+                                        perception_radius: brain_def.perception_radius,
+                                        goals: brain_def.goals.clone(),
+                                        knowledge: brain_def.knowledge.clone(),
+                                    };
+                                    let brain_state =
+                                        crate::character::npc_brain::NpcBrainState::new(config);
+                                    commands.entity(bevy_entity).insert(brain_state);
+                                }
+                                if let Some(ref mem_def) = npc_def.memory {
+                                    let mut memory = crate::character::npc_memory::NpcMemory::new(
+                                        mem_def.capacity,
+                                        mem_def.auto_memorize,
+                                    );
+                                    for entry in &mem_def.entries {
+                                        memory.add_memory(
+                                            entry.content.clone(),
+                                            entry.importance,
+                                            entry.timestamp,
+                                        );
+                                    }
+                                    commands.entity(bevy_entity).insert(memory);
+                                }
+                                tracing::info!(
+                                    "Restored NPC data for '{}'{}{}",
+                                    npc_def.entity_name,
+                                    if npc_def.brain.is_some() {
+                                        " [brain]"
+                                    } else {
+                                        ""
+                                    },
+                                    if npc_def.memory.is_some() {
+                                        " [memory]"
+                                    } else {
+                                        ""
+                                    },
+                                );
+                            } else {
+                                tracing::warn!(
+                                    "NPC data for '{}' — entity not found in registry (may load later)",
+                                    npc_def.entity_name
+                                );
+                            }
                         }
 
                         GenResponse::WorldLoaded {
@@ -1700,7 +1759,27 @@ fn process_gen_commands(
                             crate::interaction::AreaInsideTracker::default(),
                         ));
                     }
-                    crate::interaction::TriggerType::Collision => {}
+                    crate::interaction::TriggerType::Collision => {
+                        ec.insert(crate::interaction::CollisionTrigger {
+                            cooldown: p.cooldown.unwrap_or(1.0),
+                            ..default()
+                        });
+                        // Add a sensor collider if the entity doesn't already have one.
+                        // Uses the trigger radius as the sensor sphere size.
+                        ec.insert(crate::physics::ColliderConfig {
+                            shape: crate::physics::ColliderShape::Sphere,
+                            size: Some(Vec3::splat(p.radius.unwrap_or(3.0) * 2.0)),
+                            offset: Vec3::ZERO,
+                            is_trigger: true,
+                            visible_in_debug: true,
+                        });
+                    }
+                }
+                // Insert requires_item component if specified (Gap 2.3)
+                if let Some(ref item_id) = p.requires_item {
+                    ec.insert(crate::interaction::RequiresItem {
+                        item_id: item_id.clone(),
+                    });
                 }
                 // Insert action component
                 match p.action {
@@ -3840,11 +3919,24 @@ fn process_gen_commands(
             GenCommand::SetNpcBrain { entity, config } => {
                 let model = config.model.clone();
                 let tick_rate = config.tick_rate;
-                // In actual implementation, would spawn a brain task
-                GenResponse::NpcBrainSet {
-                    entity,
-                    model,
-                    tick_rate,
+                if let Some(bevy_entity) = params.registry.get_entity(&entity) {
+                    let brain_state = crate::character::npc_brain::NpcBrainState::new(config);
+                    commands.entity(bevy_entity).insert(brain_state);
+                    tracing::info!(
+                        "Attached NPC brain to '{}' (model: {}, tick: {}s)",
+                        entity,
+                        model,
+                        tick_rate
+                    );
+                    GenResponse::NpcBrainSet {
+                        entity,
+                        model,
+                        tick_rate,
+                    }
+                } else {
+                    GenResponse::Error {
+                        message: format!("Entity '{}' not found", entity),
+                    }
                 }
             }
 
@@ -3869,14 +3961,31 @@ fn process_gen_commands(
                 entity,
                 capacity,
                 initial_memories,
-                auto_memorize: _,
+                auto_memorize,
             } => {
                 let initial_count = initial_memories.len();
-                // Would attach NpcMemory component to entity
-                GenResponse::NpcMemorySet {
-                    entity,
-                    capacity,
-                    initial_count,
+                if let Some(bevy_entity) = params.registry.get_entity(&entity) {
+                    let mut memory =
+                        crate::character::npc_memory::NpcMemory::new(capacity, auto_memorize);
+                    for (i, content) in initial_memories.into_iter().enumerate() {
+                        memory.add_memory(content, 0.7, i as f64);
+                    }
+                    commands.entity(bevy_entity).insert(memory);
+                    tracing::info!(
+                        "Attached NPC memory to '{}' (capacity: {}, initial: {})",
+                        entity,
+                        capacity,
+                        initial_count
+                    );
+                    GenResponse::NpcMemorySet {
+                        entity,
+                        capacity,
+                        initial_count,
+                    }
+                } else {
+                    GenResponse::Error {
+                        message: format!("Entity '{}' not found", entity),
+                    }
                 }
             }
 

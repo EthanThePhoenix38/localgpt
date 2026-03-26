@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // ---------------------------------------------------------------------------
 // Marker components
@@ -62,6 +62,31 @@ pub struct AreaTrigger {
 impl Default for AreaTrigger {
     fn default() -> Self {
         Self { is_enter: true }
+    }
+}
+
+/// Marker for collision triggers (Avian sensor-based).
+///
+/// Unlike proximity triggers (distance check), collision triggers use Avian physics
+/// sensor colliders to detect overlap. The entity must have an Avian `Collider` +
+/// `Sensor` marker for this to work.
+#[derive(Component, Clone)]
+pub struct CollisionTrigger {
+    /// Cooldown between trigger fires (seconds).
+    pub cooldown: f32,
+    /// Timestamp of last trigger fire.
+    pub last_triggered: f32,
+    /// Entities currently overlapping this trigger volume.
+    pub overlapping: HashSet<Entity>,
+}
+
+impl Default for CollisionTrigger {
+    fn default() -> Self {
+        Self {
+            cooldown: 1.0,
+            last_triggered: 0.0,
+            overlapping: HashSet::new(),
+        }
     }
 }
 
@@ -285,6 +310,9 @@ pub struct AddTriggerParams {
     /// Score category for add_score action.
     #[serde(default)]
     pub category: Option<String>,
+    /// Require the player to have this item in inventory before the trigger fires.
+    #[serde(default)]
+    pub requires_item: Option<String>,
 }
 
 /// Parameters for teleporter.
@@ -459,19 +487,79 @@ pub struct Door {
 // ---------------------------------------------------------------------------
 
 /// Resource for tracking player inventory.
+///
+/// Stores collected item IDs as a set. Used for gating interactions
+/// (doors with `requires_key`, triggers with `requires_item`).
 #[derive(Resource, Clone, Default)]
 pub struct PlayerInventory {
-    pub items: Vec<String>,
+    /// Item IDs the player has collected.
+    pub items: HashSet<String>,
 }
 
 impl PlayerInventory {
+    /// Check if the player has a specific key/item.
     pub fn has_key(&self, key: &str) -> bool {
-        self.items.contains(&key.to_string())
+        self.items.contains(key)
     }
 
-    pub fn add_item(&mut self, item: String) {
-        self.items.push(item);
+    /// Check if the player has a specific item (alias for has_key).
+    pub fn has_item(&self, item: &str) -> bool {
+        self.items.contains(item)
     }
+
+    /// Add an item to the inventory.
+    pub fn add_item(&mut self, item: String) {
+        self.items.insert(item);
+    }
+
+    /// Remove an item from the inventory. Returns true if it was present.
+    pub fn remove_item(&mut self, item: &str) -> bool {
+        self.items.remove(item)
+    }
+
+    /// Number of items in inventory.
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Whether the inventory is empty.
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
+/// Component for items that can be picked up and added to inventory.
+///
+/// When the player walks within pickup range of an entity with this component,
+/// the item_id is added to `PlayerInventory` and the entity is despawned.
+#[derive(Component, Clone)]
+pub struct CollectibleItem {
+    /// Unique item identifier (e.g., "gold_key", "red_gem").
+    pub item_id: String,
+    /// Pickup range (distance from player to trigger pickup).
+    pub pickup_range: f32,
+    /// Optional notification text shown on pickup.
+    pub pickup_message: Option<String>,
+}
+
+impl Default for CollectibleItem {
+    fn default() -> Self {
+        Self {
+            item_id: String::new(),
+            pickup_range: 2.0,
+            pickup_message: None,
+        }
+    }
+}
+
+/// Component that gates a trigger on having a specific inventory item.
+///
+/// Added alongside trigger components (ProximityTrigger, ClickTrigger, etc.)
+/// to require the player to possess a specific item before the trigger fires.
+#[derive(Component, Clone)]
+pub struct RequiresItem {
+    /// Item ID required in PlayerInventory.
+    pub item_id: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -499,11 +587,13 @@ pub fn proximity_trigger_system(
         Option<&ToggleStateAction>,
         Option<&PlaySoundAction>,
         Option<&OnceTrigger>,
+        Option<&RequiresItem>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
     mut trigger_events: MessageWriter<TriggerFired>,
     mut commands: Commands,
     mut audio_engine: ResMut<crate::gen3d::audio::AudioEngine>,
+    inventory: Res<PlayerInventory>,
 ) {
     let player_pos = if let Ok(player_transform) = player_query.single() {
         player_transform.translation
@@ -512,7 +602,7 @@ pub fn proximity_trigger_system(
     };
     let now = time.elapsed_secs();
 
-    for (entity, transform, mut trigger, teleport, score, toggle, play_sound, once) in
+    for (entity, transform, mut trigger, teleport, score, toggle, play_sound, once, requires) in
         trigger_query.iter_mut()
     {
         let distance = player_pos.distance(transform.translation);
@@ -521,6 +611,12 @@ pub fn proximity_trigger_system(
         }
         if now - trigger.last_triggered < trigger.cooldown {
             continue;
+        }
+        // Check item requirement (Gap 2.3)
+        if let Some(req) = requires {
+            if !inventory.has_item(&req.item_id) {
+                continue;
+            }
         }
         trigger.last_triggered = now;
 
@@ -585,11 +681,13 @@ pub fn click_trigger_system(
         Option<&ToggleStateAction>,
         Option<&PlaySoundAction>,
         Option<&OnceTrigger>,
+        Option<&RequiresItem>,
     )>,
     mut score_board: ResMut<ScoreBoard>,
     mut trigger_events: MessageWriter<TriggerFired>,
     mut commands: Commands,
     mut audio_engine: ResMut<crate::gen3d::audio::AudioEngine>,
+    inventory: Res<PlayerInventory>,
 ) {
     if !keyboard.just_pressed(KeyCode::KeyE) {
         return;
@@ -601,12 +699,20 @@ pub fn click_trigger_system(
         return;
     };
 
-    // Find the closest click-triggerable entity within range
+    // Find the closest click-triggerable entity within range (respecting item requirements)
     let mut closest: Option<(Entity, f32)> = None;
-    for (entity, transform, trigger, _, _, _, _, _) in click_query.iter() {
+    for (entity, transform, trigger, _, _, _, _, _, requires) in click_query.iter() {
         let distance = player_pos.distance(transform.translation);
-        if distance <= trigger.max_distance && (closest.is_none() || distance < closest.unwrap().1)
-        {
+        if distance > trigger.max_distance {
+            continue;
+        }
+        // Check item requirement (Gap 2.3)
+        if let Some(req) = requires {
+            if !inventory.has_item(&req.item_id) {
+                continue;
+            }
+        }
+        if closest.is_none() || distance < closest.unwrap().1 {
             closest = Some((entity, distance));
         }
     }
@@ -616,8 +722,17 @@ pub fn click_trigger_system(
     };
 
     // Fire actions on the closest entity
-    if let Ok((entity, trigger_transform, _trigger, teleport, score, toggle, play_sound, once)) =
-        click_query.get(target_entity)
+    if let Ok((
+        entity,
+        trigger_transform,
+        _trigger,
+        teleport,
+        score,
+        toggle,
+        play_sound,
+        once,
+        _requires,
+    )) = click_query.get(target_entity)
     {
         // Emit trigger event (for EntityLink chain reactions)
         trigger_events.write(TriggerFired {
@@ -1200,7 +1315,7 @@ pub fn area_trigger_system(
 }
 
 // ---------------------------------------------------------------------------
-// GAP-P2-04: Click trigger prompt text rendering
+// GAP-P2-04: Click trigger prompt text rendering (world-space)
 // ---------------------------------------------------------------------------
 
 /// Marker for prompt text child entities spawned by click triggers.
@@ -1265,6 +1380,268 @@ pub fn click_prompt_system(
     }
 }
 
+// ---------------------------------------------------------------------------
+// GAP 2.5: Screen-space click interaction prompt ("Press E")
+// ---------------------------------------------------------------------------
+
+/// Marker for the screen-space interaction prompt HUD node.
+#[derive(Component)]
+pub struct InteractionPromptHud;
+
+/// Resource tracking which entity's prompt is currently displayed.
+#[derive(Resource, Default)]
+pub struct ActiveInteractionPrompt {
+    /// The entity whose prompt is being shown (if any).
+    pub target: Option<Entity>,
+    /// The prompt text being displayed.
+    pub text: String,
+}
+
+/// System: display a screen-space "Press E" prompt when the player is near a
+/// click-interactable entity.
+///
+/// This renders a centered bottom-screen HUD prompt (not world-space text),
+/// making it easy for the player to discover interactive objects.
+pub fn interaction_prompt_hud_system(
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    trigger_query: Query<(Entity, &Transform, &ClickTrigger, Option<&RequiresItem>)>,
+    inventory: Res<PlayerInventory>,
+    mut prompt_state: ResMut<ActiveInteractionPrompt>,
+    mut hud_query: Query<(Entity, &mut Text, &mut Visibility), With<InteractionPromptHud>>,
+    mut commands: Commands,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        // No player — hide any existing prompt
+        prompt_state.target = None;
+        for (_entity, _text, mut vis) in hud_query.iter_mut() {
+            *vis = Visibility::Hidden;
+        }
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    // Find the closest in-range click trigger
+    let mut closest: Option<(Entity, f32, String)> = None;
+    for (entity, transform, trigger, requires) in trigger_query.iter() {
+        let distance = player_pos.distance(transform.translation);
+        if distance > trigger.max_distance {
+            continue;
+        }
+        // Check item requirement
+        if let Some(req) = requires {
+            if !inventory.has_item(&req.item_id) {
+                continue;
+            }
+        }
+        if closest.is_none() || distance < closest.as_ref().unwrap().1 {
+            let text = trigger
+                .prompt_text
+                .clone()
+                .unwrap_or_else(|| "Press E to interact".to_string());
+            closest = Some((entity, distance, text));
+        }
+    }
+
+    match closest {
+        Some((entity, _, text)) => {
+            prompt_state.target = Some(entity);
+            prompt_state.text.clone_from(&text);
+
+            if let Ok((_hud_entity, mut hud_text, mut vis)) = hud_query.single_mut() {
+                // Update existing HUD node
+                **hud_text = text;
+                *vis = Visibility::Inherited;
+            } else {
+                // Spawn the HUD prompt node (screen-space UI)
+                commands.spawn((
+                    InteractionPromptHud,
+                    Text::new(text),
+                    TextFont {
+                        font_size: 20.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
+                    TextLayout::new_with_justify(bevy::text::Justify::Center),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        bottom: Val::Px(60.0),
+                        left: Val::Percent(50.0),
+                        // Negative margin to center (approximate)
+                        margin: UiRect {
+                            left: Val::Px(-100.0),
+                            ..default()
+                        },
+                        width: Val::Px(200.0),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.5)),
+                    ZIndex(50),
+                ));
+            }
+        }
+        None => {
+            // No interactable in range — hide prompt
+            prompt_state.target = None;
+            for (_entity, _text, mut vis) in hud_query.iter_mut() {
+                *vis = Visibility::Hidden;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GAP 2.1: Collision-based triggers (Avian sensor integration)
+// ---------------------------------------------------------------------------
+
+/// System: fire collision triggers when a physics body (player) enters a sensor collider.
+///
+/// Uses Avian's `Collisions` system param to detect overlap between the player's
+/// rigid body and entities marked with `CollisionTrigger` + `Sensor`.
+/// Fires the same actions as proximity/click triggers.
+#[cfg(feature = "physics")]
+#[allow(clippy::type_complexity)]
+pub fn collision_trigger_system(
+    time: Res<Time>,
+    collisions: avian3d::prelude::Collisions,
+    player_query: Query<Entity, With<crate::character::Player>>,
+    mut trigger_query: Query<(
+        Entity,
+        &Transform,
+        &mut CollisionTrigger,
+        Option<&TeleportAction>,
+        Option<&AddScoreAction>,
+        Option<&PlaySoundAction>,
+        Option<&OnceTrigger>,
+        Option<&RequiresItem>,
+    )>,
+    mut score_board: ResMut<ScoreBoard>,
+    mut trigger_events: MessageWriter<TriggerFired>,
+    mut commands: Commands,
+    mut audio_engine: ResMut<crate::gen3d::audio::AudioEngine>,
+    inventory: Res<PlayerInventory>,
+) {
+    let Ok(player_entity) = player_query.single() else {
+        return;
+    };
+    let now = time.elapsed_secs();
+
+    for (entity, transform, mut trigger, teleport, score, play_sound, once, requires) in
+        trigger_query.iter_mut()
+    {
+        // Check if player is colliding with this sensor
+        let is_colliding = collisions.contains(player_entity, entity);
+        let was_inside = trigger.overlapping.contains(&player_entity);
+
+        if is_colliding && !was_inside {
+            // Player just entered the trigger volume
+            trigger.overlapping.insert(player_entity);
+
+            // Check cooldown
+            if now - trigger.last_triggered < trigger.cooldown {
+                continue;
+            }
+
+            // Check item requirement
+            if let Some(req) = requires {
+                if !inventory.has_item(&req.item_id) {
+                    continue;
+                }
+            }
+
+            trigger.last_triggered = now;
+
+            // Emit trigger event
+            trigger_events.write(TriggerFired {
+                entity,
+                trigger_type: TriggerType::Collision,
+            });
+
+            // Execute actions (same pattern as proximity_trigger_system)
+            if let Some(teleport_action) = teleport {
+                match teleport_action.effect {
+                    TeleportEffect::Fade => {
+                        spawn_teleport_fade(&mut commands, teleport_action.destination);
+                    }
+                    _ => {
+                        commands
+                            .entity(player_entity)
+                            .insert(Transform::from_translation(teleport_action.destination));
+                    }
+                }
+            }
+            if let Some(score_action) = score {
+                let entry = score_board
+                    .scores
+                    .entry(score_action.category.clone())
+                    .or_insert(0);
+                *entry += score_action.amount;
+            }
+            if let Some(sound_action) = play_sound {
+                audio_engine.play_emitter_at(&sound_action.sound, transform.translation);
+            }
+
+            // Remove trigger if once
+            if once.is_some() {
+                commands.entity(entity).remove::<CollisionTrigger>();
+                commands.entity(entity).remove::<OnceTrigger>();
+            }
+        } else if !is_colliding && was_inside {
+            // Player left the trigger volume
+            trigger.overlapping.remove(&player_entity);
+        }
+    }
+}
+
+/// Stub collision trigger system when physics feature is disabled.
+#[cfg(not(feature = "physics"))]
+pub fn collision_trigger_system() {
+    // No-op: collision triggers require the physics feature (Avian3d).
+}
+
+// ---------------------------------------------------------------------------
+// GAP 2.3: Collectible item pickup system
+// ---------------------------------------------------------------------------
+
+/// System: handle CollectibleItem pickup (inventory gating).
+///
+/// When the player walks within range of an entity with `CollectibleItem`,
+/// the item_id is added to `PlayerInventory` and the entity is despawned.
+pub fn collectible_item_system(
+    player_query: Query<&Transform, With<crate::character::Player>>,
+    item_query: Query<(Entity, &Transform, &CollectibleItem)>,
+    mut inventory: ResMut<PlayerInventory>,
+    mut commands: Commands,
+    mut notifications: MessageWriter<crate::ui::notification::NotificationEvent>,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let player_pos = player_transform.translation;
+
+    for (entity, transform, item) in item_query.iter() {
+        let distance = player_pos.distance(transform.translation);
+        if distance > item.pickup_range {
+            continue;
+        }
+
+        // Add to inventory
+        inventory.add_item(item.item_id.clone());
+
+        // Send notification if configured
+        if let Some(ref msg) = item.pickup_message {
+            notifications.write(crate::ui::notification::NotificationEvent {
+                text: msg.clone(),
+                style: crate::ui::notification::NotificationStyle::Toast,
+                position: crate::ui::notification::NotificationPosition::Top,
+                icon: crate::ui::notification::NotificationIcon::None,
+            });
+        }
+
+        // Despawn the item entity
+        commands.entity(entity).despawn();
+    }
+}
+
 /// Plugin for interaction systems.
 pub struct InteractionPlugin;
 
@@ -1272,7 +1649,9 @@ impl Plugin for InteractionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ScoreBoard::default())
             .insert_resource(PlayerInventory::default())
+            .insert_resource(ActiveInteractionPrompt::default())
             .add_message::<TriggerFired>()
+            // Group 1: Trigger detection + chain resolution (max 16 systems per tuple)
             .add_systems(
                 Update,
                 (
@@ -1280,6 +1659,7 @@ impl Plugin for InteractionPlugin {
                     click_trigger_system,
                     timer_trigger_system,
                     area_trigger_system,
+                    collision_trigger_system,
                     entity_link_system
                         .after(proximity_trigger_system)
                         .after(click_trigger_system)
@@ -1287,10 +1667,18 @@ impl Plugin for InteractionPlugin {
                     door_system,
                     door_proximity_system,
                     collectible_system,
+                    collectible_item_system,
                     score_sync_system,
                     animate_action_system,
                     enable_disable_system,
+                ),
+            )
+            // Group 2: UI prompts + visual effects
+            .add_systems(
+                Update,
+                (
                     click_prompt_system,
+                    interaction_prompt_hud_system,
                     teleport_fade_system,
                     dissolve_effect_system,
                     sparkle_particle_system,
@@ -1400,9 +1788,33 @@ mod tests {
             amount: Some(10),
             state_key: None,
             category: Some("coins".to_string()),
+            requires_item: None,
         };
         assert_eq!(params.amount, Some(10));
         assert_eq!(params.category.as_deref(), Some("coins"));
+    }
+
+    #[test]
+    fn test_add_trigger_params_requires_item() {
+        let params = AddTriggerParams {
+            entity_id: "locked_chest".to_string(),
+            trigger_type: TriggerType::Click,
+            action: TriggerAction::Animate,
+            radius: None,
+            cooldown: None,
+            interval: None,
+            max_distance: Some(3.0),
+            prompt_text: Some("Press E to open".to_string()),
+            once: true,
+            destination: None,
+            text: None,
+            amount: None,
+            state_key: None,
+            category: None,
+            requires_item: Some("gold_key".to_string()),
+        };
+        assert_eq!(params.requires_item.as_deref(), Some("gold_key"));
+        assert!(params.once);
     }
 
     #[test]
@@ -1528,5 +1940,72 @@ mod tests {
         assert_eq!(json, "\"click\"");
         let parsed: DoorTrigger = serde_json::from_str("\"proximity\"").unwrap();
         assert_eq!(parsed, DoorTrigger::Proximity);
+    }
+
+    // --- Gap 2.1: CollisionTrigger tests ---
+
+    #[test]
+    fn test_collision_trigger_default() {
+        let trigger = CollisionTrigger::default();
+        assert_eq!(trigger.cooldown, 1.0);
+        assert_eq!(trigger.last_triggered, 0.0);
+        assert!(trigger.overlapping.is_empty());
+    }
+
+    // --- Gap 2.3: Inventory / CollectibleItem tests ---
+
+    #[test]
+    fn test_player_inventory_has_item() {
+        let mut inv = PlayerInventory::default();
+        assert!(inv.is_empty());
+        assert_eq!(inv.len(), 0);
+        inv.add_item("gold_key".to_string());
+        assert!(inv.has_item("gold_key"));
+        assert!(inv.has_key("gold_key")); // Alias
+        assert!(!inv.has_item("silver_key"));
+        assert_eq!(inv.len(), 1);
+    }
+
+    #[test]
+    fn test_player_inventory_remove_item() {
+        let mut inv = PlayerInventory::default();
+        inv.add_item("torch".to_string());
+        assert!(inv.has_item("torch"));
+        assert!(inv.remove_item("torch"));
+        assert!(!inv.has_item("torch"));
+        assert!(!inv.remove_item("nonexistent"));
+    }
+
+    #[test]
+    fn test_player_inventory_dedup() {
+        let mut inv = PlayerInventory::default();
+        inv.add_item("key".to_string());
+        inv.add_item("key".to_string()); // Duplicate
+        assert_eq!(inv.len(), 1); // HashSet deduplicates
+    }
+
+    #[test]
+    fn test_collectible_item_default() {
+        let item = CollectibleItem::default();
+        assert!(item.item_id.is_empty());
+        assert_eq!(item.pickup_range, 2.0);
+        assert!(item.pickup_message.is_none());
+    }
+
+    #[test]
+    fn test_requires_item_component() {
+        let req = RequiresItem {
+            item_id: "master_key".to_string(),
+        };
+        assert_eq!(req.item_id, "master_key");
+    }
+
+    // --- Gap 2.5: ActiveInteractionPrompt tests ---
+
+    #[test]
+    fn test_active_interaction_prompt_default() {
+        let prompt = ActiveInteractionPrompt::default();
+        assert!(prompt.target.is_none());
+        assert!(prompt.text.is_empty());
     }
 }

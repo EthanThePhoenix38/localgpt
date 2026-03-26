@@ -66,7 +66,8 @@ impl Tool for GenAddTriggerTool {
                     "text": { "type": "string", "description": "Text content (show_text action)" },
                     "amount": { "type": "integer", "default": 1, "description": "Score amount (add_score action)" },
                     "state_key": { "type": "string", "description": "State key (toggle_state action)" },
-                    "category": { "type": "string", "default": "points", "description": "Score category (add_score action)" }
+                    "category": { "type": "string", "default": "points", "description": "Score category (add_score action)" },
+                    "requires_item": { "type": "string", "description": "Item ID required in player inventory for this trigger to fire" }
                 },
                 "required": ["entity_id", "trigger_type", "action"]
             }),
@@ -126,6 +127,7 @@ impl Tool for GenAddTriggerTool {
             amount: args["amount"].as_i64().map(|v| v as i32),
             state_key: args["state_key"].as_str().map(|s| s.to_string()),
             category: args["category"].as_str().map(|s| s.to_string()),
+            requires_item: args["requires_item"].as_str().map(|s| s.to_string()),
         };
 
         let cmd = GenCommand::AddTrigger(params);

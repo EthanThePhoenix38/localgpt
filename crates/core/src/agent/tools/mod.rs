@@ -1,4 +1,5 @@
 pub mod spawn_agent;
+pub mod ssrf;
 pub mod web_search;
 
 use anyhow::Result;
@@ -9,7 +10,6 @@ use regex::Regex;
 use serde_json::{Value, json};
 use std::fs;
 use std::io::Cursor;
-use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::debug;
@@ -738,63 +738,10 @@ fn truncate_on_char_boundary(s: &str, max_bytes: usize) -> &str {
     &s[..s.floor_char_boundary(max_bytes)]
 }
 
-fn is_private_ip(addr: &IpAddr) -> bool {
-    match addr {
-        IpAddr::V4(ip) => {
-            ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified()
-        }
-        IpAddr::V6(ip) => {
-            ip.is_loopback()
-                || ip.is_unspecified()
-                || (ip.segments()[0] & 0xffc0) == 0xfe80
-                || (ip.segments()[0] & 0xfe00) == 0xfc00
-        }
-    }
-}
-
-fn is_blocked_hostname(host: &str) -> bool {
-    let host = host.to_ascii_lowercase();
-    let blocked = ["localhost", "metadata.google.internal", "169.254.169.254"];
-    let blocked_tlds = [".local", ".internal", ".localhost"];
-
-    blocked.contains(&host.as_str()) || blocked_tlds.iter().any(|tld| host.ends_with(tld))
-}
-
+/// Delegates to [`ssrf::validate_url`] — validates URL for SSRF safety before
+/// any HTTP request is made (scheme, hostname, IP range, DNS pinning).
 async fn validate_web_fetch_url(url: &str) -> Result<reqwest::Url> {
-    let parsed = reqwest::Url::parse(url)?;
-
-    if !matches!(parsed.scheme(), "http" | "https") {
-        anyhow::bail!("Only http/https URLs are allowed");
-    }
-
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| anyhow::anyhow!("No host in URL"))?;
-
-    if is_blocked_hostname(host) {
-        anyhow::bail!("Blocked hostname: {}", host);
-    }
-
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        if is_private_ip(&ip) {
-            anyhow::bail!("URL resolves to private IP {} — blocked for security", ip);
-        }
-        return Ok(parsed);
-    }
-
-    let port = parsed.port_or_known_default().unwrap_or(443);
-    let addrs = tokio::net::lookup_host((host, port)).await?;
-    for addr in addrs {
-        if is_private_ip(&addr.ip()) {
-            anyhow::bail!(
-                "URL {} resolves to private IP {} — blocked for security",
-                url,
-                addr.ip()
-            );
-        }
-    }
-
-    Ok(parsed)
+    ssrf::validate_url(url).await
 }
 
 const MAX_WEB_FETCH_REDIRECTS: usize = 10;
@@ -1194,31 +1141,8 @@ pub fn extract_tool_detail(tool_name: &str, arguments: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_is_private_ip_v4_ranges() {
-        assert!(is_private_ip(&"127.0.0.1".parse().unwrap()));
-        assert!(is_private_ip(&"10.0.0.5".parse().unwrap()));
-        assert!(is_private_ip(&"192.168.1.1".parse().unwrap()));
-        assert!(is_private_ip(&"169.254.0.10".parse().unwrap()));
-        assert!(!is_private_ip(&"8.8.8.8".parse().unwrap()));
-    }
-
-    #[test]
-    fn test_is_private_ip_v6_ranges() {
-        assert!(is_private_ip(&"::1".parse().unwrap()));
-        assert!(is_private_ip(&"fe80::1".parse().unwrap()));
-        assert!(is_private_ip(&"fc00::1".parse().unwrap()));
-        assert!(!is_private_ip(&"2606:4700:4700::1111".parse().unwrap()));
-    }
-
-    #[test]
-    fn test_is_blocked_hostname() {
-        assert!(is_blocked_hostname("localhost"));
-        assert!(is_blocked_hostname("metadata.google.internal"));
-        assert!(is_blocked_hostname("my-service.internal"));
-        assert!(is_blocked_hostname("printer.local"));
-        assert!(!is_blocked_hostname("example.com"));
-    }
+    // SSRF unit tests for is_private_ip and is_blocked_hostname are in ssrf.rs.
+    // These integration tests verify the redirect validation path delegates correctly.
 
     #[test]
     fn test_extract_readable_text_removes_html() {
@@ -1238,7 +1162,10 @@ mod tests {
         let err = resolve_and_validate_redirect_target(&current, "http://127.0.0.1/admin").await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
-        assert!(msg.contains("private IP"));
+        assert!(
+            msg.contains("private/reserved IP"),
+            "expected SSRF block message, got: {msg}"
+        );
     }
 
     #[tokio::test]

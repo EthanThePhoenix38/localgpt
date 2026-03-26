@@ -7,11 +7,95 @@
 //! systems to avoid egui context contention. The gallery_ui_system only
 //! accesses EguiContexts when gallery.visible is true.
 
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
 use super::gallery::{self, WorldGalleryEntry};
 use super::plugin::GenWorkspace;
+
+/// Thumbnail loading state for a single entry.
+enum ThumbnailEntry {
+    /// We haven't tried to load this yet.
+    NotLoaded,
+    /// Successfully loaded — holds the egui texture handle.
+    Loaded(egui::TextureHandle),
+    /// Loading failed (missing file, decode error, etc.) — don't retry.
+    Failed,
+}
+
+/// Cache of loaded thumbnail textures, keyed by image file path.
+///
+/// Inserted as a Bevy `Resource`. Thumbnails are loaded lazily the first
+/// time a gallery card is rendered, then cached for the lifetime of the
+/// gallery session. The cache is cleared when the gallery entry list is
+/// refreshed (e.g., the Refresh button).
+#[derive(Resource, Default)]
+pub struct ThumbnailCache {
+    textures: HashMap<PathBuf, ThumbnailEntry>,
+}
+
+impl ThumbnailCache {
+    /// Look up or lazily load a thumbnail for the given image path.
+    ///
+    /// Returns `Some(&TextureHandle)` if a texture is available, `None` if
+    /// the path has no thumbnail or loading failed.
+    fn get_or_load(&mut self, path: &PathBuf, ctx: &egui::Context) -> Option<&egui::TextureHandle> {
+        // Insert NotLoaded on first access, then try to load.
+        let entry = self
+            .textures
+            .entry(path.clone())
+            .or_insert(ThumbnailEntry::NotLoaded);
+
+        if matches!(entry, ThumbnailEntry::NotLoaded) {
+            *entry = load_thumbnail_texture(path, ctx);
+        }
+
+        match entry {
+            ThumbnailEntry::Loaded(handle) => Some(handle),
+            _ => None,
+        }
+    }
+
+    /// Drop all cached textures (called on gallery refresh).
+    fn clear(&mut self) {
+        self.textures.clear();
+    }
+}
+
+/// Load an image file from disk and upload it as an egui texture.
+fn load_thumbnail_texture(path: &PathBuf, ctx: &egui::Context) -> ThumbnailEntry {
+    let image_bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            tracing::debug!("Failed to read thumbnail {}: {}", path.display(), e);
+            return ThumbnailEntry::Failed;
+        }
+    };
+
+    let dynamic_image = match image::load_from_memory(&image_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            tracing::debug!("Failed to decode thumbnail {}: {}", path.display(), e);
+            return ThumbnailEntry::Failed;
+        }
+    };
+
+    // Resize to a reasonable thumbnail size to keep GPU memory low.
+    // 200x150 gives a crisp image at the 100x75 display size (2x for HiDPI).
+    let resized = dynamic_image.resize(200, 150, image::imageops::FilterType::Triangle);
+    let rgba = resized.to_rgba8();
+    let (w, h) = (rgba.width() as usize, rgba.height() as usize);
+
+    let color_image = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
+
+    let texture_name = format!("gallery_thumb_{}", path.display());
+    let handle = ctx.load_texture(texture_name, color_image, egui::TextureOptions::LINEAR);
+
+    ThumbnailEntry::Loaded(handle)
+}
 
 /// Gallery visibility and data state.
 #[derive(Resource, Default)]
@@ -44,6 +128,7 @@ impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GalleryState>()
             .init_resource::<PendingGalleryLoad>()
+            .init_resource::<ThumbnailCache>()
             .add_systems(Update, gallery_toggle_system)
             .add_systems(Update, gallery_ui_system)
             .add_systems(Update, gallery_load_system);
@@ -67,12 +152,14 @@ fn gallery_load_system(mut gallery: ResMut<GalleryState>, mut pending: ResMut<Pe
 fn gallery_toggle_system(
     keys: Res<ButtonInput<KeyCode>>,
     mut gallery: ResMut<GalleryState>,
+    mut thumb_cache: ResMut<ThumbnailCache>,
     workspace: Res<GenWorkspace>,
 ) {
     if keys.just_pressed(KeyCode::KeyG) {
         gallery.visible = !gallery.visible;
         if gallery.visible && gallery.entries.is_empty() {
             gallery.entries = gallery::scan_world_gallery(&workspace.path);
+            thumb_cache.clear();
         }
     }
 }
@@ -81,6 +168,7 @@ fn gallery_toggle_system(
 fn gallery_ui_system(
     mut contexts: EguiContexts,
     mut gallery: ResMut<GalleryState>,
+    mut thumb_cache: ResMut<ThumbnailCache>,
     workspace: Res<GenWorkspace>,
 ) {
     if !gallery.visible {
@@ -124,6 +212,7 @@ fn gallery_ui_system(
                 ui.text_edit_singleline(&mut gallery.filter);
                 if ui.button("Refresh").clicked() {
                     gallery.entries = gallery::scan_world_gallery(&workspace.path);
+                    thumb_cache.clear();
                 }
                 ui.label(format!("{} worlds", entry_count));
             });
@@ -148,7 +237,7 @@ fn gallery_ui_system(
                     let source = gallery.entries[idx].source.clone();
                     let description = gallery.entries[idx].description.clone();
                     let style_tags = gallery.entries[idx].style_tags.clone();
-                    let has_thumb = gallery.entries[idx].thumbnail_path.is_some();
+                    let thumb_path = gallery.entries[idx].thumbnail_path.clone();
                     let path = gallery.entries[idx].path.to_string_lossy().to_string();
                     let date = gallery.entries[idx]
                         .created_at
@@ -169,17 +258,26 @@ fn gallery_ui_system(
 
                     frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            // Thumbnail placeholder (100x75)
+                            // Thumbnail area (100x75)
                             let thumb_size = egui::vec2(100.0, 75.0);
-                            let (rect, _) =
-                                ui.allocate_exact_size(thumb_size, egui::Sense::hover());
-                            let fill = if has_thumb {
-                                egui::Color32::from_gray(60)
+
+                            // Try to load and display the actual thumbnail image
+                            let texture_id = thumb_path.as_ref().and_then(|tp| {
+                                thumb_cache.get_or_load(tp, ui.ctx()).map(|h| h.id())
+                            });
+
+                            if let Some(tex_id) = texture_id {
+                                let image = egui::Image::new(egui::load::SizedTexture::new(
+                                    tex_id, thumb_size,
+                                ))
+                                .corner_radius(4.0);
+                                ui.add(image);
                             } else {
-                                egui::Color32::from_gray(30)
-                            };
-                            ui.painter().rect_filled(rect, 4.0, fill);
-                            if !has_thumb {
+                                // Placeholder: dark rect with "No Preview" label
+                                let (rect, _) =
+                                    ui.allocate_exact_size(thumb_size, egui::Sense::hover());
+                                ui.painter()
+                                    .rect_filled(rect, 4.0, egui::Color32::from_gray(30));
                                 ui.painter().text(
                                     rect.center(),
                                     egui::Align2::CENTER_CENTER,

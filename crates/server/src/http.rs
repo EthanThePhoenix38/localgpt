@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tracing::{debug, info};
 
@@ -156,26 +156,12 @@ impl Server {
         });
 
         let cors = if self.config.server.cors_origins.is_empty() {
-            // Remove permissive Any CORS; default to common local development origins
-            let default_origins = vec![
-                "http://localhost:3000"
-                    .parse::<axum::http::HeaderValue>()
-                    .unwrap(),
-                "http://127.0.0.1:3000"
-                    .parse::<axum::http::HeaderValue>()
-                    .unwrap(),
-                "http://localhost:8080"
-                    .parse::<axum::http::HeaderValue>()
-                    .unwrap(),
-                "http://127.0.0.1:8080"
-                    .parse::<axum::http::HeaderValue>()
-                    .unwrap(),
-                "http://localhost:1420"
-                    .parse::<axum::http::HeaderValue>()
-                    .unwrap(),
-            ];
+            // Default: allow only localhost origins (any port, http/https, IPv4/IPv6)
             CorsLayer::new()
-                .allow_origin(default_origins)
+                .allow_origin(AllowOrigin::predicate(|origin, _| {
+                    let origin = origin.as_bytes();
+                    is_localhost_origin(origin)
+                }))
                 .allow_methods(Any)
                 .allow_headers(Any)
         } else {
@@ -1933,4 +1919,57 @@ async fn handle_websocket(socket: WebSocket, state: Arc<AppState>) {
     }
 
     debug!("WebSocket connection closed");
+}
+
+/// Check if an origin header value represents a localhost origin.
+///
+/// Matches: `http(s)://localhost:<port>`, `http(s)://127.0.0.1:<port>`,
+/// and `http(s)://[::1]:<port>` (any port, or no port).
+fn is_localhost_origin(origin: &[u8]) -> bool {
+    let s = match std::str::from_utf8(origin) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    // Strip scheme
+    let rest = if let Some(r) = s.strip_prefix("http://") {
+        r
+    } else if let Some(r) = s.strip_prefix("https://") {
+        r
+    } else {
+        return false;
+    };
+
+    // Check host (with optional :<port> suffix)
+    let host = if let Some(pos) = rest.rfind(':') {
+        // Could be host:port — but we need to handle [::1]:port carefully
+        if rest.starts_with('[') {
+            // IPv6 bracket notation: [::1]:port or [::1]
+            if let Some(bracket_end) = rest.find(']') {
+                let ipv6_host = &rest[..=bracket_end]; // e.g. "[::1]"
+                if bracket_end + 1 < rest.len() {
+                    // There's something after ']', should be ':port'
+                    let after = &rest[bracket_end + 1..];
+                    if !after.starts_with(':') || !after[1..].chars().all(|c| c.is_ascii_digit()) {
+                        return false;
+                    }
+                }
+                ipv6_host
+            } else {
+                return false;
+            }
+        } else {
+            // Plain host:port — verify port part is digits
+            let port_part = &rest[pos + 1..];
+            if port_part.chars().all(|c| c.is_ascii_digit()) {
+                &rest[..pos]
+            } else {
+                rest
+            }
+        }
+    } else {
+        rest
+    };
+
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }

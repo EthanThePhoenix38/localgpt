@@ -2,9 +2,25 @@
 //!
 //! Attaches a local SLM-driven brain to NPCs for autonomous behavior.
 //! Brain runs as background tasks, issuing commands at configurable tick rates.
+//!
+//! ## Architecture
+//!
+//! The brain loop runs as a Bevy system that periodically ticks each NPC entity
+//! with an `NpcBrainState` component. On each tick:
+//!
+//! 1. Gather perception (nearby entities, recent events)
+//! 2. Build prompt with personality, goals, knowledge, and memory context
+//! 3. Spawn async Ollama HTTP call via `BrainTaskChannel`
+//! 4. Parse response into `NpcAction` and apply
+//!
+//! Async calls are spawned via `std::thread::spawn` + a dedicated tokio runtime
+//! (same pattern as ws_server.rs), with results returned through a crossbeam channel
+//! so Bevy systems can poll results without blocking.
 
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::sync::mpsc as std_mpsc;
 
 /// NPC actions the brain can decide to take.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,8 +77,8 @@ impl Default for NpcBrainConfig {
     }
 }
 
-/// State of an NPC brain.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// State of an NPC brain (Bevy Component).
+#[derive(Component, Debug, Clone, Serialize, Deserialize)]
 pub struct NpcBrainState {
     pub config: NpcBrainConfig,
     pub active: bool,
@@ -70,6 +86,9 @@ pub struct NpcBrainState {
     pub last_tick: f64,
     pub recent_events: VecDeque<NpcEvent>,
     pub tick_count: u64,
+    /// Whether an async Ollama request is currently in-flight for this NPC.
+    #[serde(skip)]
+    pub pending_request: bool,
 }
 
 impl NpcBrainState {
@@ -81,6 +100,7 @@ impl NpcBrainState {
             last_tick: 0.0,
             recent_events: VecDeque::with_capacity(20),
             tick_count: 0,
+            pending_request: false,
         }
     }
 
@@ -420,5 +440,378 @@ mod tests {
         assert!(ctx.contains("oak_tree"));
         assert!(ctx.contains("Player at 2.0m east"));
         assert!(ctx.contains("Available actions"));
+    }
+}
+
+// ===========================================================================
+// Brain Task Loop — Bevy systems + async Ollama integration
+// ===========================================================================
+
+/// Result of an async brain tick returned from the Ollama worker thread.
+pub struct BrainTickResult {
+    /// The Bevy entity this result is for.
+    pub entity: Entity,
+    /// The NPC's chosen action.
+    pub action: NpcAction,
+    /// Optional memory to record (if the NPC said something notable).
+    pub memory: Option<String>,
+}
+
+/// Bevy Resource: channel for receiving brain tick results from async Ollama calls.
+///
+/// Uses `Mutex<Receiver>` because `std::sync::mpsc::Receiver` is not `Sync`,
+/// which Bevy requires for Resources. The Mutex is only locked briefly during
+/// `try_recv` polls each frame.
+#[derive(Resource)]
+pub struct BrainTaskChannel {
+    pub sender: std_mpsc::Sender<BrainTickResult>,
+    pub receiver: std::sync::Mutex<std_mpsc::Receiver<BrainTickResult>>,
+}
+
+impl Default for BrainTaskChannel {
+    fn default() -> Self {
+        let (sender, receiver) = std_mpsc::channel();
+        Self {
+            sender,
+            receiver: std::sync::Mutex::new(receiver),
+        }
+    }
+}
+
+/// Bevy Resource: Ollama endpoint configuration.
+#[derive(Resource, Clone)]
+pub struct OllamaConfig {
+    pub endpoint: String,
+    /// If true, Ollama availability has been checked and failed. Skip until retry.
+    pub unavailable: bool,
+    /// Timestamp of last availability check (seconds since startup).
+    pub last_check: f64,
+}
+
+impl Default for OllamaConfig {
+    fn default() -> Self {
+        Self {
+            endpoint: "http://localhost:11434".to_string(),
+            unavailable: false,
+            last_check: 0.0,
+        }
+    }
+}
+
+/// Call the Ollama /api/chat endpoint synchronously (runs inside a tokio task).
+///
+/// Returns the assistant message content, or an error string.
+fn call_ollama_blocking(endpoint: &str, model: &str, prompt: &str) -> Result<String, String> {
+    // Build a single-use tokio runtime for this blocking call.
+    // This is called from a std::thread::spawn context, not from Bevy's main thread.
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+
+    rt.block_on(async {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("HTTP client error: {}", e))?;
+
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [
+                { "role": "system", "content": "You are an NPC in a 3D world. Respond with exactly ONE action." },
+                { "role": "user", "content": prompt }
+            ],
+            "stream": false,
+            "options": {
+                "temperature": 0.7,
+                "num_predict": 64
+            }
+        });
+
+        let resp = client
+            .post(format!("{}/api/chat", endpoint))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Ollama request failed: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Ollama returned status {}", resp.status()));
+        }
+
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+
+        json["message"]["content"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| "No content in Ollama response".to_string())
+    })
+}
+
+/// Compute cardinal direction from one position to another.
+fn direction_label(from: Vec3, to: Vec3) -> String {
+    let delta = to - from;
+    let angle = delta.z.atan2(delta.x).to_degrees();
+    match angle {
+        a if (-45.0..45.0).contains(&a) => "east".to_string(),
+        a if (45.0..135.0).contains(&a) => "north".to_string(),
+        a if !(-135.0..135.0).contains(&a) => "west".to_string(),
+        _ => "south".to_string(),
+    }
+}
+
+/// Bevy system: gather perception and dispatch async Ollama calls for NPC brains.
+///
+/// This system runs every frame but only dispatches work when an NPC's tick
+/// interval has elapsed and no request is already in-flight.
+#[allow(clippy::type_complexity)]
+pub fn brain_tick_system(
+    time: Res<Time>,
+    ollama_config: Res<OllamaConfig>,
+    brain_channel: Res<BrainTaskChannel>,
+    mut brain_query: Query<
+        (
+            Entity,
+            &mut NpcBrainState,
+            &Transform,
+            &Name,
+            Option<&super::npc_memory::NpcMemory>,
+        ),
+        With<super::npc::Npc>,
+    >,
+    player_query: Query<&Transform, With<super::player::Player>>,
+    all_named: Query<(&Name, &Transform), Without<super::player::Player>>,
+) {
+    if ollama_config.unavailable {
+        return;
+    }
+
+    let current_time = time.elapsed_secs_f64();
+    let player_transform = player_query.single().ok();
+
+    for (entity, mut brain, npc_transform, npc_name, memory) in brain_query.iter_mut() {
+        // Skip if not time to tick or already waiting for a response
+        if !brain.should_tick(current_time) || brain.pending_request {
+            continue;
+        }
+
+        // Gather perception snapshot
+        let npc_pos = npc_transform.translation;
+        let radius = brain.config.perception_radius;
+
+        let mut nearby = Vec::new();
+        for (name, transform) in all_named.iter() {
+            if name.as_str() == npc_name.as_str() {
+                continue; // skip self
+            }
+            let dist = npc_pos.distance(transform.translation);
+            if dist <= radius {
+                nearby.push(PerceivedEntity {
+                    name: name.as_str().to_string(),
+                    entity_type: "entity".to_string(),
+                    position: transform.translation.to_array(),
+                    distance: dist,
+                    direction: direction_label(npc_pos, transform.translation),
+                });
+            }
+        }
+
+        let player_info = player_transform.map(|pt| {
+            let dist = npc_pos.distance(pt.translation);
+            PerceivedEntity {
+                name: "player".to_string(),
+                entity_type: "player".to_string(),
+                position: pt.translation.to_array(),
+                distance: dist,
+                direction: direction_label(npc_pos, pt.translation),
+            }
+        });
+
+        let perception = PerceptionSnapshot {
+            npc_position: npc_pos.to_array(),
+            current_action: brain.current_action.clone(),
+            nearby_entities: nearby,
+            player_info,
+            recent_events: brain.recent_events.iter().cloned().collect(),
+        };
+
+        // Build memory context
+        let memory_ctx = memory.and_then(|m| m.format_for_context(5, current_time));
+
+        // Build prompt
+        let prompt = build_brain_context(&brain, &perception, memory_ctx.as_deref());
+        let model = brain.config.model.clone();
+        let endpoint = ollama_config.endpoint.clone();
+        let sender = brain_channel.sender.clone();
+
+        // Mark as pending before spawning
+        brain.pending_request = true;
+        brain.last_tick = current_time;
+        brain.tick_count += 1;
+
+        // Spawn blocking Ollama call on a background thread
+        std::thread::spawn(move || {
+            let action = match call_ollama_blocking(&endpoint, &model, &prompt) {
+                Ok(response) => {
+                    let parsed = parse_npc_action(&response);
+                    tracing::debug!("NPC brain response: {:?} -> {:?}", response, parsed);
+                    parsed
+                }
+                Err(e) => {
+                    tracing::warn!("NPC brain Ollama error: {}", e);
+                    NpcAction::Wait
+                }
+            };
+
+            // Extract memory from speak actions
+            let memory = match &action {
+                NpcAction::Speak { text } => Some(format!("I said: {}", text)),
+                _ => None,
+            };
+
+            let _ = sender.send(BrainTickResult {
+                entity,
+                action,
+                memory,
+            });
+        });
+    }
+}
+
+/// Bevy system: receive completed brain tick results and apply actions to NPCs.
+pub fn brain_apply_results_system(
+    time: Res<Time>,
+    brain_channel: Res<BrainTaskChannel>,
+    mut brain_query: Query<(&mut NpcBrainState, &mut Transform, &Name), With<super::npc::Npc>>,
+    mut memory_query: Query<&mut super::npc_memory::NpcMemory>,
+) {
+    let current_time = time.elapsed_secs_f64();
+
+    // Drain all pending results (non-blocking)
+    let Ok(receiver) = brain_channel.receiver.lock() else {
+        return;
+    };
+    while let Ok(result) = receiver.try_recv() {
+        let Ok((mut brain, mut transform, name)) = brain_query.get_mut(result.entity) else {
+            continue;
+        };
+
+        brain.pending_request = false;
+        brain.current_action = result.action.clone();
+
+        // Record event for the NPC's recent events buffer
+        let action_desc = match &result.action {
+            NpcAction::MoveTo { position } => {
+                format!(
+                    "Moving to ({:.1}, {:.1}, {:.1})",
+                    position[0], position[1], position[2]
+                )
+            }
+            NpcAction::LookAt { entity } => format!("Looking at {}", entity),
+            NpcAction::Speak { text } => format!("Said: \"{}\"", text),
+            NpcAction::Emote { emote_type } => format!("Emoted: {:?}", emote_type),
+            NpcAction::Interact { entity } => format!("Interacting with {}", entity),
+            NpcAction::Wait => "Waiting".to_string(),
+            NpcAction::Wander => "Wandering".to_string(),
+        };
+        brain.push_event(action_desc, current_time);
+
+        // Apply immediate actions
+        match &result.action {
+            NpcAction::MoveTo { position } => {
+                // Set target — the NPC wander/patrol system will handle movement.
+                // For simplicity, directly update the position for now.
+                transform.translation = Vec3::from_array(*position);
+            }
+            NpcAction::LookAt {
+                entity: target_name,
+            } => {
+                // Look toward the named entity (best-effort)
+                tracing::debug!("NPC '{}' looking at '{}'", name.as_str(), target_name);
+            }
+            NpcAction::Speak { text } => {
+                tracing::info!("NPC '{}' says: {}", name.as_str(), text);
+            }
+            NpcAction::Emote { emote_type } => {
+                tracing::info!("NPC '{}' emotes: {:?}", name.as_str(), emote_type);
+            }
+            NpcAction::Interact { entity } => {
+                tracing::info!("NPC '{}' interacts with '{}'", name.as_str(), entity);
+            }
+            NpcAction::Wander => {
+                // Add a small random offset to position
+                use rand::Rng;
+                let mut rng = rand::rng();
+                let dx: f32 = rng.random_range(-3.0..3.0);
+                let dz: f32 = rng.random_range(-3.0..3.0);
+                transform.translation.x += dx;
+                transform.translation.z += dz;
+            }
+            NpcAction::Wait => {}
+        }
+
+        // Record memory if auto_memorize is enabled
+        if let Some(memory_text) = result.memory
+            && let Ok(mut mem) = memory_query.get_mut(result.entity)
+            && mem.auto_memorize
+        {
+            mem.add_memory(memory_text, 0.5, current_time);
+        }
+    }
+}
+
+/// Bevy system: periodically check if Ollama is available (every 30 seconds when marked unavailable).
+pub fn ollama_health_check_system(time: Res<Time>, mut ollama_config: ResMut<OllamaConfig>) {
+    let current_time = time.elapsed_secs_f64();
+
+    // Only check periodically
+    if current_time - ollama_config.last_check < 30.0 {
+        return;
+    }
+    ollama_config.last_check = current_time;
+
+    // Quick non-blocking check: try to connect to Ollama
+    let endpoint = ollama_config.endpoint.clone();
+    let was_unavailable = ollama_config.unavailable;
+
+    // Use a very short timeout for the health check
+    match std::net::TcpStream::connect_timeout(
+        &endpoint
+            .trim_start_matches("http://")
+            .parse()
+            .unwrap_or_else(|_| "127.0.0.1:11434".parse().unwrap()),
+        std::time::Duration::from_millis(500),
+    ) {
+        Ok(_) => {
+            if was_unavailable {
+                tracing::info!("Ollama is now available at {}", endpoint);
+            }
+            ollama_config.unavailable = false;
+        }
+        Err(_) => {
+            if !was_unavailable {
+                tracing::warn!(
+                    "Ollama unavailable at {} — NPC brains will be paused until it comes online",
+                    endpoint
+                );
+            }
+            ollama_config.unavailable = true;
+        }
+    }
+}
+
+/// Plugin for the NPC brain system.
+pub struct NpcBrainPlugin;
+
+impl Plugin for NpcBrainPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<BrainTaskChannel>()
+            .init_resource::<OllamaConfig>()
+            .add_systems(Update, brain_tick_system)
+            .add_systems(Update, brain_apply_results_system)
+            .add_systems(Update, ollama_health_check_system);
     }
 }

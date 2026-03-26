@@ -2,6 +2,7 @@
 //!
 //! NPCs accumulate memories from interactions that persist across save/load.
 
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// A single memory entry.
@@ -12,8 +13,8 @@ pub struct MemoryEntry {
     pub importance: f32,
 }
 
-/// NPC memory store.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// NPC memory store (Bevy Component).
+#[derive(Component, Debug, Clone, Serialize, Deserialize)]
 pub struct NpcMemory {
     pub capacity: usize,
     pub entries: Vec<MemoryEntry>,
