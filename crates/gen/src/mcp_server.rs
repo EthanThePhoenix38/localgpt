@@ -74,7 +74,14 @@ pub fn create_mcp_tools(bridge: Arc<GenBridge>, config: &Config) -> Result<Vec<B
     ));
 
     // AI1 tools: AI asset generation
-    tools.extend(crate::mcp::asset_gen_tools::create_asset_gen_tools(bridge));
+    tools.extend(crate::mcp::asset_gen_tools::create_asset_gen_tools(
+        bridge.clone(),
+    ));
+
+    // AI3 tools: Multimodal input for image-guided world generation
+    tools.extend(crate::mcp::multimodal_tools::create_multimodal_tools(
+        bridge,
+    ));
 
     // Experiment queue tools: queue, list, status
     let tracker = Arc::new(ExperimentTracker::new(&config.paths.state_dir));

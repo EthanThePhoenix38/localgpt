@@ -325,6 +325,41 @@ pub enum GenCommand {
         preview: bool,
         resolve_conflicts: Option<HashMap<String, String>>,
     },
+
+    // Tier 27: Multimodal Input (AI3)
+    ImageToLayout {
+        /// Path to reference image or base64-encoded image data.
+        image: String,
+        /// Additional text guidance to supplement the image.
+        prompt: Option<String>,
+        /// Target world scale: small, medium, large.
+        scale: ImageLayoutScale,
+        /// Style mode: match, blockout, stylized.
+        style: ImageLayoutStyle,
+    },
+    MatchStyle {
+        /// Path to style reference image or base64 data.
+        image: String,
+        /// Which aspects to adjust.
+        scope: StyleMatchScope,
+        /// How strongly to match (0.0–1.0).
+        intensity: f32,
+        /// Specific entity IDs to restyle (None = all).
+        entities: Option<Vec<String>>,
+    },
+    ReferenceBoard {
+        action: ReferenceBoardAction,
+    },
+    PanoramaToWorld {
+        /// Path to equirectangular panorama image or base64 data.
+        image: String,
+        /// Additional guidance for world generation.
+        prompt: Option<String>,
+        /// Estimate depth from panorama to inform 3D placement.
+        depth_estimation: bool,
+        /// Generate areas not visible in the panorama.
+        generate_beyond: bool,
+    },
 }
 
 /// Actions for editing the navmesh.
@@ -343,6 +378,78 @@ pub enum NavMeshEditAction {
     },
     /// Remove a connection near a point.
     RemoveConnection { from: [f32; 3] },
+}
+
+// ---------------------------------------------------------------------------
+// AI3: Multimodal input data structures
+// ---------------------------------------------------------------------------
+
+/// Target world scale for image-to-layout conversion.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageLayoutScale {
+    /// Single room (~10m²).
+    Small,
+    /// Building/courtyard (~100m²).
+    Medium,
+    /// Landscape (~1000m²).
+    Large,
+}
+
+/// Style interpretation mode for image-to-layout.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImageLayoutStyle {
+    /// Reproduce the image's style as closely as possible.
+    Match,
+    /// Gray-box blockout only, ignore visual style.
+    Blockout,
+    /// Freely interpret the image's mood and structure.
+    Stylized,
+}
+
+/// Which aspects of the scene to adjust during style matching.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StyleMatchScope {
+    /// Adjust lighting, materials, and atmosphere.
+    All,
+    /// Adjust lighting only.
+    Lighting,
+    /// Adjust materials only.
+    Materials,
+    /// Adjust atmosphere (fog, sky) only.
+    Atmosphere,
+}
+
+/// Actions for the reference board (mood board) management.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum ReferenceBoardAction {
+    /// Add a new reference image.
+    Add {
+        image: String,
+        label: Option<String>,
+        weight: f32,
+    },
+    /// Remove a reference by ID.
+    Remove { ref_id: String },
+    /// List all active references.
+    List,
+    /// Clear all references.
+    Clear,
+}
+
+/// A single reference image entry stored in the reference board.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReferenceEntry {
+    pub ref_id: String,
+    pub label: String,
+    pub weight: f32,
+    /// VLM-generated text description (cached at add time).
+    pub description: String,
+    /// Path to the stored (resized) image file.
+    pub image_path: String,
 }
 
 /// Actions for editing the blockout layout.
@@ -1194,6 +1301,28 @@ pub enum GenResponse {
     SyncApplied {
         domain: String,
         files_updated: Vec<String>,
+    },
+
+    // AI3: Multimodal input responses
+    ImageLayoutAnalysis {
+        /// BlockoutSpec-compatible JSON plan.
+        plan_json: String,
+        /// Image analysis metadata (detected elements, palette, etc.).
+        analysis_json: String,
+    },
+    StyleMatched {
+        /// JSON summary of changes applied.
+        changes_json: String,
+    },
+    ReferenceBoardResult {
+        /// JSON response (varies by action: add/remove/list/clear).
+        result_json: String,
+    },
+    PanoramaWorldGenerated {
+        world_name: String,
+        entities_generated: usize,
+        spawn_point: [f32; 3],
+        notes: String,
     },
 
     Error {

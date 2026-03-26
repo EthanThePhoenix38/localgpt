@@ -8,6 +8,7 @@ pub mod avatar_tools;
 pub mod experiment_tools;
 pub mod interaction_tools;
 pub mod multifile_tools;
+pub mod multimodal_tools;
 pub mod physics_tools;
 pub mod terrain_tools;
 pub mod ui_tools;

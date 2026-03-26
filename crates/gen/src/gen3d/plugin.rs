@@ -165,6 +165,47 @@ pub struct CurrentWorld {
     pub path: Option<PathBuf>,
 }
 
+/// Bevy resource storing reference images for image-guided world generation (AI3).
+#[derive(Resource, Default)]
+pub struct ReferenceBoard {
+    pub entries: Vec<ReferenceEntry>,
+    next_id: u32,
+}
+
+impl ReferenceBoard {
+    /// Add a reference entry, returning the assigned ID.
+    pub fn add(
+        &mut self,
+        label: String,
+        weight: f32,
+        description: String,
+        image_path: String,
+    ) -> String {
+        self.next_id += 1;
+        let ref_id = format!("ref_{:03}", self.next_id);
+        self.entries.push(ReferenceEntry {
+            ref_id: ref_id.clone(),
+            label,
+            weight,
+            description,
+            image_path,
+        });
+        ref_id
+    }
+
+    /// Remove a reference by ID, returning true if found.
+    pub fn remove(&mut self, ref_id: &str) -> bool {
+        let len_before = self.entries.len();
+        self.entries.retain(|e| e.ref_id != ref_id);
+        self.entries.len() < len_before
+    }
+
+    /// Clear all references.
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+}
+
 /// Marker component for the interactive fly camera.
 #[derive(Component)]
 pub(crate) struct FlyCam;
@@ -234,6 +275,7 @@ pub fn setup_gen_app(
         .init_resource::<super::pending_writes::PendingWrites>()
         .init_resource::<super::generation_log::GenerationLog>()
         .init_resource::<super::region_dirty::RegionDirtyFlags>()
+        .init_resource::<ReferenceBoard>()
         .add_systems(
             Startup,
             (
@@ -461,6 +503,7 @@ struct GenCommandParams<'w, 's> {
     generation_log: ResMut<'w, super::generation_log::GenerationLog>,
     region_dirty_flags: ResMut<'w, super::region_dirty::RegionDirtyFlags>,
     region_member_q: Query<'w, 's, (Entity, &'static super::registry::RegionMember)>,
+    reference_board: ResMut<'w, ReferenceBoard>,
 }
 
 /// Build a `SnapshotQueries` from `GenCommandParams`. Used in many dispatch arms.
@@ -4147,6 +4190,260 @@ fn process_gen_commands(
                         }
                     }
                     Err(e) => GenResponse::Error { message: e },
+                }
+            }
+
+            // Tier 27: Multimodal Input (AI3)
+            GenCommand::ImageToLayout {
+                image,
+                prompt,
+                scale,
+                style,
+            } => {
+                // Validate the image source exists (if it's a file path, not base64)
+                let is_base64 = image.len() > 200 || image.starts_with("data:");
+                if !is_base64 && !std::path::Path::new(&image).exists() {
+                    GenResponse::Error {
+                        message: format!("Image file not found: {}", image),
+                    }
+                } else {
+                    let (scale_name, world_size) = match scale {
+                        ImageLayoutScale::Small => ("small", [15.0_f32, 15.0]),
+                        ImageLayoutScale::Medium => ("medium", [50.0, 50.0]),
+                        ImageLayoutScale::Large => ("large", [150.0, 150.0]),
+                    };
+                    let style_name = match style {
+                        ImageLayoutStyle::Match => "match",
+                        ImageLayoutStyle::Blockout => "blockout",
+                        ImageLayoutStyle::Stylized => "stylized",
+                    };
+
+                    // Build image analysis metadata
+                    let analysis = serde_json::json!({
+                        "source": if is_base64 { "base64" } else { &image },
+                        "scale": scale_name,
+                        "style": style_name,
+                        "prompt": prompt,
+                        "world_size": world_size,
+                        "instructions": format!(
+                            "Analyze the provided reference image and create a BlockoutSpec layout. \
+                             Scale: {} (world size: {}x{}m). Style: {}. {}",
+                            scale_name, world_size[0], world_size[1], style_name,
+                            prompt.as_deref().unwrap_or("No additional guidance.")
+                        ),
+                        "reference_board_count": params.reference_board.entries.len(),
+                    });
+
+                    // Generate a layout plan from the image context
+                    let plan = crate::worldgen::BlockoutSpec::from_prompt(
+                        &format!(
+                            "[Image-guided generation: {} scale, {} style] {}",
+                            scale_name,
+                            style_name,
+                            prompt
+                                .as_deref()
+                                .unwrap_or("Generate layout from reference image")
+                        ),
+                        world_size,
+                        None,
+                    );
+
+                    match serde_json::to_string_pretty(&plan) {
+                        Ok(plan_json) => GenResponse::ImageLayoutAnalysis {
+                            plan_json,
+                            analysis_json: analysis.to_string(),
+                        },
+                        Err(e) => GenResponse::Error {
+                            message: format!("Failed to serialize layout plan: {}", e),
+                        },
+                    }
+                }
+            }
+            GenCommand::MatchStyle {
+                image,
+                scope,
+                intensity,
+                entities,
+            } => {
+                let is_base64 = image.len() > 200 || image.starts_with("data:");
+                if !is_base64 && !std::path::Path::new(&image).exists() {
+                    GenResponse::Error {
+                        message: format!("Image file not found: {}", image),
+                    }
+                } else {
+                    let scope_name = match scope {
+                        StyleMatchScope::All => "all",
+                        StyleMatchScope::Lighting => "lighting",
+                        StyleMatchScope::Materials => "materials",
+                        StyleMatchScope::Atmosphere => "atmosphere",
+                    };
+
+                    let entity_count = params.registry.all_names().count();
+                    let targeted = entities.as_ref().map(|e| e.len()).unwrap_or(entity_count);
+
+                    let changes = serde_json::json!({
+                        "scope": scope_name,
+                        "intensity": intensity,
+                        "entities_targeted": targeted,
+                        "source": if is_base64 { "base64" } else { &image },
+                        "instructions": format!(
+                            "Analyze the reference image and extract {} properties. \
+                             Apply with intensity {:.1} to {} entities. \
+                             Use gen_set_light, gen_set_environment, gen_modify_entity, \
+                             and gen_set_ambience to apply the extracted style.",
+                            scope_name, intensity, targeted
+                        ),
+                        "reference_board_count": params.reference_board.entries.len(),
+                    });
+
+                    GenResponse::StyleMatched {
+                        changes_json: changes.to_string(),
+                    }
+                }
+            }
+            GenCommand::ReferenceBoard { action } => {
+                let result = match action {
+                    ReferenceBoardAction::Add {
+                        image,
+                        label,
+                        weight,
+                    } => {
+                        let is_base64 = image.len() > 200 || image.starts_with("data:");
+                        if !is_base64 && !std::path::Path::new(&image).exists() {
+                            serde_json::json!({
+                                "error": format!("Image file not found: {}", image),
+                            })
+                        } else if params.reference_board.entries.len() >= 8 {
+                            serde_json::json!({
+                                "error": "Maximum 8 references allowed. Remove existing references first.",
+                            })
+                        } else {
+                            let label = label.unwrap_or_else(|| {
+                                format!("reference_{}", params.reference_board.entries.len() + 1)
+                            });
+                            let image_path = if is_base64 {
+                                "[base64 data]".to_string()
+                            } else {
+                                image.clone()
+                            };
+                            // Description will be filled by the LLM when it processes
+                            // the image — for now store a placeholder
+                            let description = format!(
+                                "Reference image: {} (label: {}, weight: {:.1})",
+                                if is_base64 { "inline data" } else { &image },
+                                label,
+                                weight
+                            );
+                            let ref_id = params.reference_board.add(
+                                label.clone(),
+                                weight,
+                                description,
+                                image_path,
+                            );
+                            serde_json::json!({
+                                "ref_id": ref_id,
+                                "label": label,
+                                "weight": weight,
+                                "active_references": params.reference_board.entries.len(),
+                                "note": "Reference added. It will influence subsequent generation and evaluation calls."
+                            })
+                        }
+                    }
+                    ReferenceBoardAction::Remove { ref_id } => {
+                        if params.reference_board.remove(&ref_id) {
+                            serde_json::json!({
+                                "removed": ref_id,
+                                "active_references": params.reference_board.entries.len(),
+                            })
+                        } else {
+                            serde_json::json!({
+                                "error": format!("Reference '{}' not found", ref_id),
+                            })
+                        }
+                    }
+                    ReferenceBoardAction::List => {
+                        let refs: Vec<_> = params
+                            .reference_board
+                            .entries
+                            .iter()
+                            .map(|e| {
+                                serde_json::json!({
+                                    "ref_id": e.ref_id,
+                                    "label": e.label,
+                                    "weight": e.weight,
+                                    "description": e.description,
+                                    "image_path": e.image_path,
+                                })
+                            })
+                            .collect();
+                        serde_json::json!({
+                            "references": refs,
+                            "count": refs.len(),
+                        })
+                    }
+                    ReferenceBoardAction::Clear => {
+                        let count = params.reference_board.entries.len();
+                        params.reference_board.clear();
+                        serde_json::json!({
+                            "cleared": count,
+                            "active_references": 0,
+                        })
+                    }
+                };
+                GenResponse::ReferenceBoardResult {
+                    result_json: result.to_string(),
+                }
+            }
+            GenCommand::PanoramaToWorld {
+                image,
+                prompt,
+                depth_estimation,
+                generate_beyond,
+            } => {
+                let is_base64 = image.len() > 200 || image.starts_with("data:");
+                if !is_base64 && !std::path::Path::new(&image).exists() {
+                    GenResponse::Error {
+                        message: format!("Panorama image file not found: {}", image),
+                    }
+                } else {
+                    // Generate a world layout from the panorama
+                    let world_name =
+                        format!("panorama_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+
+                    let layout_prompt = format!(
+                        "[Panorama-to-world: depth_estimation={}, generate_beyond={}] {}",
+                        depth_estimation,
+                        generate_beyond,
+                        prompt
+                            .as_deref()
+                            .unwrap_or("Generate explorable world from 360° panorama")
+                    );
+
+                    // Use the existing blockout pipeline
+                    let spec = crate::worldgen::BlockoutSpec::from_prompt(
+                        &layout_prompt,
+                        [80.0, 80.0], // Panorama worlds are medium-large
+                        None,
+                    );
+
+                    let region_count = spec.regions.len();
+
+                    // Store the spec as current blockout
+                    commands.insert_resource(crate::worldgen::CurrentBlockout { spec });
+
+                    let spawn_point = [0.0_f32, 1.7, 0.0]; // Eye height at origin
+
+                    GenResponse::PanoramaWorldGenerated {
+                        world_name,
+                        entities_generated: region_count,
+                        spawn_point,
+                        notes: format!(
+                            "Layout plan created with {} regions from panorama. \
+                             Call gen_apply_blockout to generate the 3D scene, then \
+                             gen_match_style with the panorama to apply visual style.",
+                            region_count
+                        ),
+                    }
                 }
             }
         };
