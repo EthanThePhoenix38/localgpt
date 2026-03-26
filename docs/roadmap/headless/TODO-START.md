@@ -62,7 +62,7 @@ Total: ~103h (~7.5 weeks solo)
 
 ---
 
-### H2: Experiment Queue & Heartbeat — DONE (data layer + detection)
+### H2: Experiment Queue & Heartbeat — DONE (data layer + detection + dispatch)
 
 | Spec | Description | Status |
 |------|-------------|--------|
@@ -70,7 +70,7 @@ Total: ~103h (~7.5 weeks solo)
 | H2.2 | `GpuLock` file-based GPU exclusivity | DONE |
 | H2.3 | `has_gen_experiments` HEARTBEAT.md detection | DONE |
 | H2.4 | `create_headless_gen_tool_factory` | DONE |
-| H2.5 | Heartbeat runner gen experiment dispatch | NOT STARTED (needs HeartbeatRunner integration in CLI daemon) |
+| H2.5 | Heartbeat runner gen experiment dispatch | DONE (subprocess dispatch via `localgpt-gen headless`) |
 | H2.6 | Variation expansion | DONE (`parse_variation`) |
 | H2.7 | End-to-end heartbeat experiment test | NOT STARTED (needs live LLM + daemon) |
 
@@ -131,7 +131,7 @@ Total: ~103h (~7.5 weeks solo)
 ### Remaining work (cannot be done offline):
 1. **H1.5.2** — Offscreen camera (Bevy 0.18 `RenderTarget` is private; needs upstream fix or workaround)
 2. **H1.5.4–H1.5.5** — Screenshot pipeline wiring + Linux fallback (needs H1.5.2)
-3. **H2.5** — Heartbeat dispatcher wiring (needs CLI daemon binary integration)
+3. ~~**H2.5**~~ — DONE: Heartbeat dispatcher via `localgpt-gen headless` subprocess
 4. **H3.5–H3.6** — Session summarization + memory partitioning (needs Agent-level integration)
 5. **H4.4** — Thumbnail texture loading (needs egui texture upload testing)
 6. **H5.5** — Background experiment processor (needs async Bevy lifecycle coordination)

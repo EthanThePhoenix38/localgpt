@@ -39,6 +39,10 @@ pub struct HeartbeatRunner {
     workspace_lock: WorkspaceLock,
     /// Optional tool factory for injecting additional tools (e.g., CLI tools from daemon)
     tool_factory: Option<ToolFactory>,
+    /// Whether gen experiment dispatch is enabled.
+    /// When true, heartbeat checks HEARTBEAT.md for gen experiments before normal processing
+    /// and dispatches them via `localgpt-gen headless` subprocess.
+    gen_dispatch_enabled: bool,
 }
 
 impl HeartbeatRunner {
@@ -124,7 +128,17 @@ impl HeartbeatRunner {
             turn_gate,
             workspace_lock,
             tool_factory,
+            gen_dispatch_enabled: false,
         })
+    }
+
+    /// Enable gen experiment dispatch via `localgpt-gen headless` subprocess.
+    ///
+    /// When enabled, each heartbeat tick checks HEARTBEAT.md for gen experiment
+    /// entries (e.g., "- [ ] Build a cozy cabin") before normal processing.
+    /// If found, dispatches ONE experiment per tick by spawning `localgpt-gen headless`.
+    pub fn enable_gen_dispatch(&mut self) {
+        self.gen_dispatch_enabled = true;
     }
 
     async fn first_delay(&self) -> Duration {
@@ -395,6 +409,34 @@ impl HeartbeatRunner {
         if content.trim().is_empty() {
             info!(name: "Heartbeat", "skipping: empty HEARTBEAT.md");
             return Ok((HEARTBEAT_OK_TOKEN.to_string(), HeartbeatStatus::Skipped));
+        }
+
+        // Pre-step: dispatch gen experiments via localgpt-gen subprocess (one per tick)
+        if self.gen_dispatch_enabled {
+            let gen_timeout = self.run_timeout.as_secs().max(60);
+            let dispatched = tokio::task::spawn_blocking({
+                let workspace = self.workspace.clone();
+                let model = self.config.agent.default_model.clone();
+                move || {
+                    super::gen_dispatch::try_dispatch_gen_experiment(
+                        &workspace,
+                        gen_timeout,
+                        Some(model.as_str()),
+                    )
+                }
+            })
+            .await
+            .unwrap_or(false);
+
+            if dispatched {
+                info!(name: "Heartbeat", "gen experiment dispatched, continuing with normal heartbeat");
+                // Re-read HEARTBEAT.md since it was updated by the dispatch
+                let updated = fs::read_to_string(&heartbeat_path).unwrap_or_default();
+                if updated.trim().is_empty() || !updated.contains("- [ ]") {
+                    info!(name: "Heartbeat", "no more tasks after gen dispatch");
+                    return Ok(("Gen experiment processed.".to_string(), HeartbeatStatus::Ok));
+                }
+            }
         }
 
         // Create agent for heartbeat (clone the cached MemoryManager to share the embedding provider)

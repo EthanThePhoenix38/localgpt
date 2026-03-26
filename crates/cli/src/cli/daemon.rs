@@ -255,7 +255,7 @@ async fn run_daemon_services(
                     localgpt_cli_tools::create_cli_tools(config)
                 });
 
-            let runner = match HeartbeatRunner::new_with_gate_and_tools(
+            let mut runner = match HeartbeatRunner::new_with_gate_and_tools(
                 &heartbeat_config,
                 &heartbeat_agent_id,
                 Some(heartbeat_gate),
@@ -267,6 +267,14 @@ async fn run_daemon_services(
                     return;
                 }
             };
+
+            // Enable gen experiment dispatch if localgpt-gen is available.
+            // This allows the heartbeat to process "- [ ] Build a ..." entries
+            // in HEARTBEAT.md by spawning localgpt-gen headless as a subprocess.
+            if which::which("localgpt-gen").is_ok() {
+                runner.enable_gen_dispatch();
+                tracing::info!("Heartbeat gen dispatch enabled (localgpt-gen found)");
+            }
             tracing::info!("Heartbeat runner created");
             if let Err(e) = runner.run().await {
                 tracing::error!("Heartbeat runner error: {}", e);
