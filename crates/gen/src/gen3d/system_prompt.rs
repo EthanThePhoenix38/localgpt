@@ -4,6 +4,9 @@
 //! specific memory guidance. When the agent is in gen mode, this
 //! replaces the generic memory section with creative-focused instructions.
 
+/// Bevy engine version targeted by generated code.
+pub const BEVY_VERSION: &str = "0.18";
+
 /// Gen-specific memory prompt overlay.
 ///
 /// Instructs the LLM to use memory for creative knowledge accumulation:

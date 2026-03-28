@@ -371,6 +371,8 @@ pub fn handle_save_world(
             model: None,
             generation_duration_ms: None,
             style_ref: None,
+            bevy_version: Some("0.18".to_string()),
+            compliance: Some(wt::ComplianceMeta::default()),
         },
         environment,
         camera: camera_def,
@@ -947,6 +949,8 @@ pub fn save_multi_file_world(
             model: None,
             generation_duration_ms: None,
             style_ref: None,
+            bevy_version: Some("0.18".to_string()),
+            compliance: Some(wt::ComplianceMeta::default()),
         },
         environment,
         camera: camera_def,
@@ -1346,5 +1350,84 @@ mod tests {
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Validate all starter template world.ron files parse as valid WorldManifest.
+    #[test]
+    fn starter_templates_parse() {
+        let templates_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let template_names = [
+            "medieval-village",
+            "space-station",
+            "island-paradise",
+            "dungeon-crawler",
+            "zen-garden",
+        ];
+
+        for name in &template_names {
+            let ron_path = templates_dir.join(name).join("world.ron");
+            assert!(
+                ron_path.exists(),
+                "Template world.ron not found: {}",
+                ron_path.display()
+            );
+
+            let ron_str = std::fs::read_to_string(&ron_path)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {}", ron_path.display(), e));
+
+            let manifest: wt::WorldManifest = ron::from_str(&ron_str)
+                .unwrap_or_else(|e| panic!("Failed to parse {}: {}", ron_path.display(), e));
+
+            // Basic sanity checks
+            assert_eq!(
+                manifest.meta.name, *name,
+                "Template name mismatch in {}",
+                name
+            );
+            assert!(manifest.version > 0, "Version should be > 0 in {}", name);
+            assert!(
+                !manifest.entities.is_empty(),
+                "Template {} has no entities",
+                name
+            );
+            assert!(
+                manifest.environment.is_some(),
+                "Template {} has no environment",
+                name
+            );
+            assert!(manifest.camera.is_some(), "Template {} has no camera", name);
+            assert!(manifest.avatar.is_some(), "Template {} has no avatar", name);
+            assert!(!manifest.tours.is_empty(), "Template {} has no tours", name);
+
+            // Check SKILL.md exists too
+            let skill_path = templates_dir.join(name).join("SKILL.md");
+            assert!(
+                skill_path.exists(),
+                "Template SKILL.md not found: {}",
+                skill_path.display()
+            );
+
+            // Check that entity IDs are unique
+            let ids: Vec<u64> = manifest.entities.iter().map(|e| e.id.0).collect();
+            let mut sorted_ids = ids.clone();
+            sorted_ids.sort();
+            sorted_ids.dedup();
+            assert_eq!(
+                ids.len(),
+                sorted_ids.len(),
+                "Duplicate entity IDs in template {}",
+                name
+            );
+
+            // Check next_entity_id is greater than all entity IDs
+            let max_id = ids.iter().copied().max().unwrap_or(0);
+            assert!(
+                manifest.next_entity_id > max_id,
+                "next_entity_id ({}) must be > max entity ID ({}) in {}",
+                manifest.next_entity_id,
+                max_id,
+                name
+            );
+        }
     }
 }

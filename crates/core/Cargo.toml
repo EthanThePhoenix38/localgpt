@@ -27,6 +27,8 @@ embeddings-none = []
 sqlite-vec = ["dep:sqlite-vec"]
 # Image optimization for vision models (resizes before sending to LLM)
 image-resize = ["dep:image"]
+# MCP streamable HTTP transport (adds axum + tower-http — not for mobile)
+mcp-http = ["dep:axum", "dep:tower-http"]
 # Legacy alias
 gguf = ["embeddings-gguf"]
 
@@ -56,6 +58,10 @@ llama-cpp-2 = { version = "0.1", optional = true }
 
 # Image optimization
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"], optional = true }
+
+# MCP HTTP transport (optional — desktop only)
+axum = { version = "0.8", features = ["macros"], optional = true }
+tower-http = { version = "0.6", features = ["cors"], optional = true }
 
 # Cron expression parsing
 croner = "2"

@@ -15,6 +15,7 @@ use anyhow::Result;
 
 use localgpt_core::agent::tools::Tool;
 use localgpt_core::config::Config;
+use localgpt_core::mcp::server::ToolHandler;
 
 use crate::experiment::ExperimentTracker;
 use crate::gen3d::GenBridge;
@@ -23,6 +24,16 @@ use crate::gen3d::GenBridge;
 pub async fn run_mcp_server(bridge: Arc<GenBridge>, config: Config) -> Result<()> {
     let tools = create_mcp_tools(bridge, &config)?;
     localgpt_core::mcp::server::run_mcp_stdio_server(tools, "localgpt-gen").await
+}
+
+/// Run the MCP HTTP server with gen tools + core tools on the given port.
+///
+/// This serves the MCP streamable HTTP transport at `http://127.0.0.1:{port}/mcp`.
+pub async fn run_mcp_http_server(bridge: Arc<GenBridge>, config: Config, port: u16) -> Result<()> {
+    let tools = create_mcp_tools(bridge, &config)?;
+    let handler = Arc::new(ToolHandler::new("localgpt-gen", tools));
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    localgpt_core::mcp::http_transport::run_mcp_http_server(handler, addr).await
 }
 
 /// Create the combined tool set for the MCP server:

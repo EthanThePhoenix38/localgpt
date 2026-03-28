@@ -265,6 +265,10 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
     let has_tours = !manifest.tours.is_empty();
     let has_audio = manifest.entities.iter().any(|e| e.audio.is_some());
 
+    let compliance = manifest.meta.compliance.as_ref();
+    let default_compliance = wt::ComplianceMeta::default();
+    let c = compliance.unwrap_or(&default_compliance);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -279,7 +283,12 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{description}">
-<meta name="generator" content="LocalGPT Gen">
+<meta name="generator" content="{generation_tool}">
+<meta name="localgpt:generation-method" content="{generation_method}">
+<meta name="localgpt:human-modifiable" content="{human_modifiable}">
+<meta name="localgpt:steam-code-tool-exempt" content="{steam_code_tool_exempt}">
+<meta name="localgpt:eu-ai-act-risk-level" content="{eu_ai_act_risk_level}">
+<meta name="localgpt:no-gen-ai-compatible" content="{no_gen_ai_compatible}">
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
@@ -287,7 +296,7 @@ pub fn generate_html(manifest: &wt::WorldManifest) -> String {
   "name": "{title}",
   "description": "{description}",
   "encodingFormat": "text/html",
-  "creator": {{ "@type": "SoftwareApplication", "name": "LocalGPT Gen" }}
+  "creator": {{ "@type": "SoftwareApplication", "name": "{generation_tool}" }}
 }}
 </script>
 <style>
@@ -348,6 +357,12 @@ import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
         entity_count = entity_count,
         tours_label = if has_tours { " &middot; Tours" } else { "" },
         audio_label = if has_audio { " &middot; Audio" } else { "" },
+        generation_tool = html_escape(&c.generation_tool),
+        generation_method = html_escape(&c.generation_method),
+        human_modifiable = c.human_modifiable,
+        steam_code_tool_exempt = c.steam_code_tool_exempt,
+        eu_ai_act_risk_level = html_escape(&c.eu_ai_act_risk_level),
+        no_gen_ai_compatible = c.no_gen_ai_compatible,
         js = js,
     )
 }

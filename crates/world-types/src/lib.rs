@@ -66,7 +66,7 @@ pub use shape::{PrimitiveShapeKind, Shape};
 pub use spatial::ChunkCoord;
 pub use tour::{TourDef, TourMode, TourWaypoint};
 pub use validation::{Severity, ValidationIssue, WorldLimits};
-pub use world::{CameraDef, EnvironmentDef, WorldManifest, WorldMeta};
+pub use world::{CameraDef, ComplianceMeta, EnvironmentDef, WorldManifest, WorldMeta};
 
 // Multi-file world types (v2)
 pub use genlog::GenLogEntry;

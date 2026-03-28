@@ -637,6 +637,11 @@ enum GenSubcommand {
         /// Pass the relay port (e.g., 9878) or omit to auto-discover.
         #[arg(long)]
         connect: Option<Option<u16>>,
+
+        /// Also start a streamable HTTP MCP server on this port.
+        /// External tools can POST JSON-RPC to http://127.0.0.1:<port>/mcp.
+        #[arg(long)]
+        mcp_http: Option<u16>,
     },
     /// Control an external avatar (headless, no Bevy window)
     Control {
@@ -796,7 +801,11 @@ fn main() -> Result<()> {
             result
         }
 
-        Some(GenSubcommand::McpServer { headless, connect }) => {
+        Some(GenSubcommand::McpServer {
+            headless,
+            connect,
+            mcp_http,
+        }) => {
             // --connect mode: relay stdio MCP to an existing gen process's TCP relay
             if let Some(port_opt) = connect {
                 let port = port_opt
@@ -830,6 +839,28 @@ fn main() -> Result<()> {
             let (bridge, channels) = gen3d::create_gen_channels();
             let bridge_for_mcp = bridge.clone();
             let mcp_config = config.clone();
+
+            // Optionally start the MCP HTTP server on a separate thread
+            if let Some(http_port) = mcp_http {
+                let bridge_for_http = bridge.clone();
+                let http_config = config.clone();
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Builder::new_multi_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to build tokio runtime for MCP HTTP server");
+
+                    rt.block_on(async move {
+                        if let Err(e) =
+                            mcp_server::run_mcp_http_server(bridge_for_http, http_config, http_port)
+                                .await
+                        {
+                            tracing::error!("MCP HTTP server error: {}", e);
+                        }
+                    });
+                });
+            }
+
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()

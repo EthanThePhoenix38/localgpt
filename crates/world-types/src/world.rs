@@ -106,7 +106,7 @@ pub struct WorldMeta {
     /// Biome hint for procedural generation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub biome: Option<String>,
-    /// Time of day (0.0–24.0, for lighting presets).
+    /// Time of day (0.0-24.0, for lighting presets).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub time_of_day: Option<f32>,
 
@@ -135,6 +135,73 @@ pub struct WorldMeta {
     /// Style name from memory (if applied).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub style_ref: Option<String>,
+    /// Bevy engine version targeted by this world's generated code.
+    #[serde(
+        default = "default_bevy_version",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub bevy_version: Option<String>,
+
+    // --- Regulatory compliance metadata ---
+    /// Compliance metadata for distribution and regulatory classification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compliance: Option<ComplianceMeta>,
+}
+
+/// Regulatory and distribution compliance metadata.
+///
+/// Records classification signals for storefronts, regulatory frameworks,
+/// and content-origin seals so that exported worlds carry machine-readable
+/// provenance alongside the creative data.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ComplianceMeta {
+    /// Steam "code tool" exemption flag.
+    ///
+    /// `true` indicates the output is compilable/editable source code (RON scene
+    /// definitions, parametric shapes) rather than pre-made binary assets.  Under
+    /// Valve's AI content policy, tools whose output is code that the developer
+    /// compiles or modifies are treated as code tools, not AI-generated asset
+    /// generators.
+    #[serde(default = "default_true")]
+    pub steam_code_tool_exempt: bool,
+
+    /// EU AI Act risk-level classification.
+    ///
+    /// LocalGPT Gen is a code-generation tool: the LLM produces scene definition
+    /// code (RON) that the user compiles into 3D geometry via Bevy.  Under the
+    /// EU AI Act (Regulation 2024/1689), general-purpose code-generation tools
+    /// with a human in the loop fall under the "minimal risk" tier, requiring
+    /// only transparency obligations (Art. 52) -- no conformity assessment.
+    #[serde(default = "default_risk_level")]
+    pub eu_ai_act_risk_level: String,
+
+    /// "No Gen AI" seal compatibility flag.
+    ///
+    /// `true` indicates the output is human-editable source code (not opaque
+    /// binary blobs) and the creative direction is human-driven.  The scene
+    /// definition can be fully read, understood, and modified by a person,
+    /// making the output compatible with "No Gen AI" asset provenance
+    /// requirements that focus on human authorship of the final artifact.
+    #[serde(default = "default_true")]
+    pub no_gen_ai_compatible: bool,
+
+    /// Tool name and version that produced this world (e.g. "LocalGPT Gen v0.3.5").
+    #[serde(default = "default_generation_tool")]
+    pub generation_tool: String,
+
+    /// How the output was produced: "code-generation" (LLM writes scene code
+    /// compiled by the engine) vs "asset-generation" (LLM directly produces
+    /// binary mesh/texture data).
+    #[serde(default = "default_generation_method")]
+    pub generation_method: String,
+
+    /// Whether the output can be meaningfully edited by a human.
+    ///
+    /// `true` for LocalGPT Gen because the canonical format is RON text with
+    /// parametric shapes -- users can open, read, and modify every dimension,
+    /// material, and behavior by hand.
+    #[serde(default = "default_true")]
+    pub human_modifiable: bool,
 }
 
 /// Environment settings.
@@ -193,6 +260,34 @@ fn default_camera_pos() -> [f32; 3] {
 fn default_fov() -> f32 {
     45.0
 }
+fn default_bevy_version() -> Option<String> {
+    Some("0.18".to_string())
+}
+fn default_true() -> bool {
+    true
+}
+fn default_risk_level() -> String {
+    "minimal".to_string()
+}
+fn default_generation_tool() -> String {
+    format!("LocalGPT Gen v{}", env!("CARGO_PKG_VERSION"))
+}
+fn default_generation_method() -> String {
+    "code-generation".to_string()
+}
+
+impl Default for ComplianceMeta {
+    fn default() -> Self {
+        Self {
+            steam_code_tool_exempt: true,
+            eu_ai_act_risk_level: default_risk_level(),
+            no_gen_ai_compatible: true,
+            generation_tool: default_generation_tool(),
+            generation_method: default_generation_method(),
+            human_modifiable: true,
+        }
+    }
+}
 
 impl WorldManifest {
     /// Create a new empty world with a given name.
@@ -212,6 +307,8 @@ impl WorldManifest {
                 model: None,
                 generation_duration_ms: None,
                 style_ref: None,
+                bevy_version: default_bevy_version(),
+                compliance: Some(ComplianceMeta::default()),
             },
             environment: None,
             camera: None,
@@ -364,5 +461,36 @@ mod tests {
             }
             _ => panic!("Expected TooNew error"),
         }
+    }
+
+    #[test]
+    fn compliance_meta_default() {
+        let c = ComplianceMeta::default();
+        assert!(c.steam_code_tool_exempt);
+        assert_eq!(c.eu_ai_act_risk_level, "minimal");
+        assert!(c.no_gen_ai_compatible);
+        assert!(c.generation_tool.starts_with("LocalGPT Gen v"));
+        assert_eq!(c.generation_method, "code-generation");
+        assert!(c.human_modifiable);
+    }
+
+    #[test]
+    fn compliance_roundtrip_json() {
+        let c = ComplianceMeta::default();
+        let json = serde_json::to_string_pretty(&c).unwrap();
+        let back: ComplianceMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(c, back);
+    }
+
+    #[test]
+    fn manifest_new_includes_compliance() {
+        let m = WorldManifest::new("compliance_test");
+        assert!(m.meta.compliance.is_some());
+        let c = m.meta.compliance.unwrap();
+        assert!(c.steam_code_tool_exempt);
+        assert_eq!(c.eu_ai_act_risk_level, "minimal");
+        assert!(c.no_gen_ai_compatible);
+        assert!(c.human_modifiable);
+        assert_eq!(c.generation_method, "code-generation");
     }
 }
