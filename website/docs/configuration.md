@@ -318,21 +318,23 @@ export OPENAI_API_KEY="sk-..."
 [LM Studio](https://lmstudio.ai/) runs open-weight models locally and exposes an OpenAI-compatible API. No API keys, no cloud — everything stays on your machine.
 
 1. Download and install [LM Studio](https://lmstudio.ai/).
-2. In LM Studio, download a model (e.g., Qwen 3.5, Llama 4, Gemma 3, Phi-4) and start the local server. Note the model name shown in the server tab.
-3. Edit `~/.config/localgpt/config.toml`:
+2. In LM Studio, download a model (e.g., Qwen 3.5, Llama 4, Gemma 3, Phi-4) and start the local server.
+3. Find the exact model ID — run `curl http://127.0.0.1:1234/v1/models` and look for the `"id"` field (e.g., `qwen/qwen3.5-35b-a3b`). The model name must match exactly.
+4. Edit `~/.config/localgpt/config.toml`:
 
 ```toml
 [agent]
-default_model = "openai/qwen3.5-35b-a3b"  # use the model name from LM Studio
+default_model = "openai/qwen/qwen3.5-35b-a3b"  # use the exact model ID from step 3
+context_window = 32768  # match the context length set in LM Studio
 
 [providers.openai]
 api_key = "lm-studio"
 base_url = "http://127.0.0.1:1234/v1"
 ```
 
-4. Run `localgpt chat` — all requests go to LM Studio on your machine.
+5. Run `localgpt chat` — all requests go to LM Studio on your machine.
 
-LM Studio's default port is `1234`. If you changed it, update the `base_url` accordingly. Tool calling works with models that support it (e.g., Qwen 3.5, Llama 4).
+LM Studio's default port is `1234`. If you changed it, update the `base_url` accordingly. Set the context length in LM Studio's model load settings to match `context_window`. Tool calling works with models that support it (e.g., Qwen 3.5, Llama 4).
 
 ### Ollama (Local)
 

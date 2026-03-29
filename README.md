@@ -145,7 +145,7 @@ Stored at `<config_dir>/config.toml`:
 
 ```toml
 [agent]
-default_model = "openai/qwen3.5-35b-a3b"
+default_model = "openai/qwen/qwen3.5-35b-a3b"
 
 [providers.openai]
 api_key = "lm-studio"

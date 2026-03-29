@@ -17,7 +17,7 @@ Run models entirely on your machine with [LM Studio](https://lmstudio.ai):
 ```bash
 # Install LM Studio from https://lmstudio.ai
 # Download a model and start the local server, then:
-localgpt config set agent.default_model "openai/qwen3.5-35b-a3b"
+localgpt config set agent.default_model "openai/qwen/qwen3.5-35b-a3b"
 localgpt config set providers.openai.api_key "lm-studio"
 localgpt config set providers.openai.base_url "http://127.0.0.1:1234/v1"
 ```

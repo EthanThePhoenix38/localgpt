@@ -61,7 +61,7 @@ LocalGPT automatically detects the provider based on model name prefix:
 
 | Prefix | Provider | Examples |
 |--------|----------|----------|
-| `openai/*` | LM Studio / OpenAI | openai/qwen3.5-35b-a3b, openai/gpt-4o |
+| `openai/*` | LM Studio / OpenAI | openai/qwen/qwen3.5-35b-a3b, openai/gpt-4o |
 | Other | Ollama (local) | llama3, mistral, codellama |
 | `claude-cli/*` | Claude CLI | claude-cli/opus, claude-cli/sonnet |
 | `anthropic/*` | Anthropic API | anthropic/claude-opus-4-5, anthropic/claude-sonnet-4-5 |
