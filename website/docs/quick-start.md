@@ -10,7 +10,27 @@ This guide will get you chatting with LocalGPT in just a few minutes.
 
 Choose one of the following options:
 
-### Option A: Claude CLI (Recommended)
+### Option A: LM Studio (Local, No API Key)
+
+Run models entirely on your machine with [LM Studio](https://lmstudio.ai):
+
+```bash
+# Install LM Studio from https://lmstudio.ai
+# Download a model and start the local server, then:
+localgpt config set agent.default_model "openai/qwen3.5-35b-a3b"
+localgpt config set providers.openai.api_key "lm-studio"
+localgpt config set providers.openai.base_url "http://127.0.0.1:1234/v1"
+```
+
+### Option B: Ollama (Local)
+
+```bash
+# Install Ollama from https://ollama.ai, then:
+ollama pull llama3
+localgpt config set agent.default_model "llama3"
+```
+
+### Option C: Claude CLI
 
 If you have the [Claude CLI](https://claude.ai/code) installed and authenticated:
 
@@ -20,7 +40,7 @@ If you have the [Claude CLI](https://claude.ai/code) installed and authenticated
 localgpt chat
 ```
 
-### Option B: API Keys
+### Option D: API Keys
 
 ```bash
 # For OpenAI
@@ -31,17 +51,6 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 # For Gemini
 export GEMINI_API_KEY="..."
-
-# For GLM (Z.AI)
-export GLM_API_KEY="..."
-```
-
-### Option C: Local Models (Ollama)
-
-```bash
-# Install Ollama from https://ollama.ai, then:
-ollama pull llama3
-localgpt config set agent.default_model "llama3"
 ```
 
 ## 2. Start an Interactive Chat

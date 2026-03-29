@@ -313,6 +313,39 @@ export OPENAI_API_KEY="sk-..."
 
 ## Provider-Specific Configuration
 
+### LM Studio (Local)
+
+[LM Studio](https://lmstudio.ai/) runs open-weight models locally and exposes an OpenAI-compatible API. No API keys, no cloud — everything stays on your machine.
+
+1. Download and install [LM Studio](https://lmstudio.ai/).
+2. In LM Studio, download a model (e.g., Qwen 3.5, Llama 4, Gemma 3, Phi-4) and start the local server. Note the model name shown in the server tab.
+3. Edit `~/.config/localgpt/config.toml`:
+
+```toml
+[agent]
+default_model = "openai/qwen3.5-35b-a3b"  # use the model name from LM Studio
+
+[providers.openai]
+api_key = "lm-studio"
+base_url = "http://127.0.0.1:1234/v1"
+```
+
+4. Run `localgpt chat` — all requests go to LM Studio on your machine.
+
+LM Studio's default port is `1234`. If you changed it, update the `base_url` accordingly. Tool calling works with models that support it (e.g., Qwen 3.5, Llama 4).
+
+### Ollama (Local)
+
+```toml
+[agent]
+default_model = "llama3"  # or mistral, codellama, etc.
+
+[providers.ollama]
+endpoint = "http://localhost:11434"
+```
+
+For fully local operation, only configure Ollama (no API keys needed). Tool calling is supported for Ollama models that have tool calling capability.
+
 ### OpenAI
 
 ```toml
@@ -375,18 +408,6 @@ default_model = "github-copilot/gpt-4o"
 [providers.github_copilot]
 access_token = "${GITHUB_COPILOT_TOKEN}"
 ```
-
-### Ollama (Local)
-
-```toml
-[agent]
-default_model = "llama3"  # or mistral, codellama, etc.
-
-[providers.ollama]
-endpoint = "http://localhost:11434"
-```
-
-For fully local operation, only configure Ollama (no API keys needed). Tool calling is supported for Ollama models that have tool calling capability.
 
 ### GLM (Z.AI)
 
@@ -458,9 +479,9 @@ api_key = "${OPENROUTER_API_KEY}"
 base_url = "https://openrouter.ai/api/v1"
 ```
 
-### Local OpenAI-Compatible Server (LM Studio, llamafile, etc.)
+### Local OpenAI-Compatible Server (llamafile, vLLM, etc.)
 
-If you run a local server that speaks the OpenAI API (e.g., LM Studio, llamafile, vLLM), point LocalGPT at it with an `openai/*` model ID:
+If you run another local server that speaks the OpenAI API (e.g., llamafile, vLLM, llama.cpp server), point LocalGPT at it with an `openai/*` model ID:
 
 1. Start your local server and note the port and model name.
 2. Edit `~/.config/localgpt/config.toml`:
@@ -470,9 +491,8 @@ If you run a local server that speaks the OpenAI API (e.g., LM Studio, llamafile
 default_model = "openai/<your-model-name>"
 
 [providers.openai]
-# Many local servers accept a dummy key
 api_key = "not-needed"
-base_url = "http://127.0.0.1:8080/v1"   # or :1234 for LM Studio
+base_url = "http://127.0.0.1:8080/v1"
 ```
 
 3. Run `localgpt chat` and requests will go to your local server.

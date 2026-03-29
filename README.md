@@ -119,7 +119,7 @@ localgpt daemon start
 - **Autonomous heartbeat** — delegate tasks and let it work in the background
 - **Multiple interfaces** — CLI, web UI, desktop GUI, Telegram bot
 - **Defense-in-depth security** — signed policy files, kernel-enforced sandbox, prompt injection defenses
-- **Multiple LLM providers** — Anthropic, OpenAI, xAI, Ollama, GLM, Vertex AI, CLI providers
+- **Multiple LLM providers** — LM Studio, Ollama, Anthropic, OpenAI, xAI, GLM, Vertex AI, CLI providers
 
 ### How It Works
 
@@ -141,20 +141,25 @@ Files are indexed with SQLite FTS5 for keyword search and sqlite-vec for semanti
 
 Stored at `<config_dir>/config.toml`:
 
+**Local models via LM Studio** (no API key, fully offline):
+
+```toml
+[agent]
+default_model = "openai/qwen3.5-35b-a3b"
+
+[providers.openai]
+api_key = "lm-studio"
+base_url = "http://127.0.0.1:1234/v1"
+```
+
+**Cloud providers** (Anthropic, OpenAI, etc.):
+
 ```toml
 [agent]
 default_model = "claude-cli/opus"
 
 [providers.anthropic]
 api_key = "${ANTHROPIC_API_KEY}"
-
-[heartbeat]
-enabled = true
-interval = "30m"
-
-[telegram]
-enabled = true
-api_token = "${TELEGRAM_BOT_TOKEN}"
 ```
 
 Full config reference: [`website/docs/configuration.md`](website/docs/configuration.md)
